@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 """Production decider tuned for the current deployment."""
 
-import csv
 import datetime
-import os
 import time
 from pathlib import Path
 from subprocess import run
@@ -16,7 +14,6 @@ SCOPES = [
     "https://www.googleapis.com/auth/youtube",
 ]
 TOKEN = "/root/token.json"
-CSV = "/root/yt_decider_log.csv"
 CYCLE = 20  # seconds
 DAY_START = 8
 DAY_END = 19
@@ -33,6 +30,24 @@ def log_event(component: str, message: str) -> None:
             handle.write(line)
     except OSError:
         pass
+
+
+def log_cycle_decision(
+    *,
+    cycle: int,
+    hour: str,
+    stream_status: str,
+    health: str,
+    action: str,
+    detail: str,
+) -> None:
+    """Send the decision information to the shared service log."""
+
+    message = "decision_csv=" + ",".join(
+        str(value if value is not None else "")
+        for value in (cycle, hour, stream_status, health, action, detail)
+    )
+    log_event("yt_decider", message)
 
 
 def local_hour() -> int:
@@ -81,26 +96,6 @@ def get_state(yt):
         "health": hs.get("status", "?"),
         "note": "",
     }
-
-
-def csv_log(row):
-    exists = os.path.exists(CSV)
-    with open(CSV, "a", newline="", encoding="utf-8") as handle:
-        writer = csv.writer(handle)
-        if not exists:
-            writer.writerow(
-                [
-                    "cycle",
-                    "hora",
-                    "streamStatus",
-                    "health",
-                    "acao",
-                    "detalhe",
-                ]
-            )
-        writer.writerow(row)
-
-
 def is_active(unit):
     return (
         run(["systemctl", "is-active", unit], capture_output=True, text=True).returncode
@@ -162,15 +157,13 @@ def main():
                 "yt_decider",
                 f"Exception during cycle {cycle}: {exc.__class__.__name__}: {exc}",
             )
-            csv_log(
-                [
-                    cycle,
-                    datetime.datetime.now().strftime("%H:%M"),
-                    "?",
-                    "?",
-                    "KEEP",
-                    f"exc: {exc.__class__.__name__}",
-                ]
+            log_cycle_decision(
+                cycle=cycle,
+                hour=datetime.datetime.now().strftime("%H:%M"),
+                stream_status="?",
+                health="?",
+                action="KEEP",
+                detail=f"exc: {exc.__class__.__name__}",
             )
             time.sleep(CYCLE)
             continue
@@ -211,15 +204,13 @@ def main():
             f"action={action} detail={detail or '-'}",
         )
 
-        csv_log(
-            [
-                cycle,
-                datetime.datetime.now().strftime("%H:%M"),
-                stream_status,
-                health,
-                action,
-                detail,
-            ]
+        log_cycle_decision(
+            cycle=cycle,
+            hour=datetime.datetime.now().strftime("%H:%M"),
+            stream_status=stream_status,
+            health=health,
+            action=action,
+            detail=detail,
         )
         time.sleep(CYCLE)
 
