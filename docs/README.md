@@ -8,9 +8,13 @@ Two-module setup:
 
 ### Primary (Windows)
 1. Install Python 3.11 and PyInstaller.
-2. Edit `primary-windows/src/stream_to_youtube.py` (input device) and set `YT_URL` to your **primary URL**.
-3. Build: `py -3.11 -m pip install -U pyinstaller==6.10` then `py -3.11 -m PyInstaller --clean primary-windows/stream_to_youtube.spec`.
-4. Run the generated `dist/stream_to_youtube.exe`.
+2. Configure the stream credentials via environment variables or a `.env` file:
+   - `YT_URL` — URL completo `rtmps://a.rtmps.youtube.com/live2/<KEY>`.
+   - `YT_KEY` — apenas a chave; o URL é construído automaticamente.
+   Copie `primary-windows/src/.env.example` para `.env` (no mesmo diretório) ou defina as variáveis antes de executar.
+3. Ajuste `primary-windows/src/stream_to_youtube.py` apenas se precisar alterar o dispositivo de entrada.
+4. Build: `py -3.11 -m pip install -U pyinstaller==6.10` then `py -3.11 -m PyInstaller --clean primary-windows/stream_to_youtube.spec`.
+5. Run the generated `dist/stream_to_youtube.exe`, garantindo que `YT_URL` ou `YT_KEY` estejam presentes no ambiente.
 
 ### Secondary (Droplet)
 1. Put stream key in `/etc/youtube-fallback.env` (`YT_KEY="..."`).  

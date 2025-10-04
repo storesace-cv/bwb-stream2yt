@@ -5,10 +5,60 @@
 # - Default input is RTSP; change to dshow as needed.
 
 import os, sys, time, subprocess, signal, datetime
+from pathlib import Path
+
+
+def _load_env_files():
+    """Populate os.environ with values from nearby .env files."""
+    script_dir = Path(__file__).resolve().parent
+    env_paths = [
+        script_dir / ".env",
+        script_dir.parent / ".env",
+        Path.cwd() / ".env",
+    ]
+
+    seen = set()
+    for path in env_paths:
+        if path in seen or not path.is_file():
+            continue
+        seen.add(path)
+        try:
+            with path.open("r", encoding="utf-8") as fh:
+                for raw_line in fh:
+                    line = raw_line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    if "=" not in line:
+                        continue
+                    key, value = line.split("=", 1)
+                    key = key.strip()
+                    value = value.strip()
+                    if len(value) >= 2 and ((value[0] == value[-1] == '"') or (value[0] == value[-1] == "'")):
+                        value = value[1:-1]
+                    os.environ.setdefault(key, value)
+        except OSError:
+            continue
+
+
+_load_env_files()
+
+
+def _resolve_yt_url():
+    url = os.environ.get("YT_URL", "").strip()
+    if url:
+        return url
+
+    key = os.environ.get("YT_KEY", "").strip()
+    if key:
+        return f"rtmps://a.rtmps.youtube.com/live2/{key}"
+
+    print("[primary] ERRO: defina YT_URL ou YT_KEY (consulte README).", file=sys.stderr)
+    sys.exit(2)
+
 
 # === CONFIG (edit if needed) ===
-# YouTube Primary URL (hardcoded as requested)
-YT_URL = "rtmps://a.rtmps.youtube.com/live2/f4ex-ztrk-vc4h-2pvc-2kg4"
+# YouTube Primary URL (lido de variáveis/env file)
+YT_URL = _resolve_yt_url()
 
 # Day window (Africa/Luanda time offset)
 DAY_START_HOUR = 8
@@ -33,11 +83,13 @@ OUTPUT_ARGS = [
 
 FFMPEG = os.environ.get("FFMPEG", r"C:\bwb\ffmpeg\bin\ffmpeg.exe")
 
+
 def in_day_window(now_utc=None):
     if now_utc is None:
         now_utc = datetime.datetime.utcnow()
     local = now_utc + datetime.timedelta(hours=TZ_OFFSET_HOURS)
     return DAY_START_HOUR <= local.hour < DAY_END_HOUR
+
 
 def run_loop():
     print("===== START {} =====".format(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
@@ -62,6 +114,7 @@ def run_loop():
                 pass
             print("[primary] Stopped by user.")
             break
+
 
 if __name__ == "__main__":
     run_loop()
