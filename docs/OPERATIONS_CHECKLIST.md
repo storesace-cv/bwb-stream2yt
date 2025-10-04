@@ -8,8 +8,8 @@
 ### Log centralizado (`/root/bwb_services.log`)
 - Consultar com `less +F /root/bwb_services.log` para acompanhar eventos em tempo real.
 - O ficheiro inclui todos os eventos anteriormente registados no CSV `yt_decider_log`, além dos estados dos serviços primário e fallback.
-- Rodar manualmente se necessário: `logrotate -f /etc/logrotate.d/bwb-services` (criar entrada caso não exista).
-- Garantir que o ficheiro não cresça indefinidamente (>200 MB): arquivar/comprimir periodicamente ou integrar com logrotate.
+- A rotação de 24h é automática via logrotate (mantém apenas eventos das últimas 24 horas).
+- Rodar manualmente se necessário: `logrotate -f /etc/logrotate.d/bwb-services`.
 
 ## If backup URL reuses `${YT_KEY}` literal
 - Confirm `/etc/youtube-fallback.env` contains only `YT_KEY="..."

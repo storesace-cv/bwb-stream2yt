@@ -34,6 +34,11 @@
       "remote": "/etc/youtube-fallback.env",
       "mode": "644",
       "if_missing_only": true
+    },
+    {
+      "local": "secondary-droplet/config/logrotate/bwb-services",
+      "remote": "/etc/logrotate.d/bwb-services",
+      "mode": "644"
     }
   ]
 }
