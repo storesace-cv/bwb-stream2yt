@@ -64,7 +64,9 @@ Os serviços principais do Droplet:
 |----------|------------|----------------|
 | `yt-decider-daemon.service` | Monitoriza a API do YouTube e comanda o fallback | `active (running)` |
 | `youtube-fallback.service` | Envia o sinal de contingência para o YouTube | `active (running)` |
-| `/root/yt_decider_log.csv` | Log cronológico de decisões automáticas | Atualizado continuamente |
+| `/root/bwb_services.log` | Log centralizado de decisões automáticas e eventos dos serviços | Atualizado continuamente |
+
+> O antigo CSV `yt_decider_log` foi fundido neste registo único; todas as consultas operacionais devem usar **exclusivamente** `/root/bwb_services.log`.
 
 **Reação automática a falhas:**
 - `Restart=always` no systemd
@@ -82,7 +84,7 @@ Os serviços principais do Droplet:
 | `/usr/local/bin/yt_decider_daemon.py` | Monitor do estado da stream |
 | `/etc/systemd/system/youtube-fallback.service` | Unit de arranque e recuperação |
 | `/etc/systemd/system/yt-decider-daemon.service` | Unit do monitor principal |
-| `/root/yt_decider_log.csv` | Registo contínuo de decisões |
+| `/root/bwb_services.log` | Registo unificado de decisões e eventos dos serviços |
 
 ---
 
@@ -133,6 +135,6 @@ systemctl status yt-decider-daemon youtube-fallback --no-pager
 journalctl -u yt-decider-daemon -n 40 -l --no-pager
 journalctl -u youtube-fallback -n 40 -l --no-pager
 
-# CSV de decisões
-tail -n 20 /root/yt_decider_log.csv
+# Log centralizado
+tail -n 100 /root/bwb_services.log
 ```
