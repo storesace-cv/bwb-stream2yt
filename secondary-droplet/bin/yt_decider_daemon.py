@@ -109,13 +109,43 @@ def is_active(unit):
 
 
 def start_fallback():
-    log_event("yt_decider", "Enabling youtube-fallback.service")
-    run(["systemctl", "enable", "--now", "youtube-fallback.service"], check=False)
+    log_event(
+        "yt_decider",
+        "fallback: start requested service=youtube-fallback.service",
+    )
+    proc = run(
+        ["systemctl", "enable", "--now", "youtube-fallback.service"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    stderr = proc.stderr.strip()
+    stdout = proc.stdout.strip()
+    log_event(
+        "yt_decider",
+        "fallback: start result returncode="
+        f"{proc.returncode} stdout={stdout or '-'} stderr={stderr or '-'}",
+    )
 
 
 def stop_fallback():
-    log_event("yt_decider", "Stopping youtube-fallback.service")
-    run(["systemctl", "stop", "youtube-fallback.service"], check=False)
+    log_event(
+        "yt_decider",
+        "fallback: stop requested service=youtube-fallback.service",
+    )
+    proc = run(
+        ["systemctl", "stop", "youtube-fallback.service"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    stderr = proc.stderr.strip()
+    stdout = proc.stdout.strip()
+    log_event(
+        "yt_decider",
+        "fallback: stop result returncode="
+        f"{proc.returncode} stdout={stdout or '-'} stderr={stderr or '-'}",
+    )
 
 
 def main():
@@ -172,6 +202,14 @@ def main():
                     start_fallback()
                     action = "START secondary"
                     detail = "day but no primary"
+
+        log_event(
+            "yt_decider",
+            "decision: cycle="
+            f"{cycle} status={stream_status} health={health} "
+            f"fallback={'on' if fallback_on else 'off'} "
+            f"action={action} detail={detail or '-'}",
+        )
 
         csv_log(
             [
