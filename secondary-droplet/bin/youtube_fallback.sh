@@ -25,7 +25,64 @@ if [ -z "${YT_KEY:-}" ]; then
   echo "[youtube_fallback] ERRO: YT_KEY vazio (env: $ENV_FILE)."; exit 1
 fi
 
-: "${YT_URL_BACKUP:=rtmps://b.rtmps.youtube.com/live2/${YT_KEY}?backup=1}"
+sanitize_stream_key() {
+  local key="$1"
+  # Remove carriage returns / newlines that may have leaked from env files
+  key="${key//$'\r'/}"
+  key="${key//$'\n'/}"
+  key="${key//$'\t'/}"
+
+  # Remove duplicated backup query fragments that may appear anywhere
+  key="${key//\?backup=1\//\/}"
+  key="${key//backup=1\//\/}"
+  key="${key//\?backup=1/}"
+
+  # Drop prefixes that accidentally included the RTMP URL
+  key="${key##*live2/}"
+
+  # Remove any lingering query string and leading slashes
+  key="${key%%\?*}"
+  key="${key##*/}"
+
+  printf '%s' "$key"
+}
+
+normalize_backup_url() {
+  local url="$1"
+  local key="$2"
+  local default_base="rtmps://b.rtmps.youtube.com/live2"
+
+  if [ -z "$url" ]; then
+    printf '%s?backup=1/%s' "$default_base" "$key"
+    return
+  fi
+
+  # Trim newlines that may exist in env vars
+  url="${url//$'\r'/}"
+  url="${url//$'\n'/}"
+  url="${url//$'\t'/}"
+
+  # Drop anything after the first '?'
+  local base="${url%%\?*}"
+
+  # Remove the key or trailing slashes accidentally appended to the base
+  base="${base%/${key}}"
+  base="${base%/}"
+
+  if [ -z "$base" ] || [[ "$base" != *"://"* ]]; then
+    base="$default_base"
+  fi
+
+  printf '%s?backup=1/%s' "$base" "$key"
+}
+
+YT_KEY="$(sanitize_stream_key "$YT_KEY")"
+
+if [ -z "$YT_KEY" ]; then
+  echo "[youtube_fallback] ERRO: YT_KEY inválido após sanitização (env: $ENV_FILE)."; exit 1
+fi
+
+YT_URL_BACKUP="$(normalize_backup_url "${YT_URL_BACKUP-}" "$YT_KEY")"
 
 : "${FALLBACK_IMG:=/usr/local/share/youtube-fallback/SignalLost.jpg}"
 : "${FALLBACK_WIDTH:=1280}"
