@@ -97,10 +97,14 @@ flowchart TD
     B -->|Não| D{Secundário ativo?}
     D -->|Não| E[Iniciar youtube-fallback.service]
     D -->|Sim| F[Manter sinal de contingência]
-    E --> G[Reavaliar a cada 30s]
+    E --> G[Reavaliar a cada 20s]
     F --> G
     G --> B
 ```
+
+> ⏱️ O `yt_decider_daemon.py` executa ciclos de decisão a cada **20 segundos**,
+> garantindo que a avaliação do estado da stream se mantém alinhada com o
+> comportamento real do serviço (`CYCLE = 20`).
 
 ---
 
