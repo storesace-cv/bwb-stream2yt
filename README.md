@@ -44,6 +44,19 @@ scripts/
 3. Configurar **Droplet** (ver `DEPLOY.md`).
 4. Configurar **Windows** (ver `primary-windows/README.md`).
 
+## Testes automatizados
+
+Execute os testes antes de publicar alterações para garantir que o daemon decisor continua a tomar decisões corretas:
+
+```bash
+python -m pip install --upgrade pip
+pip install -r secondary-droplet/requirements.txt
+pip install pytest
+pytest
+```
+
+Os testes ficam em `secondary-droplet/tests/` e simulam diferentes estados da API do YouTube, sem necessidade de contactar serviços externos.
+
 ---
 
 ## Passo-a-passo (terminal)

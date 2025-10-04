@@ -20,3 +20,15 @@ python3 /root/bwb-stream2yt/secondary-droplet/bin/yt_api_probe_once.py
 
 - Ver `journalctl -u yt-decider-daemon -f -l`
 - CSV de eventos (se existir) em `/root/yt_decider_log.csv`.
+
+## Testes
+
+Use `pytest` para validar rapidamente a lógica do decider antes de qualquer deploy:
+
+```bash
+cd /root/bwb-stream2yt
+python -m pip install --upgrade pip
+pip install -r secondary-droplet/requirements.txt
+pip install pytest
+pytest
+```
