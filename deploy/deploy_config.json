@@ -15,6 +15,11 @@
       "mode": "755"
     },
     {
+      "local": "secondary-droplet/config/youtube-fallback.defaults",
+      "remote": "/usr/local/config/youtube-fallback.defaults",
+      "mode": "644"
+    },
+    {
       "local": "secondary-droplet/bin/yt_api_probe_once.py",
       "remote": "/root/yt_api_probe_once.py",
       "mode": "755"
