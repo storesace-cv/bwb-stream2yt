@@ -30,7 +30,14 @@ def get_state(yt):
         return {"streamStatus":"?", "health":"?", "note":"sem broadcast"}
     sid = live["contentDetails"]["boundStreamId"]
     s = yt.liveStreams().list(part="id,status,cdn", id=sid).execute()
-    st = s["items"][0]
+    stream_items = s.get("items", [])
+    if not stream_items:
+        return {
+            "streamStatus": "?",
+            "health": "?",
+            "note": "stream não encontrado",
+        }
+    st = stream_items[0]
     hs = st["status"].get("healthStatus",{})
     return {
         "streamStatus": st["status"].get("streamStatus"),

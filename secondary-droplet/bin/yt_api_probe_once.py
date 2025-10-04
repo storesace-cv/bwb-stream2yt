@@ -16,7 +16,11 @@ def main():
         print("Sem broadcast live/testing visível pela API."); return 0
     sid = live["contentDetails"]["boundStreamId"]
     s = yt.liveStreams().list(part="id,status,cdn", id=sid).execute()
-    st = s["items"][0]; hs = st["status"].get("healthStatus", {})
+    stream_items = s.get("items", [])
+    if not stream_items:
+        print(f"Stream '{sid}' não encontrado pela API de liveStreams.")
+        return 1
+    st = stream_items[0]; hs = st["status"].get("healthStatus", {})
     print(json.dumps({
       "streamStatus": st["status"].get("streamStatus"),
       "healthStatus.status": hs.get("status"),
