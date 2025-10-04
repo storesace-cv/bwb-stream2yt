@@ -3,11 +3,11 @@
 ## Daily sanity
 - `systemctl status yt-decider-daemon youtube-fallback`
 - `journalctl -u yt-decider-daemon -n 60 -l --no-pager`
-- `tail -n 50 /root/yt_decider_log.csv`
 - `tail -n 100 /root/bwb_services.log` (event log para primário, fallback e daemon)
 
 ### Log centralizado (`/root/bwb_services.log`)
 - Consultar com `less +F /root/bwb_services.log` para acompanhar eventos em tempo real.
+- O ficheiro inclui todos os eventos anteriormente registados no CSV `yt_decider_log`, além dos estados dos serviços primário e fallback.
 - Rodar manualmente se necessário: `logrotate -f /etc/logrotate.d/bwb-services` (criar entrada caso não exista).
 - Garantir que o ficheiro não cresça indefinidamente (>200 MB): arquivar/comprimir periodicamente ou integrar com logrotate.
 

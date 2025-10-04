@@ -11,7 +11,7 @@
   - 720p30 backup (Droplet) with `-b:v 1500k`, `-g 60`, scroll/static texts overlay to indicate fallback.
 
 ## Logs
-- Human-oriented console logs + CSV (`/root/yt_decider_log.csv`) with minimal noise (only relevant transitions).
+- Human-oriented console logs + ficheiro unificado (`/root/bwb_services.log`) com transições relevantes do decider e estado dos serviços.
 
 ## Windows build
 - Build with **PyInstaller 6.10** (or compatible) targeting Python 3.11.

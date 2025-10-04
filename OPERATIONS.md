@@ -19,7 +19,7 @@ python3 /root/bwb-stream2yt/secondary-droplet/bin/yt_api_probe_once.py
 ## Decider (se usado)
 
 - Ver `journalctl -u yt-decider-daemon -f -l`
-- CSV de eventos (se existir) em `/root/yt_decider_log.csv`.
+- Consultar o histórico consolidado em `/root/bwb_services.log` (contém decisões do decider, eventos do fallback e notas do primário).
 
 ## Testes
 

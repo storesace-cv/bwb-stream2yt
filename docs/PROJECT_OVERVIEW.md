@@ -23,6 +23,6 @@ This repository contains **two logical modules**:
 - Fallback sender: `/usr/local/bin/youtube_fallback.sh`
 - Fallback env: `/etc/youtube-fallback.env`
 - Unit files: `/etc/systemd/system/*.service`
-- Logs (csv): `/root/yt_decider_log.csv`
+- Log centralizado: `/root/bwb_services.log`
 
 > **Stream Key**: manter apenas em ficheiros `.env` / secrets seguros; nunca o commits no repositório público.
