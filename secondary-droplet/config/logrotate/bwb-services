@@ -1,0 +1,8 @@
+/root/bwb_services.log {
+    daily
+    copytruncate
+    rotate 0
+    maxage 1
+    missingok
+    notifempty
+}
