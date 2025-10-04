@@ -38,7 +38,9 @@ def _load_env_files():
                     key, value = line.split("=", 1)
                     key = key.strip()
                     value = value.strip()
-                    if len(value) >= 2 and ((value[0] == value[-1] == '"') or (value[0] == value[-1] == "'")):
+                    if len(value) >= 2 and (
+                        (value[0] == value[-1] == '"') or (value[0] == value[-1] == "'")
+                    ):
                         value = value[1:-1]
                     os.environ.setdefault(key, value)
         except OSError:
@@ -68,7 +70,10 @@ YT_URL = _resolve_yt_url()
 # Day window (Africa/Luanda time offset — overridable via env)
 DAY_START_HOUR = int(os.environ.get("YT_DAY_START_HOUR", "8"))
 DAY_END_HOUR = int(os.environ.get("YT_DAY_END_HOUR", "19"))
-TZ_OFFSET_HOURS = int(os.environ.get("YT_TZ_OFFSET_HOURS", "1"))  # Luanda currently UTC+1
+TZ_OFFSET_HOURS = int(
+    os.environ.get("YT_TZ_OFFSET_HOURS", "1")
+)  # Luanda currently UTC+1
+
 
 # FFmpeg input/output (example: RTSP)
 def _split_args(value: str, default: list[str]) -> list[str]:
@@ -81,21 +86,60 @@ def _split_args(value: str, default: list[str]) -> list[str]:
 INPUT_ARGS = _split_args(
     os.environ.get("YT_INPUT_ARGS", ""),
     [
-        "-rtsp_transport","tcp","-rtsp_flags","prefer_tcp",
-        "-fflags","nobuffer","-flags","low_delay","-use_wallclock_as_timestamps","1",
-        "-i","rtsp://BEACHCAM:QueriasEntrar123@10.0.254.50:554/Streaming/Channels/101",
+        "-rtsp_transport",
+        "tcp",
+        "-rtsp_flags",
+        "prefer_tcp",
+        "-fflags",
+        "nobuffer",
+        "-flags",
+        "low_delay",
+        "-use_wallclock_as_timestamps",
+        "1",
+        "-i",
+        "rtsp://BEACHCAM:QueriasEntrar123@10.0.254.50:554/Streaming/Channels/101",
     ],
 )
 OUTPUT_ARGS = _split_args(
     os.environ.get("YT_OUTPUT_ARGS", ""),
     [
-        "-vf","scale=1920:1080:flags=bicubic,format=yuv420p",
-        "-r","30",
-        "-c:v","libx264","-preset","veryfast","-profile:v","high","-level","4.2",
-        "-b:v","5000k","-maxrate","6000k","-bufsize","12000k","-g","60","-sc_threshold","0",
-        "-pix_fmt","yuv420p",
-        "-filter:a","aresample=async=1:first_pts=0, aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo",
-        "-c:a","aac","-b:a","128k","-ar","44100","-ac","2",
+        "-vf",
+        "scale=1920:1080:flags=bicubic,format=yuv420p",
+        "-r",
+        "30",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-profile:v",
+        "high",
+        "-level",
+        "4.2",
+        "-b:v",
+        "5000k",
+        "-maxrate",
+        "6000k",
+        "-bufsize",
+        "12000k",
+        "-g",
+        "60",
+        "-sc_threshold",
+        "0",
+        "-pix_fmt",
+        "yuv420p",
+        "-filter:a",
+        (
+            "aresample=async=1:first_pts=0,"
+            " aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo"
+        ),
+        "-c:a",
+        "aac",
+        "-b:a",
+        "128k",
+        "-ar",
+        "44100",
+        "-ac",
+        "2",
     ],
 )
 
@@ -110,8 +154,21 @@ def in_day_window(now_utc=None):
 
 
 def run_loop():
-    print("===== START {} =====".format(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-    print("CMD:", FFMPEG, "-hide_banner -loglevel warning", *INPUT_ARGS, *OUTPUT_ARGS, "-f", "flv", YT_URL)
+    print(
+        "===== START {} =====".format(
+            datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        )
+    )
+    print(
+        "CMD:",
+        FFMPEG,
+        "-hide_banner -loglevel warning",
+        *INPUT_ARGS,
+        *OUTPUT_ARGS,
+        "-f",
+        "flv",
+        YT_URL,
+    )
     while True:
         if not in_day_window():
             # Still keep process alive but don't transmit: short sleep and re-check
@@ -119,7 +176,17 @@ def run_loop():
             time.sleep(30)
             continue
 
-        cmd = [FFMPEG, "-hide_banner", "-loglevel", "warning", *INPUT_ARGS, *OUTPUT_ARGS, "-f", "flv", YT_URL]
+        cmd = [
+            FFMPEG,
+            "-hide_banner",
+            "-loglevel",
+            "warning",
+            *INPUT_ARGS,
+            *OUTPUT_ARGS,
+            "-f",
+            "flv",
+            YT_URL,
+        ]
         proc = subprocess.Popen(cmd)
         try:
             code = proc.wait()

@@ -20,7 +20,9 @@ google_credentials = types.ModuleType("google.oauth2.credentials")
 
 class _DummyCredentials:
     @classmethod
-    def from_authorized_user_file(cls, *args, **kwargs):  # pragma: no cover - behaviour mocked in tests
+    def from_authorized_user_file(
+        cls, *args, **kwargs
+    ):  # pragma: no cover - behaviour mocked in tests
         return object()
 
 
@@ -46,7 +48,7 @@ BIN_PATH = Path(__file__).resolve().parents[1] / "bin"
 if str(BIN_PATH) not in sys.path:
     sys.path.insert(0, str(BIN_PATH))
 
-import yt_decider_daemon as decider
+import yt_decider_daemon as decider  # noqa: E402
 
 
 class StopLoop(Exception):
