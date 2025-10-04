@@ -32,3 +32,15 @@ pip install -r secondary-droplet/requirements.txt
 pip install pytest
 pytest
 ```
+
+## Lint e formatação
+
+Antes de subir código novo, garanta que o repositório está formatado e sem avisos de lint:
+
+```bash
+cd /root/bwb-stream2yt
+python -m pip install --upgrade pip
+pip install -r requirements-dev.txt
+python -m black --check .
+python -m flake8
+```

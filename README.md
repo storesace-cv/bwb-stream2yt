@@ -57,6 +57,22 @@ pytest
 
 Os testes ficam em `secondary-droplet/tests/` e simulam diferentes estados da API do YouTube, sem necessidade de contactar serviços externos.
 
+## Lint e formatação
+
+Utilizamos [Black](https://github.com/psf/black) para formatação automática e [Flake8](https://flake8.pycqa.org/) para garantir estilo consistente. Instale as dependências de desenvolvimento e execute as ferramentas antes de enviar alterações:
+
+```bash
+python -m pip install --upgrade pip
+pip install -r requirements-dev.txt
+
+# Formatar código automaticamente
+python -m black .
+
+# Validar formatação e regras de estilo
+python -m black --check .
+python -m flake8
+```
+
 ---
 
 ## Passo-a-passo (terminal)
