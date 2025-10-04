@@ -5,6 +5,7 @@ import csv
 import datetime
 import os
 import time
+from pathlib import Path
 from subprocess import run
 
 from google.oauth2.credentials import Credentials
@@ -20,6 +21,18 @@ CYCLE = 20  # seconds
 DAY_START = 8
 DAY_END = 19
 TZ_OFFSET = 1  # Luanda
+
+LOG_FILE = Path("/root/bwb_services.log")
+
+
+def log_event(component: str, message: str) -> None:
+    timestamp = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    line = f"{timestamp} [{component}] {message}\n"
+    try:
+        with LOG_FILE.open("a", encoding="utf-8") as handle:
+            handle.write(line)
+    except OSError:
+        pass
 
 
 def local_hour() -> int:
@@ -96,15 +109,18 @@ def is_active(unit):
 
 
 def start_fallback():
+    log_event("yt_decider", "Enabling youtube-fallback.service")
     run(["systemctl", "enable", "--now", "youtube-fallback.service"], check=False)
 
 
 def stop_fallback():
+    log_event("yt_decider", "Stopping youtube-fallback.service")
     run(["systemctl", "stop", "youtube-fallback.service"], check=False)
 
 
 def main():
     print("== yt_decider_daemon — PRODUÇÃO (STOP diurno quando primário OK) ==")
+    log_event("yt_decider", "Daemon started")
     cycle = 0
     while True:
         cycle += 1
@@ -112,6 +128,10 @@ def main():
             yt = build_api()
             state = get_state(yt)
         except Exception as exc:  # noqa: BLE001 - log error and continue looping
+            log_event(
+                "yt_decider",
+                f"Exception during cycle {cycle}: {exc.__class__.__name__}: {exc}",
+            )
             csv_log(
                 [
                     cycle,
@@ -167,4 +187,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        log_event("yt_decider", "Daemon interrupted by user")
+        raise SystemExit(130)

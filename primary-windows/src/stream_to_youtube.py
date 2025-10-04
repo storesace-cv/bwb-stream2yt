@@ -13,6 +13,22 @@ import shlex
 from pathlib import Path
 
 
+LOG_FILE = Path("/root/bwb_services.log")
+
+
+def log_event(component: str, message: str) -> None:
+    """Append a timestamped entry to the shared services log."""
+
+    timestamp = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    line = f"{timestamp} [{component}] {message}\n"
+    try:
+        with LOG_FILE.open("a", encoding="utf-8") as handle:
+            handle.write(line)
+    except OSError:
+        # Logging should never interrupt the streaming loop.
+        pass
+
+
 def _load_env_files():
     """Populate os.environ with values from nearby .env files."""
     script_dir = Path(__file__).resolve().parent
@@ -169,6 +185,7 @@ def run_loop():
         "flv",
         YT_URL,
     )
+    log_event("primary", "Streaming loop started")
     while True:
         if not in_day_window():
             # Still keep process alive but don't transmit: short sleep and re-check
@@ -187,10 +204,12 @@ def run_loop():
             "flv",
             YT_URL,
         ]
+        log_event("primary", "Launching ffmpeg process")
         proc = subprocess.Popen(cmd)
         try:
             code = proc.wait()
             print(f"[primary] ffmpeg exited code {code}; restarting in 5s.")
+            log_event("primary", f"ffmpeg exited with code {code}; retrying in 5s")
             time.sleep(5)
         except KeyboardInterrupt:
             try:
@@ -198,7 +217,10 @@ def run_loop():
             except Exception:
                 pass
             print("[primary] Stopped by user.")
+            log_event("primary", "Streaming loop interrupted by user")
             break
+
+    log_event("primary", "Streaming loop finished")
 
 
 if __name__ == "__main__":
