@@ -6,6 +6,8 @@ DEST_USER="${DEST_USER:-root}"
 DEST_IP="${DEST_IP:-104.248.134.44}"
 DEST_DIR="${DEST_DIR:-/root/bwb-stream2yt}"
 
+ssh -o StrictHostKeyChecking=accept-new "${DEST_USER}@${DEST_IP}" "mkdir -p '${DEST_DIR}/secondary-droplet' '${DEST_DIR}/scripts'"
+
 rsync -avz --delete \
   --exclude '*.env' --exclude 'token.json' --exclude 'client_secret.json' \
   "$(dirname "$0")/../secondary-droplet/" "${DEST_USER}@${DEST_IP}:${DEST_DIR}/secondary-droplet/"
