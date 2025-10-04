@@ -10,7 +10,7 @@ if [ -z "${YT_KEY:-}" ]; then
   echo "[youtube_fallback] ERRO: YT_KEY vazio (env: $ENV_FILE)."; exit 1
 fi
 
-: "${YT_URL_BACKUP:=rtmps://b.rtmps.youtube.com/live2?backup=1/${YT_KEY}}"
+: "${YT_URL_BACKUP:=rtmps://b.rtmps.youtube.com/live2/${YT_KEY}?backup=1}"
 
 : "${FALLBACK_IMG:=/usr/local/share/youtube-fallback/SignalLost.jpg}"
 : "${FALLBACK_WIDTH:=1280}"
