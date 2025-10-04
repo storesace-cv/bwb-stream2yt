@@ -1,0 +1,5 @@
+2025-10-04 22:41:24 [youtube_fallback] Serviço iniciado (PID 661)
+[youtube_fallback] Envio contínuo → rtmps://b.rtmps.youtube.com/live2/f4ex-ztrk-vc4h-2pvc-2kg4?backup=1
+[youtube_fallback] 1280x720@30 | V=1500k/1800k/3000k | A=128k@48000 | Delay=3.0s | GOP=60 | LogLevel=warning
+2025-10-04 22:41:24 [youtube_fallback] Iniciando ffmpeg (loglevel=warning)
+[swscaler @ 0x559e84be8100] deprecated pixel format used, make sure you did set range correctly
