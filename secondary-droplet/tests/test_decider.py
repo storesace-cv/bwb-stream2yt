@@ -55,18 +55,40 @@ class StopLoop(Exception):
     """Helper exception to interrupt the infinite loop."""
 
 
-def run_single_cycle(monkeypatch, *, state, hour, fallback_active):
-    """Execute one main loop iteration with controlled environment."""
+def run_cycles(monkeypatch, scenarios):
+    """Execute consecutive main loop iterations with controlled environment."""
 
     monkeypatch.setattr(decider, "build_api", lambda: object())
-    monkeypatch.setattr(decider, "get_state", lambda _api: state)
-    monkeypatch.setattr(decider, "local_hour", lambda: hour)
-    monkeypatch.setattr(decider, "is_active", lambda _unit: fallback_active)
+
+    scenario_iter = iter(scenarios)
+    current = next(scenario_iter)
+
+    fallback_state = current["fallback_active"]
+
+    def _advance():
+        nonlocal current, fallback_state
+        current = next(scenario_iter)
+        fallback_state = current.get("fallback_active", fallback_state)
+
+    monkeypatch.setattr(decider, "get_state", lambda _api: current["state"])
+    monkeypatch.setattr(decider, "local_hour", lambda: current["hour"])
+    monkeypatch.setattr(decider, "is_active", lambda _unit: fallback_state)
 
     start_calls = []
     stop_calls = []
-    monkeypatch.setattr(decider, "start_fallback", lambda: start_calls.append(True))
-    monkeypatch.setattr(decider, "stop_fallback", lambda: stop_calls.append(True))
+
+    def _start():
+        nonlocal fallback_state
+        start_calls.append(True)
+        fallback_state = True
+
+    def _stop():
+        nonlocal fallback_state
+        stop_calls.append(True)
+        fallback_state = False
+
+    monkeypatch.setattr(decider, "start_fallback", _start)
+    monkeypatch.setattr(decider, "stop_fallback", _stop)
 
     logs = []
 
@@ -76,9 +98,14 @@ def run_single_cycle(monkeypatch, *, state, hour, fallback_active):
     monkeypatch.setattr(decider, "log_event", _log_event)
 
     def _sleep(_seconds):
-        raise StopLoop()
+        try:
+            _advance()
+        except StopIteration as exc:
+            raise StopLoop() from exc
 
     monkeypatch.setattr(decider.time, "sleep", _sleep)
+
+    monkeypatch.setattr(decider, "context", decider.DeciderContext())
 
     with pytest.raises(StopLoop):
         decider.main()
@@ -87,6 +114,7 @@ def run_single_cycle(monkeypatch, *, state, hour, fallback_active):
         "logs": logs,
         "start_calls": len(start_calls),
         "stop_calls": len(stop_calls),
+        "fallback_state": fallback_state,
     }
 
 
@@ -103,12 +131,16 @@ def _extract_decision_fields(result):
 
 
 def test_daytime_primary_ok_stops_secondary(monkeypatch):
-    result = run_single_cycle(
-        monkeypatch,
-        state={"streamStatus": "active", "health": "good", "note": ""},
-        hour=10,
-        fallback_active=True,
-    )
+    scenarios = [
+        {
+            "state": {"streamStatus": "active", "health": "good", "note": ""},
+            "hour": 10,
+            "fallback_active": True,
+        }
+        for _ in range(decider.STOP_OK_STREAK)
+    ]
+
+    result = run_cycles(monkeypatch, scenarios)
 
     assert result["stop_calls"] == 1
     assert result["start_calls"] == 0
@@ -118,12 +150,16 @@ def test_daytime_primary_ok_stops_secondary(monkeypatch):
 
 
 def test_daytime_without_primary_starts_secondary(monkeypatch):
-    result = run_single_cycle(
-        monkeypatch,
-        state={"streamStatus": "?", "health": "bad", "note": "sem primário"},
-        hour=11,
-        fallback_active=False,
-    )
+    scenarios = [
+        {
+            "state": {"streamStatus": "?", "health": "bad", "note": "sem primário"},
+            "hour": 11,
+            "fallback_active": False,
+        }
+        for _ in range(decider.START_BAD_STREAK)
+    ]
+
+    result = run_cycles(monkeypatch, scenarios)
 
     assert result["start_calls"] == 1
     assert result["stop_calls"] == 0
@@ -133,11 +169,15 @@ def test_daytime_without_primary_starts_secondary(monkeypatch):
 
 
 def test_night_without_primary_starts_secondary(monkeypatch):
-    result = run_single_cycle(
+    result = run_cycles(
         monkeypatch,
-        state={"streamStatus": "inactive", "health": "noData", "note": ""},
-        hour=2,
-        fallback_active=False,
+        [
+            {
+                "state": {"streamStatus": "inactive", "health": "noData", "note": ""},
+                "hour": 2,
+                "fallback_active": False,
+            }
+        ],
     )
 
     assert result["start_calls"] == 1
@@ -148,11 +188,15 @@ def test_night_without_primary_starts_secondary(monkeypatch):
 
 
 def test_night_with_healthy_primary_keeps_state(monkeypatch):
-    result = run_single_cycle(
+    result = run_cycles(
         monkeypatch,
-        state={"streamStatus": "active", "health": "good", "note": ""},
-        hour=22,
-        fallback_active=True,
+        [
+            {
+                "state": {"streamStatus": "active", "health": "good", "note": ""},
+                "hour": 22,
+                "fallback_active": True,
+            }
+        ],
     )
 
     assert result["start_calls"] == 0
@@ -160,3 +204,50 @@ def test_night_with_healthy_primary_keeps_state(monkeypatch):
     fields = _extract_decision_fields(result)
     assert fields[4] == "KEEP"
     assert fields[5] == ""
+
+
+def test_daytime_primary_needs_hysteresis(monkeypatch):
+    scenarios = [
+        {
+            "state": {"streamStatus": "active", "health": "good", "note": ""},
+            "hour": 12,
+            "fallback_active": True,
+        },
+        {
+            "state": {"streamStatus": "active", "health": "good", "note": ""},
+            "hour": 12,
+        },
+    ]
+
+    result = run_cycles(monkeypatch, scenarios)
+
+    assert result["stop_calls"] == 0
+    fields = _extract_decision_fields(result)
+    assert fields[4] == "KEEP"
+    assert "aguardar ok streak" in fields[5]
+
+
+def test_primary_flap_does_not_toggle(monkeypatch):
+    scenarios = [
+        {
+            "state": {"streamStatus": "active", "health": "good", "note": ""},
+            "hour": 14,
+            "fallback_active": False,
+        },
+        {
+            "state": {"streamStatus": "?", "health": "bad", "note": "instável"},
+            "hour": 14,
+        },
+        {
+            "state": {"streamStatus": "active", "health": "ok", "note": ""},
+            "hour": 14,
+        },
+    ]
+
+    result = run_cycles(monkeypatch, scenarios)
+
+    assert result["start_calls"] == 0
+    assert result["stop_calls"] == 0
+    fields = _extract_decision_fields(result)
+    assert fields[4] == "KEEP"
+    assert "aguardar" in fields[5]

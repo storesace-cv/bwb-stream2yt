@@ -3,6 +3,7 @@
 
 import datetime
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from subprocess import run
 
@@ -18,8 +19,21 @@ CYCLE = 20  # seconds
 DAY_START = 8
 DAY_END = 19
 TZ_OFFSET = 1  # Luanda
+STOP_OK_STREAK = 3
+START_BAD_STREAK = 2
 
 LOG_FILE = Path("/root/bwb_services.log")
+
+
+@dataclass
+class DeciderContext:
+    """Stateful information preserved between cycles."""
+
+    primary_ok_streak: int = 0
+    primary_bad_streak: int = 0
+
+
+context = DeciderContext()
 
 
 def log_event(component: str, message: str) -> None:
@@ -176,27 +190,58 @@ def main():
 
         action = "KEEP"
         detail = state["note"] or ""
+
+        primary_ok = stream_status == "active" and health in ("good", "ok")
+        primary_bad = stream_status in ("inactive", "?") or health in (
+            "noData",
+            "?",
+            "bad",
+        )
+
+        if primary_ok:
+            context.primary_ok_streak += 1
+        else:
+            context.primary_ok_streak = 0
+
+        if primary_bad:
+            context.primary_bad_streak += 1
+        else:
+            context.primary_bad_streak = 0
         # Night: 19:00–08:00 keep fallback if no primary
         if not (DAY_START <= hour < DAY_END):
-            if stream_status in ("inactive", "?") or health in ("noData", "?", "bad"):
+            if primary_bad:
                 if not fallback_on:
                     start_fallback()
                     action = "START secondary"
                     detail = "night + no primary"
+                else:
+                    detail = detail or ""
             else:
                 action = "KEEP"
         else:
             # Day: stop fallback if primary OK, else keep/start
-            if stream_status == "active" and health in ("good", "ok"):
-                if fallback_on:
+            if primary_ok:
+                if fallback_on and context.primary_ok_streak >= STOP_OK_STREAK:
                     stop_fallback()
                     action = "STOP secondary"
                     detail = "day primary OK"
+                    context.primary_bad_streak = 0
+                else:
+                    detail = (
+                        detail
+                        or f"aguardar ok streak {context.primary_ok_streak}/{STOP_OK_STREAK}"
+                    )
             else:
-                if not fallback_on:
+                if not fallback_on and context.primary_bad_streak >= START_BAD_STREAK:
                     start_fallback()
                     action = "START secondary"
                     detail = "day but no primary"
+                    context.primary_ok_streak = 0
+                else:
+                    detail = (
+                        detail
+                        or f"aguardar bad streak {context.primary_bad_streak}/{START_BAD_STREAK}"
+                    )
 
         log_event(
             "yt_decider",
