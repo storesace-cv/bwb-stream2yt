@@ -81,7 +81,7 @@ Os serviços principais do Droplet:
 |----------|--------|
 | `/usr/local/bin/youtube_fallback.sh` | Script principal do sinal secundário |
 | `/usr/local/config/youtube-fallback.defaults` | Defaults do slate (resolução, bitrates, textos) |
-| `/etc/youtube-fallback.env` | Overrides conscientes (`YT_KEY`, ajustes específicos) |
+| `/etc/youtube-fallback.env` | Overrides conscientes (`YT_KEY`, ajustes específicos) — reescrito pelo `post_deploy.sh` preservando a chave |
 | `/usr/local/bin/yt_decider_daemon.py` | Monitor do estado da stream |
 | `/etc/systemd/system/youtube-fallback.service` | Unit de arranque e recuperação |
 | `/etc/systemd/system/yt-decider-daemon.service` | Unit do monitor principal |
@@ -124,9 +124,9 @@ sudo systemctl status yt-decider-daemon youtube-fallback --no-pager
 
 ## 🔹 9. Nota sobre Chaves e Segurança
 
-- Utilize a variável `YT_KEY` definida em `/etc/youtube-fallback.env` (ver `secondary-droplet/config/youtube-fallback.env.example`) para configurar a chave do YouTube sem expor valores reais.
+- Utilize a variável `YT_KEY` definida em `/etc/youtube-fallback.env` (ver `secondary-droplet/config/youtube-fallback.env.example`) para configurar a chave do YouTube sem expor valores reais. O `post_deploy.sh` garante que o ficheiro mantém `YT_KEY` e repõe as linhas comentadas com os defaults atuais.
 - Não incluir a chave em ficheiros públicos ou mensagens de suporte.
-- O ficheiro `.env` deve ter permissões `600` e proprietário `root`, garantindo acesso restrito.
+- O ficheiro `.env` é recriado com permissões `0644` e proprietário `root`; ajuste as permissões apenas se políticas locais exigirem algo mais restritivo.
 
 ---
 

@@ -13,7 +13,7 @@
 
 ## If backup URL reuses `${YT_KEY}` literal
 - Confirm `/usr/local/config/youtube-fallback.defaults` matches the expected slate defaults (managed via deploy).
-- Confirm `/etc/youtube-fallback.env` contains only `YT_KEY="..."`.
+- Confirm `/etc/youtube-fallback.env` preserva `YT_KEY="..."` e mostra as linhas comentadas com os defaults atuais.
 - Ensure **no** `YT_URL_BACKUP` line remains stale.
 - `systemctl daemon-reload && systemctl restart youtube-fallback`
 

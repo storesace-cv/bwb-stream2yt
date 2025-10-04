@@ -38,9 +38,10 @@ systemctl enable --now youtube-fallback.service
 
 ```
 # YT_KEY (backup)
-printf 'YT_KEY="SUA_CHAVE_AQUI"
-' > /etc/youtube-fallback.env
-chmod 640 /etc/youtube-fallback.env && chown root:root /etc/youtube-fallback.env
+# post_deploy.sh irá regenerar o ficheiro preservando a chave e restaurando os defaults comentados.
+printf 'YT_KEY="SUA_CHAVE_AQUI"\n' > /etc/youtube-fallback.env
+chown root:root /etc/youtube-fallback.env
+chmod 644 /etc/youtube-fallback.env
 systemctl restart youtube-fallback
 
 # OAuth token para YouTube Data API
