@@ -19,13 +19,14 @@ Two-module setup:
 5. Run the generated `dist/stream_to_youtube.exe`, garantindo que `YT_URL` ou `YT_KEY` estejam presentes no ambiente.
 
 ### Secondary (Droplet)
-1. Put stream key in `/etc/youtube-fallback.env` (`YT_KEY="..."`).  
+1. Defaults ship in `/usr/local/config/youtube-fallback.defaults`; adjust there if the standard slate settings need to change.
+2. Put stream key in `/etc/youtube-fallback.env` (`YT_KEY="..."`). Use this file only for secrets or conscious overrides.
 2. Install units & scripts from `secondary-droplet/` and run:
-   ```bash
-   sudo systemctl daemon-reload
-   sudo systemctl enable --now youtube-fallback.service
-   sudo systemctl enable --now yt-decider-daemon.service
-   ```
+  ```bash
+  sudo systemctl daemon-reload
+  sudo systemctl enable --now youtube-fallback.service
+  sudo systemctl enable --now yt-decider-daemon.service
+  ```
 
 ### Deploy tool
 - Configure `deploy/deploy_config.json` with SSH user/identity.
@@ -44,6 +45,7 @@ secondary-droplet/
     yt_decider_daemon.py
     yt_api_probe_once.py
   config/
+    youtube-fallback.defaults
     youtube-fallback.env.example
   systemd/
     youtube-fallback.service

@@ -80,7 +80,8 @@ Os serviços principais do Droplet:
 | Caminho | Função |
 |----------|--------|
 | `/usr/local/bin/youtube_fallback.sh` | Script principal do sinal secundário |
-| `/etc/youtube-fallback.env` | Configuração de parâmetros (resolução, bitrate, chave YouTube) |
+| `/usr/local/config/youtube-fallback.defaults` | Defaults do slate (resolução, bitrates, textos) |
+| `/etc/youtube-fallback.env` | Overrides conscientes (`YT_KEY`, ajustes específicos) |
 | `/usr/local/bin/yt_decider_daemon.py` | Monitor do estado da stream |
 | `/etc/systemd/system/youtube-fallback.service` | Unit de arranque e recuperação |
 | `/etc/systemd/system/yt-decider-daemon.service` | Unit do monitor principal |

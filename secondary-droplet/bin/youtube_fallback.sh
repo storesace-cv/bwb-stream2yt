@@ -16,6 +16,32 @@ trap 'status=$?; log_line "Serviço terminou (exit ${status})"' EXIT
 
 log_line "Serviço iniciado (PID $$)"
 
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+DEFAULTS_FILE="${SCRIPT_DIR%/bin}/config/youtube-fallback.defaults"
+
+if [ -r "$DEFAULTS_FILE" ]; then
+  # shellcheck source=../config/youtube-fallback.defaults
+  . "$DEFAULTS_FILE"
+else
+  FALLBACK_IMG="/usr/local/share/youtube-fallback/SignalLost.jpg"
+  FALLBACK_WIDTH=1280
+  FALLBACK_HEIGHT=720
+  FALLBACK_FPS=30
+  FALLBACK_VBITRATE="1500k"
+  FALLBACK_MAXRATE="1800k"
+  FALLBACK_BUFSIZE="3000k"
+  FALLBACK_ABITRATE="128k"
+  FALLBACK_AR=48000
+  FALLBACK_PRESET="veryfast"
+  FALLBACK_GOP=60
+  FALLBACK_KEYINT_MIN=60
+  FALLBACK_DELAY_SEC=3.0
+  FALLBACK_LOGLEVEL="warning"
+  FALLBACK_FONT="/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+  FALLBACK_SCROLL_TEXT="BEACHCAM | CABO LEDO | ANGOLA"
+  FALLBACK_STATIC_TEXT="VOLTAREMOS DENTRO DE MOMENTOS"
+fi
+
 ENV_FILE="/etc/youtube-fallback.env"
 [ -r "$ENV_FILE" ] && . "$ENV_FILE"
 
@@ -83,24 +109,6 @@ if [ -z "$YT_KEY" ]; then
 fi
 
 YT_URL_BACKUP="$(normalize_backup_url "${YT_URL_BACKUP-}" "$YT_KEY")"
-
-: "${FALLBACK_IMG:=/usr/local/share/youtube-fallback/SignalLost.jpg}"
-: "${FALLBACK_WIDTH:=1280}"
-: "${FALLBACK_HEIGHT:=720}"
-: "${FALLBACK_FPS:=30}"
-: "${FALLBACK_VBITRATE:=1500k}"
-: "${FALLBACK_MAXRATE:=1800k}"
-: "${FALLBACK_BUFSIZE:=3000k}"
-: "${FALLBACK_ABITRATE:=128k}"
-: "${FALLBACK_AR:=48000}"
-: "${FALLBACK_PRESET:=veryfast}"
-: "${FALLBACK_GOP:=60}"
-: "${FALLBACK_KEYINT_MIN:=60}"
-: "${FALLBACK_DELAY_SEC:=3.0}"
-: "${FALLBACK_LOGLEVEL:=warning}"
-: "${FALLBACK_FONT:=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf}"
-: "${FALLBACK_SCROLL_TEXT:=BEACHCAM | CABO LEDO | ANGOLA}"
-: "${FALLBACK_STATIC_TEXT:=VOLTAREMOS DENTRO DE MOMENTOS}"
 
 echo "[youtube_fallback] Envio contínuo → ${YT_URL_BACKUP}"
 echo "[youtube_fallback] ${FALLBACK_WIDTH}x${FALLBACK_HEIGHT}@${FALLBACK_FPS} | V=${FALLBACK_VBITRATE}/${FALLBACK_MAXRATE}/${FALLBACK_BUFSIZE} | A=${FALLBACK_ABITRATE}@${FALLBACK_AR} | Delay=${FALLBACK_DELAY_SEC}s | GOP=${FALLBACK_GOP} | LogLevel=${FALLBACK_LOGLEVEL}"

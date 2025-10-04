@@ -21,7 +21,8 @@ This repository contains **two logical modules**:
 - Offline discovery doc: `/root/bwb-stream2yt/docs/youtube-data-api.v3.discovery.json` (YouTube Data API schema for local tooling/troubleshooting)
 - Decider: `/usr/local/bin/yt_decider_daemon.py`
 - Fallback sender: `/usr/local/bin/youtube_fallback.sh`
-- Fallback env: `/etc/youtube-fallback.env`
+- Fallback defaults: `/usr/local/config/youtube-fallback.defaults`
+- Fallback env overrides: `/etc/youtube-fallback.env`
 - Unit files: `/etc/systemd/system/*.service`
 - Log centralizado: `/root/bwb_services.log`
 
