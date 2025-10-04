@@ -96,6 +96,8 @@ def get_state(yt):
         "health": hs.get("status", "?"),
         "note": "",
     }
+
+
 def is_active(unit):
     return (
         run(["systemctl", "is-active", unit], capture_output=True, text=True).returncode
