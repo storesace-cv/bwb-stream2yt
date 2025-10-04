@@ -68,8 +68,12 @@ def run_single_cycle(monkeypatch, *, state, hour, fallback_active):
     monkeypatch.setattr(decider, "start_fallback", lambda: start_calls.append(True))
     monkeypatch.setattr(decider, "stop_fallback", lambda: stop_calls.append(True))
 
-    rows = []
-    monkeypatch.setattr(decider, "csv_log", lambda row: rows.append(row))
+    logs = []
+
+    def _log_event(component, message):
+        logs.append((component, message))
+
+    monkeypatch.setattr(decider, "log_event", _log_event)
 
     def _sleep(_seconds):
         raise StopLoop()
@@ -80,10 +84,22 @@ def run_single_cycle(monkeypatch, *, state, hour, fallback_active):
         decider.main()
 
     return {
-        "rows": rows,
+        "logs": logs,
         "start_calls": len(start_calls),
         "stop_calls": len(stop_calls),
     }
+
+
+def _extract_decision_fields(result):
+    decision_messages = [
+        message for _component, message in result["logs"] if message.startswith("decision_csv=")
+    ]
+    assert decision_messages, "No decision log entry captured"
+    payload = decision_messages[-1].split("=", 1)[1]
+    parts = payload.split(",", 5)
+    if len(parts) < 6:
+        parts.extend([""] * (6 - len(parts)))
+    return parts
 
 
 def test_daytime_primary_ok_stops_secondary(monkeypatch):
@@ -96,10 +112,9 @@ def test_daytime_primary_ok_stops_secondary(monkeypatch):
 
     assert result["stop_calls"] == 1
     assert result["start_calls"] == 0
-    assert result["rows"]
-    action_row = result["rows"][0]
-    assert action_row[4] == "STOP secondary"
-    assert action_row[5] == "day primary OK"
+    fields = _extract_decision_fields(result)
+    assert fields[4] == "STOP secondary"
+    assert fields[5] == "day primary OK"
 
 
 def test_daytime_without_primary_starts_secondary(monkeypatch):
@@ -112,9 +127,9 @@ def test_daytime_without_primary_starts_secondary(monkeypatch):
 
     assert result["start_calls"] == 1
     assert result["stop_calls"] == 0
-    action_row = result["rows"][0]
-    assert action_row[4] == "START secondary"
-    assert action_row[5] == "day but no primary"
+    fields = _extract_decision_fields(result)
+    assert fields[4] == "START secondary"
+    assert fields[5] == "day but no primary"
 
 
 def test_night_without_primary_starts_secondary(monkeypatch):
@@ -127,9 +142,9 @@ def test_night_without_primary_starts_secondary(monkeypatch):
 
     assert result["start_calls"] == 1
     assert result["stop_calls"] == 0
-    action_row = result["rows"][0]
-    assert action_row[4] == "START secondary"
-    assert action_row[5] == "night + no primary"
+    fields = _extract_decision_fields(result)
+    assert fields[4] == "START secondary"
+    assert fields[5] == "night + no primary"
 
 
 def test_night_with_healthy_primary_keeps_state(monkeypatch):
@@ -142,6 +157,6 @@ def test_night_with_healthy_primary_keeps_state(monkeypatch):
 
     assert result["start_calls"] == 0
     assert result["stop_calls"] == 0
-    action_row = result["rows"][0]
-    assert action_row[4] == "KEEP"
-    assert action_row[5] == ""
+    fields = _extract_decision_fields(result)
+    assert fields[4] == "KEEP"
+    assert fields[5] == ""
