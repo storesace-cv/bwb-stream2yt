@@ -1,6 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+LOG_FILE="/root/bwb_services.log"
+exec >>"$LOG_FILE" 2>&1
+
+timestamp() {
+  date -u '+%Y-%m-%d %H:%M:%S'
+}
+
+log_line() {
+  printf '%s [youtube_fallback] %s\n' "$(timestamp)" "$*"
+}
+
+trap 'status=$?; log_line "Serviço terminou (exit ${status})"' EXIT
+
+log_line "Serviço iniciado (PID $$)"
+
 ENV_FILE="/etc/youtube-fallback.env"
 [ -r "$ENV_FILE" ] && . "$ENV_FILE"
 
@@ -32,7 +47,7 @@ fi
 echo "[youtube_fallback] Envio contínuo → ${YT_URL_BACKUP}"
 echo "[youtube_fallback] ${FALLBACK_WIDTH}x${FALLBACK_HEIGHT}@${FALLBACK_FPS} | V=${FALLBACK_VBITRATE}/${FALLBACK_MAXRATE}/${FALLBACK_BUFSIZE} | A=${FALLBACK_ABITRATE}@${FALLBACK_AR} | Delay=${FALLBACK_DELAY_SEC}s | GOP=${FALLBACK_GOP}"
 
-exec ffmpeg -progress /run/youtube-fallback.progress -hide_banner -loglevel warning -nostats \
+if ffmpeg -progress /run/youtube-fallback.progress -hide_banner -loglevel warning -nostats \
   -re -stream_loop -1 -framerate "${FALLBACK_FPS}" -i "${FALLBACK_IMG}" \
   -f lavfi -i "anullsrc=channel_layout=stereo:sample_rate=${FALLBACK_AR}" \
   -filter_complex "[0:v]scale=${FALLBACK_WIDTH}:${FALLBACK_HEIGHT}:force_original_aspect_ratio=decrease,pad=${FALLBACK_WIDTH}:${FALLBACK_HEIGHT}:(ow-iw)/2:(oh-ih)/2:color=black,format=yuv420p,setpts=PTS+${FALLBACK_DELAY_SEC}/TB,drawtext=fontfile=${FALLBACK_FONT}:text='${FALLBACK_SCROLL_TEXT}':fontsize=36:fontcolor=white:shadowcolor=black@0.85:shadowx=2:shadowy=2:x=w-mod(t*30*8\,w+text_w):y=H-60,drawtext=fontfile=${FALLBACK_FONT}:text='${FALLBACK_STATIC_TEXT}':fontsize=28:fontcolor=white:shadowcolor=black@0.85:shadowx=2:shadowy=2:x=(w-text_w)/2:y=60[vb];[1:a]asetpts=PTS+${FALLBACK_DELAY_SEC}/TB[ab]" \
@@ -41,4 +56,11 @@ exec ffmpeg -progress /run/youtube-fallback.progress -hide_banner -loglevel warn
   -b:v "${FALLBACK_VBITRATE}" -maxrate "${FALLBACK_MAXRATE}" -bufsize "${FALLBACK_BUFSIZE}" \
   -g "${FALLBACK_GOP}" -keyint_min "${FALLBACK_KEYINT_MIN}" -sc_threshold 0 \
   -c:a aac -b:a "${FALLBACK_ABITRATE}" -ar "${FALLBACK_AR}" -ac 2 \
-  -f flv "${YT_URL_BACKUP}"
+  -f flv "${YT_URL_BACKUP}"; then
+  status=0
+else
+  status=$?
+fi
+
+log_line "ffmpeg terminou (exit ${status})"
+exit ${status}
