@@ -1,0 +1,32 @@
+2025-10-04 22:41:24 [youtube_fallback] Serviço iniciado (PID 661)
+[youtube_fallback] Envio contínuo → rtmps://b.rtmps.youtube.com/live2/f4ex-ztrk-vc4h-2pvc-2kg4?backup=1
+[youtube_fallback] 1280x720@30 | V=1500k/1800k/3000k | A=128k@48000 | Delay=3.0s | GOP=60 | LogLevel=warning
+2025-10-04 22:41:24 [youtube_fallback] Iniciando ffmpeg (loglevel=warning)
+[swscaler @ 0x559e84be8100] deprecated pixel format used, make sure you did set range correctly
+[flv @ 0x559e84732c40] Failed to update header with correct duration.
+[flv @ 0x559e84732c40] Failed to update header with correct filesize.
+2025-10-04 22:58:18 [youtube_fallback] Recebido SIGTERM, encerrando
+2025-10-04 22:58:18 [youtube_fallback] Serviço terminou (exit 255)
+2025-10-04 22:58:18 [youtube_fallback] Serviço iniciado (PID 1511)
+[youtube_fallback] Envio contínuo → rtmps://b.rtmps.youtube.com/live2?backup=1/f4ex-ztrk-vc4h-2pvc-2kg4
+[youtube_fallback] 1280x720@30 | V=1500k/1800k/3000k | A=128k@48000 | Delay=3.0s | GOP=60 | LogLevel=warning
+2025-10-04 22:58:18 [youtube_fallback] Iniciando ffmpeg (loglevel=warning)
+[swscaler @ 0x55b0e8e2f100] deprecated pixel format used, make sure you did set range correctly
+[flv @ 0x55b0e8979c40] Failed to update header with correct duration.
+[flv @ 0x55b0e8979c40] Failed to update header with correct filesize.
+2025-10-04 22:58:36 [youtube_fallback] Recebido SIGTERM, encerrando
+2025-10-04 22:58:36 [youtube_fallback] Serviço terminou (exit 255)
+2025-10-04 22:58:36 [youtube_fallback] Serviço iniciado (PID 1595)
+[youtube_fallback] Envio contínuo → rtmps://b.rtmps.youtube.com/live2?backup=1/f4ex-ztrk-vc4h-2pvc-2kg4
+[youtube_fallback] 1280x720@30 | V=1500k/1800k/3000k | A=128k@48000 | Delay=3.0s | GOP=60 | LogLevel=warning
+2025-10-04 22:58:36 [youtube_fallback] Iniciando ffmpeg (loglevel=warning)
+[swscaler @ 0x556b98fa2100] deprecated pixel format used, make sure you did set range correctly
+[flv @ 0x556b98aecc40] Failed to update header with correct duration.
+[flv @ 0x556b98aecc40] Failed to update header with correct filesize.
+2025-10-04 22:59:10 [youtube_fallback] Recebido SIGTERM, encerrando
+2025-10-04 22:59:10 [youtube_fallback] Serviço terminou (exit 255)
+2025-10-04 22:59:38 [youtube_fallback] Serviço iniciado (PID 660)
+[youtube_fallback] Envio contínuo → rtmps://b.rtmps.youtube.com/live2?backup=1/f4ex-ztrk-vc4h-2pvc-2kg4
+[youtube_fallback] 1280x720@30 | V=1500k/1800k/3000k | A=128k@48000 | Delay=3.0s | GOP=60 | LogLevel=warning
+2025-10-04 22:59:38 [youtube_fallback] Iniciando ffmpeg (loglevel=warning)
+[swscaler @ 0x559d4f715100] deprecated pixel format used, make sure you did set range correctly
