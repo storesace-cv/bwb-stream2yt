@@ -1,0 +1,29 @@
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.spec
+build/
+dist/
+
+# Virtualenv
+.venv/
+venv/
+env/
+
+# Logs & runtime
+*.log
+*.csv
+*.pid
+*.progress
+
+# OS
+.DS_Store
+
+# Secrets
+*.env
+**/secrets/**
+token.json
+client_secret.json

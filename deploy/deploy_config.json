@@ -1,0 +1,39 @@
+{
+  "droplet_host": "104.248.134.44",
+  "ssh_user": "root",
+  "ssh_key": "~/.ssh/id_rsa",
+  "remote_prefix": "/",
+  "sync_map": [
+    {
+      "local": "secondary-droplet/bin/yt_decider_daemon.py",
+      "remote": "/usr/local/bin/yt_decider_daemon.py",
+      "mode": "755"
+    },
+    {
+      "local": "secondary-droplet/bin/youtube_fallback.sh",
+      "remote": "/usr/local/bin/youtube_fallback.sh",
+      "mode": "755"
+    },
+    {
+      "local": "secondary-droplet/bin/yt_api_probe_once.py",
+      "remote": "/root/yt_api_probe_once.py",
+      "mode": "755"
+    },
+    {
+      "local": "secondary-droplet/systemd/youtube-fallback.service",
+      "remote": "/etc/systemd/system/youtube-fallback.service",
+      "mode": "644"
+    },
+    {
+      "local": "secondary-droplet/systemd/yt-decider-daemon.service",
+      "remote": "/etc/systemd/system/yt-decider-daemon.service",
+      "mode": "644"
+    },
+    {
+      "local": "secondary-droplet/config/youtube-fallback.env.example",
+      "remote": "/etc/youtube-fallback.env",
+      "mode": "644",
+      "if_missing_only": true
+    }
+  ]
+}
