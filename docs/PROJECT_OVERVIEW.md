@@ -24,4 +24,4 @@ This repository contains **two logical modules**:
 - Unit files: `/etc/systemd/system/*.service`
 - Logs (csv): `/root/yt_decider_log.csv`
 
-> **Stream Key used by customer today:** `f4ex-ztrk-vc4h-2pvc-2kg4` > Keep it in **env files / secrets**; do not commit your actual key to public repos.
+> **Stream Key**: manter apenas em ficheiros `.env` / secrets seguros; nunca o commits no repositório público.
