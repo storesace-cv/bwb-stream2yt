@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-cd /root/bwb-stream2yt/linux-secondary
+cd /root/bwb-stream2yt/secondary-droplet
 
 # Instalar dependências (idempotente)
 pip3 install -r requirements.txt
 
 # Instalar/atualizar serviços
-install -m 755 -o root -g root youtube_fallback.sh /usr/local/bin/youtube_fallback.sh
-install -m 644 -o root -g root youtube-fallback.service /etc/systemd/system/youtube-fallback.service
+install -m 755 -o root -g root bin/youtube_fallback.sh /usr/local/bin/youtube_fallback.sh
+install -m 644 -o root -g root systemd/youtube-fallback.service /etc/systemd/system/youtube-fallback.service
 
 systemctl daemon-reload
 systemctl enable --now youtube-fallback.service

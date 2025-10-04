@@ -7,13 +7,13 @@
 
 ## O que procurar neste repo
 
-- **windows-primary/**: app `stream_to_youtube.py` para enviar RTSP/DirectShow → RTMP(S) primário (A-endpoint do YouTube).
-- **linux-secondary/**:
-  - `youtube_fallback.sh`: envia slate 720p 30fps para **backup** (B-endpoint do YouTube).
-  - `youtube-fallback.service`: unit systemd.
-  - `yt_decider_daemon.py`: decide **quando** ligar/desligar o fallback (ligar à API YouTube).
-  - `yt_api_probe_once.py`: utilitário de debug (lista `liveStreams`/health).
-  - `regen_token.py`: fluxo OAuth (gerar `token.json` noutro host com browser).
+- **primary-windows/**: app `stream_to_youtube.py` para enviar RTSP/DirectShow → RTMP(S) primário (A-endpoint do YouTube).
+- **secondary-droplet/**:
+  - `bin/youtube_fallback.sh`: envia slate 720p 30fps para **backup** (B-endpoint do YouTube).
+  - `systemd/youtube-fallback.service`: unit systemd.
+  - `bin/yt_decider_daemon.py`: decide **quando** ligar/desligar o fallback (ligar à API YouTube).
+  - `bin/yt_api_probe_once.py`: utilitário de debug (lista `liveStreams`/health).
+  - `tools/regen_token.py`: fluxo OAuth (gerar `token.json` noutro host com browser).
 
 ## Tarefas pedidas
 

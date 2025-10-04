@@ -13,7 +13,7 @@ Two-module setup:
    - `YT_KEY` — apenas a chave; o URL é construído automaticamente.
    Copie `primary-windows/src/.env.example` para `.env` (no mesmo diretório) ou defina as variáveis antes de executar.
 3. Ajuste `primary-windows/src/stream_to_youtube.py` apenas se precisar alterar o dispositivo de entrada.
-4. Build: `py -3.11 -m pip install -U pyinstaller==6.10` then `py -3.11 -m PyInstaller --clean primary-windows/stream_to_youtube.spec`.
+4. Build: `py -3.11 -m pip install -U pyinstaller==6.10` then `py -3.11 -m PyInstaller --clean --onefile primary-windows/src/stream_to_youtube.py`.
 5. Run the generated `dist/stream_to_youtube.exe`, garantindo que `YT_URL` ou `YT_KEY` estejam presentes no ambiente.
 
 ### Secondary (Droplet)
@@ -36,8 +36,6 @@ Two-module setup:
 primary-windows/
   src/
     stream_to_youtube.py
-  stream_to_youtube.spec
-
 secondary-droplet/
   bin/
     youtube_fallback.sh
