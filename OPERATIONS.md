@@ -11,7 +11,7 @@ ss -tnp | grep -Ei 'youtube|rtmps|ffmpeg' || pgrep -fa ffmpeg
 ## YouTube API (debug rápido)
 
 ```
-python3 /root/bwb-stream2yt/linux-secondary/yt_api_probe_once.py
+python3 /root/bwb-stream2yt/secondary-droplet/bin/yt_api_probe_once.py
 ```
 
 ## Decider (se usado)

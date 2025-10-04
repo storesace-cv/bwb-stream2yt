@@ -10,11 +10,14 @@ Inclui:
 
 ## Estrutura
 ```
-scripts/
-  ├── yt_api_probe_once.py
-  └── youtube_fallback.sh
-systemd/
-  └── youtube-fallback.service
+primary-windows/
+  └── src/
+      └── stream_to_youtube.py
+secondary-droplet/
+  ├── bin/
+  ├── config/
+  ├── systemd/
+  └── tools/
 docs/
   ├── PROJECT_OVERVIEW.md
   ├── CODING_GUIDE.md

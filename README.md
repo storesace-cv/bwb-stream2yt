@@ -2,9 +2,9 @@
 
 Pipeline para transmissão para o YouTube com **fonte primária (Windows)** e **backup secundário (Droplet Linux)**.
 
-Este repositório contém:
-- **windows-primary/** – app que empacota e envia o RTSP (ou DirectShow) para o YouTube (URL primária).
-- **linux-secondary/** – serviços de fallback no droplet (imagem + texto) e daemon "decider" (liga/desliga o fallback).
+Nomenclatura canónica:
+- **primary-windows/** – app que empacota e envia o RTSP (ou DirectShow) para o YouTube (URL primária).
+- **secondary-droplet/** – serviços de fallback no droplet (imagem + texto) e daemon "decider" (liga/desliga o fallback).
 - **scripts/** – utilitários de deploy/atualização para o droplet via SSH/rsync.
 
 > ⚠️ **Segredos (chaves/tokens) NÃO vão para o repositório.** Ver `SECURITY.md`.
@@ -14,7 +14,7 @@ Este repositório contém:
 1. Criar o repo remoto no GitHub (`bwb-stream2yt`).
 2. Iniciar git localmente e publicar (ver *Passo-a-passo* abaixo).
 3. Configurar **Droplet** (ver `DEPLOY.md`).
-4. Configurar **Windows** (ver `windows-primary/README.md`).
+4. Configurar **Windows** (ver `primary-windows/README.md`).
 
 ---
 

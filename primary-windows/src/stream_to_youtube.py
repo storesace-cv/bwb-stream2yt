@@ -4,7 +4,12 @@
 # - Robust ffmpeg process handling and auto-restarts on error.
 # - Default input is RTSP; change to dshow as needed.
 
-import os, sys, time, subprocess, signal, datetime
+import os
+import sys
+import time
+import subprocess
+import datetime
+import shlex
 from pathlib import Path
 
 
@@ -60,26 +65,39 @@ def _resolve_yt_url():
 # YouTube Primary URL (lido de variáveis/env file)
 YT_URL = _resolve_yt_url()
 
-# Day window (Africa/Luanda time offset)
-DAY_START_HOUR = 8
-DAY_END_HOUR = 19
-TZ_OFFSET_HOURS = 1  # Luanda currently UTC+1
+# Day window (Africa/Luanda time offset — overridable via env)
+DAY_START_HOUR = int(os.environ.get("YT_DAY_START_HOUR", "8"))
+DAY_END_HOUR = int(os.environ.get("YT_DAY_END_HOUR", "19"))
+TZ_OFFSET_HOURS = int(os.environ.get("YT_TZ_OFFSET_HOURS", "1"))  # Luanda currently UTC+1
 
 # FFmpeg input/output (example: RTSP)
-INPUT_ARGS = [
-    "-rtsp_transport","tcp","-rtsp_flags","prefer_tcp",
-    "-fflags","nobuffer","-flags","low_delay","-use_wallclock_as_timestamps","1",
-    "-i","rtsp://BEACHCAM:QueriasEntrar123@10.0.254.50:554/Streaming/Channels/101"
-]
-OUTPUT_ARGS = [
-    "-vf","scale=1920:1080:flags=bicubic,format=yuv420p",
-    "-r","30",
-    "-c:v","libx264","-preset","veryfast","-profile:v","high","-level","4.2",
-    "-b:v","5000k","-maxrate","6000k","-bufsize","12000k","-g","60","-sc_threshold","0",
-    "-pix_fmt","yuv420p",
-    "-filter:a","aresample=async=1:first_pts=0, aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo",
-    "-c:a","aac","-b:a","128k","-ar","44100","-ac","2",
-]
+def _split_args(value: str, default: list[str]) -> list[str]:
+    value = value.strip()
+    if not value:
+        return default
+    return shlex.split(value)
+
+
+INPUT_ARGS = _split_args(
+    os.environ.get("YT_INPUT_ARGS", ""),
+    [
+        "-rtsp_transport","tcp","-rtsp_flags","prefer_tcp",
+        "-fflags","nobuffer","-flags","low_delay","-use_wallclock_as_timestamps","1",
+        "-i","rtsp://BEACHCAM:QueriasEntrar123@10.0.254.50:554/Streaming/Channels/101",
+    ],
+)
+OUTPUT_ARGS = _split_args(
+    os.environ.get("YT_OUTPUT_ARGS", ""),
+    [
+        "-vf","scale=1920:1080:flags=bicubic,format=yuv420p",
+        "-r","30",
+        "-c:v","libx264","-preset","veryfast","-profile:v","high","-level","4.2",
+        "-b:v","5000k","-maxrate","6000k","-bufsize","12000k","-g","60","-sc_threshold","0",
+        "-pix_fmt","yuv420p",
+        "-filter:a","aresample=async=1:first_pts=0, aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo",
+        "-c:a","aac","-b:a","128k","-ar","44100","-ac","2",
+    ],
+)
 
 FFMPEG = os.environ.get("FFMPEG", r"C:\bwb\ffmpeg\bin\ffmpeg.exe")
 
