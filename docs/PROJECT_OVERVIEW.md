@@ -18,6 +18,7 @@ This repository contains **two logical modules**:
 ## Key paths on production droplet
 
 - Token: `/root/token.json` (Google OAuth — YouTube API)
+- Offline discovery doc: `/root/bwb-stream2yt/docs/youtube-data-api.v3.discovery.json` (YouTube Data API schema for local tooling/troubleshooting)
 - Decider: `/usr/local/bin/yt_decider_daemon.py`
 - Fallback sender: `/usr/local/bin/youtube_fallback.sh`
 - Fallback env: `/etc/youtube-fallback.env`

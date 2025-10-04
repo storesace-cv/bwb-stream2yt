@@ -14,6 +14,8 @@ ss -tnp | grep -Ei 'youtube|rtmps|ffmpeg' || pgrep -fa ffmpeg
 python3 /root/bwb-stream2yt/secondary-droplet/bin/yt_api_probe_once.py
 ```
 
+- Offline schema for manual API calls: `/root/bwb-stream2yt/docs/youtube-data-api.v3.discovery.json`.
+
 ## Decider (se usado)
 
 - Ver `journalctl -u yt-decider-daemon -f -l`
