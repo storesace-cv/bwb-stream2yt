@@ -18,6 +18,7 @@ env/
 *.csv
 *.pid
 *.progress
+logs/
 
 # OS
 .DS_Store
