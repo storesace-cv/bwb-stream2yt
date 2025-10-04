@@ -11,10 +11,16 @@ TOKEN="token.json"
 
 def main():
     flow = InstalledAppFlow.from_client_secrets_file(CLIENT_SECRET, SCOPES)
-    print("Abra este URL no seu browser:")
-    print(flow.authorization_url(access_type='offline', include_granted_scopes='true')[0])
-    creds = flow.run_local_server(port=8080, open_browser=False,
-        authorization_prompt_message="Depois de autorizar, será redirecionado para http://localhost:8080 (via túnel SSH).")
+    creds = flow.run_local_server(
+        port=8080,
+        open_browser=False,
+        authorization_prompt_message=(
+            "Abra este URL no seu browser e, depois de autorizar, "
+            "será redirecionado para http://localhost:8080 (via túnel SSH)."
+        ),
+        access_type="offline",
+        include_granted_scopes="true",
+    )
     with open(TOKEN, "w", encoding="utf-8") as f:
         f.write(creds.to_json())
     print(f"[OK] Token gravado em {TOKEN}")
