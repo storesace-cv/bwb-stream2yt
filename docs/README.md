@@ -4,6 +4,8 @@ Two-module setup:
 - `primary-windows/` → streams camera to **YouTube Primary** (Windows).
 - `secondary-droplet/` → backup slate stream to **YouTube Backup** (Linux, DigitalOcean).
 
+> The `docs/` folder also ships `youtube-data-api.v3.discovery.json`, an offline copy of the YouTube Data API discovery document for tooling without external network access.
+
 ## Quick start
 
 ### Primary (Windows)
@@ -58,4 +60,5 @@ docs/
   CODING_GUIDE.md
   CODEX_PROMPT.md
   OPERATIONS_CHECKLIST.md
+  youtube-data-api.v3.discovery.json
 ```
