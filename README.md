@@ -3,6 +3,8 @@
 Pipeline redundante para transmissão para o YouTube do canal **BeachCam | Praia dos Surfistas | Cabo Ledo | Angola**, com fonte primária em Windows e backup secundário num droplet Linux.
 
 > ⚠️ **Segredos (chaves/tokens) NÃO vão para o repositório.** Consulte `SECURITY.md`.
+>
+> 🚫 **Logs locais ficam fora do Git.** O diretório `logs/` já está no `.gitignore`; não remova essa regra nem execute `git add` em ficheiros gerados.
 
 ## Visão geral
 
