@@ -20,7 +20,7 @@ Two-module setup:
 
 ### Secondary (Droplet)
 1. Defaults ship in `/usr/local/config/youtube-fallback.defaults`; adjust there if the standard slate settings need to change.
-2. Put stream key in `/etc/youtube-fallback.env` (`YT_KEY="..."`). Use this file only for secrets or conscious overrides.
+2. Put stream key in `/etc/youtube-fallback.env` (`YT_KEY="..."`). O `post_deploy.sh` reescreve este ficheiro preservando `YT_KEY` e restaurando as linhas comentadas com os defaults para referência — use-o apenas para segredos ou overrides conscientes.
 2. Install units & scripts from `secondary-droplet/` and run:
   ```bash
   sudo systemctl daemon-reload

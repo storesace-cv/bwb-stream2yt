@@ -3,6 +3,7 @@
   "ssh_user": "root",
   "ssh_key": "~/.ssh/id_rsa",
   "remote_prefix": "/",
+  "post_deploy_notes": "post_deploy.sh reescreve /etc/youtube-fallback.env preservando YT_KEY e restaurando os padrões comentados.",
   "sync_map": [
     {
       "local": "secondary-droplet/bin/yt_decider_daemon.py",
