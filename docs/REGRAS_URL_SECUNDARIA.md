@@ -119,9 +119,9 @@ sudo systemctl status yt-decider-daemon youtube-fallback --no-pager
 
 ## 🔹 9. Nota sobre Chaves e Segurança
 
-- Chave atual: `f4ex-ztrk-vc4h-2pvc-2kg4`
-- Não incluir a chave em ficheiros públicos.
-- O `.env` deve ter permissões `600` e proprietário `root`.
+- Utilize a variável `YT_KEY` definida em `/etc/youtube-fallback.env` (ver `secondary-droplet/config/youtube-fallback.env.example`) para configurar a chave do YouTube sem expor valores reais.
+- Não incluir a chave em ficheiros públicos ou mensagens de suporte.
+- O ficheiro `.env` deve ter permissões `600` e proprietário `root`, garantindo acesso restrito.
 
 ---
 
