@@ -13,6 +13,7 @@ Este guia descreve como montar um microserviço HTTP na droplet secundária que 
 1. **Automação via scripts**
    - Depois de sincronizar o repositório com `./scripts/deploy_to_droplet.sh`, execute manualmente `bash /root/bwb-stream2yt/scripts/post_deploy.sh` na droplet.
    - O `post_deploy.sh` chama `secondary-droplet/bin/ytc_web_backend_setup.sh`, que cria/actualiza o virtualenv em `/opt/ytc-web-service`, instala dependências com `pip --no-cache-dir` (para reduzir consumo de memória) e sincroniza o código da aplicação FastAPI.
+   - As dependências do backend evitam extras pesados (por exemplo, usamos `uvicorn` sem o sufixo `[standard]`) para caber confortavelmente na droplet de 512 MB.
 
 2. **Reutilizar a lógica existente**
    - A aplicação (`secondary-droplet/ytc-web-backend/app.py`) reaproveita a consulta `liveBroadcasts.list`/`liveStreams.list`, encapsulando-a em `fetch_live_status()` com cache de 30 s e resposta conforme `status-endpoint.md`.
