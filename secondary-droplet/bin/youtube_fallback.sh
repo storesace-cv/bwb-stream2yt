@@ -116,6 +116,11 @@ echo "[youtube_fallback] ${FALLBACK_WIDTH}x${FALLBACK_HEIGHT}@${FALLBACK_FPS} | 
 handle_signal() {
   local sig="$1"
   log_line "Recebido SIG${sig}, encerrando"
+
+  if [ -n "${FFMPEG_PID:-}" ] && kill -0 "$FFMPEG_PID" 2>/dev/null; then
+    kill -s "$sig" "$FFMPEG_PID" 2>/dev/null || true
+  fi
+
   trap - "$sig"
   kill -s "$sig" "$$"
 }
@@ -126,9 +131,78 @@ trap 'handle_signal QUIT' QUIT
 trap 'handle_signal PIPE' PIPE
 trap 'handle_signal TERM' TERM
 
+PROGRESS_FILE="/run/youtube-fallback.progress"
+PROGRESS_LOG_INTERVAL=${PROGRESS_LOG_INTERVAL:-30}
+
 log_line "Iniciando ffmpeg (loglevel=${FALLBACK_LOGLEVEL})"
 
-if ffmpeg -progress /run/youtube-fallback.progress -hide_banner -loglevel "${FALLBACK_LOGLEVEL}" -nostats \
+rm -f "$PROGRESS_FILE"
+
+FFMPEG_PID=""
+
+progress_value() {
+  local key="$1" file="$2"
+
+  [ -f "$file" ] || return
+
+  awk -F'=' -v key="$key" '($1 == key) {value=$2} END {if (value != "") print value}' "$file" 2>/dev/null
+}
+
+log_progress_snapshot() {
+  local file="$1"
+  [ -s "$file" ] || return
+
+  local frame fps bitrate drop_frames out_time total_size out_time_ms
+  frame=$(progress_value frame "$file")
+  fps=$(progress_value fps "$file")
+  bitrate=$(progress_value bitrate "$file")
+  drop_frames=$(progress_value drop_frames "$file")
+  total_size=$(progress_value total_size "$file")
+  out_time=$(progress_value out_time "$file")
+  out_time_ms=$(progress_value out_time_ms "$file")
+
+  if [ -z "$out_time" ] && [ -n "$out_time_ms" ]; then
+    local seconds=$((out_time_ms / 1000000))
+    local hours=$((seconds / 3600))
+    local minutes=$(((seconds % 3600) / 60))
+    local secs=$((seconds % 60))
+    out_time=$(printf '%02d:%02d:%02d' "$hours" "$minutes" "$secs")
+  fi
+
+  local human_size=""
+  if [ -n "$total_size" ]; then
+    human_size=$(numfmt --to=iec --suffix=B --padding=0 "$total_size" 2>/dev/null || printf '%sB' "$total_size")
+  fi
+
+  log_line "Progresso ffmpeg: frame=${frame:-?} fps=${fps:-?} bitrate=${bitrate:-?} drop=${drop_frames:-0} tamanho=${human_size:-?} tempo=${out_time:-?}"
+}
+
+progress_watcher() {
+  local file="$1" interval="$2" pid="$3"
+  local last_log=0
+
+  if ! [[ "$interval" =~ ^[0-9]+$ ]] || (( interval <= 0 )); then
+    interval=30
+  fi
+
+  while kill -0 "$pid" 2>/dev/null; do
+    local now
+    now=$(date +%s)
+    if (( now - last_log >= interval )); then
+      log_progress_snapshot "$file"
+      last_log=$now
+    fi
+    sleep 1
+  done
+
+  # Emit a final snapshot if we have data but didn't log recently
+  if [ -s "$file" ]; then
+    log_progress_snapshot "$file"
+  fi
+}
+
+set +e
+ffmpeg -progress "$PROGRESS_FILE" -hide_banner -loglevel "${FALLBACK_LOGLEVEL}" -nostats \
   -re -stream_loop -1 -framerate "${FALLBACK_FPS}" -i "${FALLBACK_IMG}" \
   -f lavfi -i "anullsrc=channel_layout=stereo:sample_rate=${FALLBACK_AR}" \
   -filter_complex "[0:v]scale=${FALLBACK_WIDTH}:${FALLBACK_HEIGHT}:force_original_aspect_ratio=decrease,pad=${FALLBACK_WIDTH}:${FALLBACK_HEIGHT}:(ow-iw)/2:(oh-ih)/2:color=black,format=yuv420p,setpts=PTS+${FALLBACK_DELAY_SEC}/TB,drawtext=fontfile=${FALLBACK_FONT}:text='${FALLBACK_SCROLL_TEXT}':fontsize=36:fontcolor=white:shadowcolor=black@0.85:shadowx=2:shadowy=2:x=w-mod(t*30*8\,w+text_w):y=H-60,drawtext=fontfile=${FALLBACK_FONT}:text='${FALLBACK_STATIC_TEXT}':fontsize=28:fontcolor=white:shadowcolor=black@0.85:shadowx=2:shadowy=2:x=(w-text_w)/2:y=60[vb];[1:a]asetpts=PTS+${FALLBACK_DELAY_SEC}/TB[ab]" \
@@ -137,10 +211,22 @@ if ffmpeg -progress /run/youtube-fallback.progress -hide_banner -loglevel "${FAL
   -b:v "${FALLBACK_VBITRATE}" -maxrate "${FALLBACK_MAXRATE}" -bufsize "${FALLBACK_BUFSIZE}" \
   -g "${FALLBACK_GOP}" -keyint_min "${FALLBACK_KEYINT_MIN}" -sc_threshold 0 \
   -c:a aac -b:a "${FALLBACK_ABITRATE}" -ar "${FALLBACK_AR}" -ac 2 \
-  -f flv "${YT_URL_BACKUP}"; then
-  status=0
-else
-  status=$?
+  -f flv "${YT_URL_BACKUP}" &
+FFMPEG_PID=$!
+set -e
+
+progress_watcher "$PROGRESS_FILE" "$PROGRESS_LOG_INTERVAL" "$FFMPEG_PID" &
+WATCHER_PID=$!
+
+set +e
+wait "$FFMPEG_PID"
+status=$?
+set -e
+
+if [ -n "${WATCHER_PID:-}" ]; then
+  set +e
+  wait "$WATCHER_PID"
+  set -e
 fi
 
 if [ "$status" -ge 128 ]; then
