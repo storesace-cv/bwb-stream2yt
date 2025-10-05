@@ -6,7 +6,6 @@ Este guia descreve como montar um microserviço HTTP na droplet secundária que 
 
 - Droplet já configurada com o token OAuth (`/root/token.json`) utilizado pelos scripts `yt_api_probe_once.py`.
 - Python 3.11 (o mesmo usado no repositório) e dependências listadas em `requirements-dev.txt` para reuso do cliente da API.
-- Pacote `python3.X-venv` (substitua `X` pela versão menor activa, ex.: `apt install python3.11-venv`) ou `python3-venv` instalado para permitir a criação do ambiente virtual do serviço. Valide antes do deploy com `dpkg -s python3.X-venv` (ajustando para a versão utilizada) **ou** executando `python3 -m ensurepip --help`.
 - Acesso SSH privilegiado para configurar `systemd`, firewalls e variáveis de ambiente.
 
 ## Passos de implementação
@@ -30,9 +29,8 @@ Este guia descreve como montar um microserviço HTTP na droplet secundária que 
    - Active `systemctl enable --now ytc-web.service` e monitorize os logs com `journalctl -u ytc-web -f`.
 
 5. **Proteger o acesso**
-   - A porta do serviço (por omissão `8081`) deve aceitar ligações apenas do IP `94.46.15.210`; os scripts de deploy aplicam esta regra via `ufw`/`iptables`.
-   - Após o deploy, confirme que a regra está activa executando `ufw status numbered | grep 94.46.15.210` na droplet secundária.
-   - Caso seja necessário acesso público adicional, aplique autenticação básica ou token de acesso simples via cabeçalho.
+   - Exponha a porta apenas para o balanceador ou túnel que irá consumir o JSON.
+   - Caso seja necessário acesso público, aplique autenticação básica ou token de acesso simples via cabeçalho.
    - Mantenha os tokens OAuth fora do repositório e com permissões restritas (`chmod 600`).
 
 ## Operação e manutenção
@@ -40,12 +38,5 @@ Este guia descreve como montar um microserviço HTTP na droplet secundária que 
 - **Monitorização**: inclua métricas básicas (tempo de resposta, contagem de erros) e alertas caso a API retorne falhas persistentes.
 - **Actualizações**: quando a especificação do endpoint mudar, sincronize com `status-endpoint.md` e notifique a equipa web.
 - **Fallback**: em caso de indisponibilidade da API, devolva um JSON com `status="unknown"` e mensagem amigável, permitindo que o front-end apresente o aviso secundário.
-
-## Automação disponível no repositório
-
-- O deploy automático é orquestrado por `scripts/deploy_to_droplet.sh`, que sincroniza `secondary-droplet/` (incluindo `ytc-web-backend/`) e executa `scripts/post_deploy.sh`.
-- O script `secondary-droplet/bin/ytc_web_backend_setup.sh` prepara `/opt/ytc-web-service`, cria o virtualenv, instala as dependências (`secondary-droplet/requirements.txt` + `ytc-web-backend/requirements.txt`) e aplica o unit file `secondary-droplet/systemd/ytc-web-backend.service`.
-- Caso o virtualenv fique corrompido (ex.: `pip` ausente), o deploy remove automaticamente `/opt/ytc-web-service/venv` e recria tudo na execução seguinte; confirme o estado com `ls /opt/ytc-web-service/venv/bin/pip` para garantir que o binário existe e é executável.
-- As variáveis sensíveis vivem em `/etc/ytc-web-backend.env`. Edite `YT_OAUTH_TOKEN_PATH` (padrão: `/root/token.json`) e `YTC_WEB_BACKEND_CACHE_TTL_SECONDS` conforme a necessidade; o ficheiro é criado com `chmod 600`.
-- Após o deploy, valide o serviço com `systemctl status ytc-web-backend.service` e analise logs recentes via `journalctl -u ytc-web-backend.service -n 50`.
+- **Execução de scripts**: ao correr `post_deploy.sh` manualmente, o shell pode ficar momentaneamente dentro do virtualenv criado pelo serviço. Se o prompt indicar isso (`(venv)`), execute `deactivate` antes de iniciar outra sessão ou simplesmente abra uma nova ligação SSH; o script próprio também garante a saída automática ao terminar.
 

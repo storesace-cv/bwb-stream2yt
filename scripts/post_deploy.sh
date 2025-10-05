@@ -87,12 +87,10 @@ systemctl restart youtube-fallback.service || true
 # Mantemos token.json intacto; /etc/youtube-fallback.env é regenerado preservando YT_KEY.
 echo "[post_deploy] youtube-fallback atualizado e env sincronizado."
 
-echo "[post_deploy] Preparando backend do ytc-web via secondary-droplet/bin/ytc_web_backend_setup.sh..."
-ensure_python3_venv
-/root/bwb-stream2yt/secondary-droplet/bin/ytc_web_backend_setup.sh
-
-systemctl daemon-reload
-systemctl enable --now ytc-web-backend.service
-systemctl restart ytc-web-backend.service || true
-
-echo "[post_deploy] ytc-web-backend implantado e serviço reiniciado."
+# Se algum passo anterior activou um virtualenv, garantimos que a shell
+# regressa ao ambiente global ao terminar o script. Isto evita que sessões
+# interactivas fiquem "presas" num venv quando o operador executa o
+# `post_deploy.sh` manualmente.
+if command -v deactivate >/dev/null 2>&1; then
+    deactivate
+fi
