@@ -29,8 +29,9 @@ Este guia descreve como montar um microserviço HTTP na droplet secundária que 
    - Active `systemctl enable --now ytc-web.service` e monitorize os logs com `journalctl -u ytc-web -f`.
 
 5. **Proteger o acesso**
-   - Exponha a porta apenas para o balanceador ou túnel que irá consumir o JSON.
-   - Caso seja necessário acesso público, aplique autenticação básica ou token de acesso simples via cabeçalho.
+   - A porta do serviço (por omissão `8081`) deve aceitar ligações apenas do IP `94.46.15.210`; os scripts de deploy aplicam esta regra via `ufw`/`iptables`.
+   - Após o deploy, confirme que a regra está activa executando `ufw status numbered | grep 94.46.15.210` na droplet secundária.
+   - Caso seja necessário acesso público adicional, aplique autenticação básica ou token de acesso simples via cabeçalho.
    - Mantenha os tokens OAuth fora do repositório e com permissões restritas (`chmod 600`).
 
 ## Operação e manutenção

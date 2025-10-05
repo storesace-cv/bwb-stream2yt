@@ -13,6 +13,56 @@ VENV_DIR="${INSTALL_DIR}/venv"
 SYSTEMD_SRC="${PROJECT_ROOT}/systemd/ytc-web-backend.service"
 SYSTEMD_DEST="/etc/systemd/system/ytc-web-backend.service"
 ENV_FILE="/etc/ytc-web-backend.env"
+BACKEND_PORT="${YTC_WEB_BACKEND_PORT:-8081}"
+ALLOWED_IP="94.46.15.210"
+
+ensure_firewall_rule() {
+  if ! command -v ufw >/dev/null 2>&1; then
+    log "ufw não está instalado; saltando configuração de firewall"
+    return
+  fi
+
+  local status
+  status=$(ufw status | awk 'NR==1 {print $2}')
+  if [ "${status}" != "active" ]; then
+    log "Activando firewall (ufw)"
+    ufw --force enable
+  else
+    log "Firewall já activo"
+  fi
+
+  local allow_pattern="${BACKEND_PORT}/tcp"
+  if ufw status | grep -E "${allow_pattern}[[:space:]]+ALLOW[[:space:]]+${ALLOWED_IP}" >/dev/null 2>&1; then
+    log "Regra restritiva existente para ${ALLOWED_IP}:${BACKEND_PORT}"
+  else
+    log "Aplicando regra restritiva: ufw allow from ${ALLOWED_IP} to any port ${BACKEND_PORT} proto tcp"
+    ufw allow from "${ALLOWED_IP}" to any port "${BACKEND_PORT}" proto tcp
+  fi
+
+  local line number rule
+  mapfile -t generic_rules < <(
+    ufw status numbered | while IFS= read -r line; do
+      if [ "${line:0:1}" != "[" ]; then
+        continue
+      fi
+      number=${line:1}
+      number=${number%%]*}
+      rule=${line#*] }
+      if [[ "${rule}" == *"${allow_pattern}"* && "${rule}" == *"ALLOW"* && "${rule}" == *"Anywhere"* ]]; then
+        printf '%s\n' "${number}"
+      fi
+    done
+  )
+
+  if [ ${#generic_rules[@]} -gt 0 ]; then
+    log "Removendo regras genéricas para ${BACKEND_PORT}/tcp"
+    for (( idx=${#generic_rules[@]}-1; idx>=0; idx-- )); do
+      ufw --force delete "${generic_rules[idx]}"
+    done
+  fi
+
+  log "Firewall configurado. Verifique com: ufw status numbered | grep ${ALLOWED_IP}"
+}
 
 log "Preparando diretório da aplicação em ${INSTALL_DIR}"
 install -d -m 755 -o root -g root "${INSTALL_DIR}"
@@ -46,5 +96,7 @@ if [ ! -f "${ENV_FILE}" ]; then
 else
   chmod 600 "${ENV_FILE}"
 fi
+
+ensure_firewall_rule
 
 log "Configuração do backend web concluída."
