@@ -3,6 +3,7 @@ import signal
 import sys
 import threading
 import time
+import types
 from pathlib import Path
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "primary-windows" / "src" / "stream_to_youtube.py"
@@ -10,6 +11,16 @@ SPEC = importlib.util.spec_from_file_location("_stream_to_youtube_test", MODULE_
 assert SPEC and SPEC.loader
 module = importlib.util.module_from_spec(SPEC)
 sys.modules["_stream_to_youtube_test"] = module
+
+if "autotune" not in sys.modules:
+    autotune_stub = types.ModuleType("autotune")
+
+    def _estimate_upload_bitrate(*_args, **_kwargs):
+        raise NotImplementedError
+
+    autotune_stub.estimate_upload_bitrate = _estimate_upload_bitrate  # type: ignore[attr-defined]
+    sys.modules["autotune"] = autotune_stub
+
 SPEC.loader.exec_module(module)
 
 

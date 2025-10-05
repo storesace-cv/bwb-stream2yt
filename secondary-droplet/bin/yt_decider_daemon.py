@@ -217,15 +217,15 @@ def main():
             context.primary_bad_streak = 0
         # Night: 19:00–08:00 keep fallback if no primary
         if not (DAY_START <= hour < DAY_END):
-            if primary_bad:
-                if not fallback_on:
-                    start_fallback()
-                    action = "START secondary"
-                    detail = "night + no primary"
-                else:
-                    detail = detail or ""
+            if not fallback_on:
+                start_fallback()
+                fallback_on = True
+                action = "START secondary"
+                detail = "night – force secondary on"
             else:
-                action = "KEEP"
+                detail = detail or (
+                    "night – force secondary on" if primary_ok else ""
+                )
         else:
             # Day: stop fallback if primary OK, else keep/start
             if primary_ok:
