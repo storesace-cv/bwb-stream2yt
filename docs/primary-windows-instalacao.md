@@ -56,6 +56,7 @@ Escolha uma das opções abaixo para copiar o conteúdo do repositório para o s
 4. **Verifique os logs**:
    - Os registros são gravados em arquivos diários `C:\myapps\logs\bwb_services-YYYY-MM-DD.log` (a pasta `logs\` é criada se necessário e mantemos somente os últimos sete dias).
    - Utilize esses arquivos para confirmar a inicialização do FFmpeg e eventuais erros de autenticação.
+   - Enquanto o RTSP estiver instável, o log pode exibir mensagens como `ffmpeg exited with code ...; retrying in 5s`. Isso indica que o `StreamingWorker` está reiniciando o FFmpeg automaticamente para restabelecer a ingestão; intervenha manualmente apenas se aparecer erro ao iniciar o binário ou se a rotina de tentativa não voltar a conectar após um período prolongado.
 5. **Homologação rápida**:
    - Confirme, durante o primeiro teste, se o YouTube recebe o stream na URL primária e se o log indica status `connected`.
 
