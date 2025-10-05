@@ -7,6 +7,10 @@ Ferramenta oficial para enviar o feed (RTSP/DirectShow) para a URL **primária**
 - O executável roda em **modo headless** e mantém o FFmpeg ativo em segundo plano enquanto houver janela de transmissão configurada. Utilize os logs gerados automaticamente para acompanhar o estado do worker.
 - Caso ainda não tenha obtido os arquivos locais, siga o passo a passo de download descrito em [docs/primary-windows-instalacao.md](../docs/primary-windows-instalacao.md#11-obter-o-repositorio-git-ou-zip).
 
+## Notas de versão
+
+- **Minimização automática do console (Windows):** ao arrancar o `stream_to_youtube.py` interativamente, a janela do console é minimizada com `SW_SHOWMINNOACTIVE` e redimensionada para um tamanho compacto. Isso evita que a aplicação roube o foco do operador e mantém o terminal discreto durante a transmissão.
+
 ### Executável distribuído
 
 - Siga o [guia de instalação](../docs/primary-windows-instalacao.md#2-executável-distribuído) para posicionar o `stream_to_youtube.exe` em `C:\myapps\`. A primeira execução gera automaticamente o `.env` ao lado do binário; edite-o em seguida para informar `YT_KEY`/`YT_URL`, argumentos do FFmpeg e credenciais RTSP conforme o equipamento (o valor padrão de `FFMPEG` aponta para `C:\bwb\ffmpeg\bin\ffmpeg.exe`, mas é possível sobrescrevê-lo nesse arquivo se desejar outro diretório).
