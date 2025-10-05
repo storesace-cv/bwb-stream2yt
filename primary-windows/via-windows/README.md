@@ -7,6 +7,7 @@ These instructions describe how to package the **stream_to_youtube** Windows exe
 1. Windows 10 or newer with administrator privileges.
 2. Python 3.11.x from <https://www.python.org/downloads/windows/> installed for "All Users" with the "Add python.exe to PATH" option enabled.
 3. Local copy of this repository synced to `C:\bwb\src\stream2yt\` (or another working directory of your choice).
+   - If you still need to download the sources, follow the step-by-step guide in [docs/primary-windows-instalacao.md](../../docs/primary-windows-instalacao.md#11-obter-o-repositorio-git-ou-zip).
 
 ## 1. Prepare the virtual environment
 
