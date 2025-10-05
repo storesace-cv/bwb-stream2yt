@@ -4,13 +4,17 @@ Ferramenta oficial para enviar o feed (RTSP/DirectShow) para a URL **primária**
 
 ## Utilização rápida
 
-- O executável agora roda em **modo bandeja** e controla a transmissão em segundo plano. O ícone exibe as opções "Abrir logs…", "Parar/Iniciar transmissão" e "Sair"; sair garante o encerramento limpo do FFmpeg. Caso `pystray`/`pillow` não estejam instalados, o script registra o ocorrido e continua ativo apenas no console (sem ícone).
+- O executável roda em **modo headless** e mantém o FFmpeg ativo em segundo plano enquanto houver janela de transmissão configurada. Utilize os logs gerados automaticamente para acompanhar o estado do worker.
 
 ### Executável distribuído
 
 - Siga o [guia de instalação](../docs/primary-windows-instalacao.md#2-executável-distribuído) para posicionar o `stream_to_youtube.exe` em `C:\bwb\apps\YouTube\`. A primeira execução gera automaticamente o `.env` ao lado do binário; edite-o em seguida para informar `YT_KEY`/`YT_URL`, argumentos do FFmpeg e credenciais RTSP conforme o equipamento.
 - A execução gera arquivos diários em `C:\bwb\apps\YouTube\logs\bwb_services-YYYY-MM-DD.log` (retenção automática de sete dias). Utilize-os para homologar a conexão com o YouTube.
-- Para instalar o serviço do Windows, execute o binário uma vez com `stream_to_youtube.exe /service`. Depois utilize `/start` e `/stop` para controlar o serviço ou `/noservice` para removê-lo. Os comandos registram eventos no log compartilhado descrito acima.
+- Para instalar o serviço do Windows, execute o binário uma vez com `stream_to_youtube.exe /service`. Em seguida:
+  - Inicie com `stream_to_youtube.exe /start`.
+  - Interrompa com `stream_to_youtube.exe /stop`.
+  - Remova com `stream_to_youtube.exe /noservice`.
+  Todos os comandos registram eventos no log compartilhado descrito acima.
 
 ### Código-fonte (desenvolvimento)
 
@@ -18,18 +22,11 @@ Ferramenta oficial para enviar o feed (RTSP/DirectShow) para a URL **primária**
    - A primeira execução gera `src/.env` automaticamente a partir do template `src/.env.example`; edite `YT_URL`/`YT_KEY`, argumentos e credenciais antes de iniciar a transmissão.
    - Alternativamente, defina as variáveis manualmente antes de executar (`set YT_KEY=xxxx`).
 2. Execute a partir de `primary-windows/src/` (o `.env` é lido automaticamente):
-   - Para depurar no console:
-     ```bat
-     setlocal
-     cd /d %~dp0src
-     python -c "from stream_to_youtube import run_forever; run_forever()"
-     ```
-   - Para testar o modo bandeja durante o desenvolvimento (requer ambiente gráfico):
-     ```bat
-     setlocal
-     cd /d %~dp0src
-     pythonw stream_to_youtube.py
-     ```
+   ```bat
+   setlocal
+   cd /d %~dp0src
+   python -c "from stream_to_youtube import run_forever; run_forever()"
+   ```
 
 ## Configuração (variáveis opcionais)
 
@@ -57,11 +54,11 @@ O serviço executa o mesmo worker da versão em foreground (com logs em `logs\bw
 ## Build (one-file) com PyInstaller
 
 - Use Python 3.11 para evitar problemas do 3.13 com o PyInstaller.
-- Instale dependências (incluindo `pystray` e `pillow`, necessários para a bandeja) e faça o build:
+- Instale dependências e faça o build:
 
 ```bat
 py -3.11 -m pip install -U pip wheel
-py -3.11 -m pip install -U pyinstaller==6.10 pystray pillow pywin32 pyinstaller-hooks-contrib
+py -3.11 -m pip install -U pyinstaller==6.10 pywin32 pyinstaller-hooks-contrib
 py -3.11 -m PyInstaller --clean --onefile --noconsole ^
     --hidden-import win32timezone ^
     --collect-binaries pywin32 ^

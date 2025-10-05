@@ -521,38 +521,7 @@ def main() -> None:
             sys.exit(1)
         return
 
-    try:
-        from system_tray import TrayApplication, TRAY_AVAILABLE
-    except Exception as exc:
-        message = f"Modo bandeja indisponível ({exc}); executando em modo console."
-        print(f"[primary] {message}")
-        log_event("primary", message)
-        run_forever()
-        return
-
-    if not TRAY_AVAILABLE:
-        message = "Dependências do modo bandeja ausentes; executando em modo console."
-        print(f"[primary] {message}")
-        log_event("primary", message)
-        run_forever()
-        return
-
-    worker = StreamingWorker()
-    worker.start()
-
-    try:
-        tray = TrayApplication(worker)
-    except Exception as exc:
-        message = f"Falha ao iniciar modo bandeja ({exc}); mantendo streaming ativo sem ícone."
-        print(f"[primary] {message}")
-        log_event("primary", message)
-        run_forever(worker)
-        return
-
-    try:
-        tray.run()
-    finally:
-        worker.stop()
+    run_forever()
 
 
 if __name__ == "__main__":
