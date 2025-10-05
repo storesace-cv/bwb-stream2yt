@@ -55,7 +55,16 @@ Este guia explica como preparar um host Windows para executar o módulo **primar
    py -3.11 -m pip install -U pip wheel
    py -3.11 -m pip install -U pyinstaller==6.10 pywin32 pyinstaller-hooks-contrib
    ```
-2. Gere o executável a partir do diretório `primary-windows\`: `py -3.11 -m PyInstaller --clean --onefile src/stream_to_youtube.py`.
+2. Gere o executável a partir do diretório `primary-windows\`:
+   ```bat
+   py -3.11 -m PyInstaller --clean --onefile --noconsole ^
+       --hidden-import win32timezone ^
+       --collect-binaries pywin32 ^
+       --collect-submodules win32service ^
+       --collect-submodules win32timezone ^
+       src/stream_to_youtube.py
+   ```
+   Essas opções incorporam todas as dependências do `pywin32`; sem elas, o executável não inclui os binários necessários e os comandos `/service` falham ao registrar o serviço.
 3. O binário será produzido em `dist/stream_to_youtube.exe` e deve ser movido para `C:\bwb\apps\YouTube\` junto com um `.env` válido.
 4. Durante a distribuição, reforce a necessidade do `ffmpeg.exe` presente em `C:\bwb\ffmpeg\bin\` ou documente o caminho alternativo via variável `FFMPEG`.
 
