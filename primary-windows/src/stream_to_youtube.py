@@ -18,6 +18,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+from autotune import estimate_upload_bitrate
+
 
 ENV_TEMPLATE_CONTENT = """# Configurações para stream_to_youtube.py
 # Copie este arquivo para ".env" ou deixe que o script gere um automaticamente e depois personalize.
@@ -42,6 +44,16 @@ ENV_TEMPLATE_CONTENT = """# Configurações para stream_to_youtube.py
 
 # Parâmetros de saída para o ffmpeg. Utilize para alterar codec, bitrate ou filtros.
 #YT_OUTPUT_ARGS=-vf scale=1920:1080:flags=bicubic,format=yuv420p -r 30 -c:v libx264 -preset veryfast -profile:v high -level 4.2 -b:v 4500k -pix_fmt yuv420p -g 60 -c:a aac -b:a 128k -ar 44100 -f flv
+
+# Ative o ajuste automático de bitrate (requer psutil) para medir a banda de upload.
+#YT_AUTOTUNE=1
+# Intervalo, em segundos, entre medições consecutivas.
+#YT_AUTOTUNE_INTERVAL=8
+# Limites (em kbps) utilizados pelo ajuste automático de bitrate.
+#YT_BITRATE_MIN=2500
+#YT_BITRATE_MAX=6000
+# Margem de segurança aplicada sobre a banda medida (0.0 a 1.0).
+#YT_AUTOTUNE_SAFETY=0.75
 
 # Caminho para o executável ffmpeg. Deixe vazio para usar o ffmpeg no PATH.
 #FFMPEG=C:\\caminho\\para\\ffmpeg.exe
@@ -495,6 +507,126 @@ def _build_rtsp_url_from_env() -> Optional[str]:
     return f"rtsp://{credentials}{authority}{normalized_path}"
 
 
+def _env_flag(name: str, default: bool = False) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    normalized = value.strip().lower()
+    if not normalized:
+        return default
+    return normalized not in {"0", "false", "no", "off"}
+
+
+def _env_int(name: str, default: int) -> int:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        return int(raw.strip())
+    except (TypeError, ValueError):
+        return default
+
+
+def _env_float(name: str, default: float) -> float:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        return float(raw.strip())
+    except (TypeError, ValueError):
+        return default
+
+
+def _parse_bitrate_from_args(args: list[str], flag: str) -> Optional[int]:
+    try:
+        index = args.index(flag)
+    except ValueError:
+        return None
+    if index + 1 >= len(args):
+        return None
+    value = args[index + 1].strip()
+    if value.endswith("k"):
+        value = value[:-1]
+    try:
+        return int(value)
+    except ValueError:
+        return None
+
+
+def _extract_arg_value(args: list[str], flag: str) -> Optional[str]:
+    try:
+        index = args.index(flag)
+    except ValueError:
+        return None
+    if index + 1 >= len(args):
+        return None
+    return args[index + 1]
+
+
+def _set_arg_value(args: list[str], flag: str, value: str) -> None:
+    try:
+        index = args.index(flag)
+    except ValueError:
+        args.extend([flag, value])
+        return
+    if index + 1 >= len(args):
+        args.append(value)
+    else:
+        args[index + 1] = value
+
+
+_PRESET_ORDER = [
+    "ultrafast",
+    "superfast",
+    "veryfast",
+    "faster",
+    "fast",
+    "medium",
+    "slow",
+    "slower",
+    "veryslow",
+]
+
+
+def _recommended_preset(bitrate_kbps: int) -> Optional[str]:
+    if bitrate_kbps >= 5500:
+        return "veryfast"
+    if bitrate_kbps >= 4000:
+        return "veryfast"
+    if bitrate_kbps >= 3000:
+        return "faster"
+    if bitrate_kbps >= 2200:
+        return "fast"
+    if bitrate_kbps >= 1600:
+        return "medium"
+    return "slow"
+
+
+def _select_preset(base_preset: Optional[str], bitrate_kbps: int) -> Optional[str]:
+    recommended = _recommended_preset(bitrate_kbps)
+    if recommended is None:
+        return base_preset
+
+    if base_preset is None:
+        return recommended
+
+    try:
+        base_index = _PRESET_ORDER.index(base_preset)
+    except ValueError:
+        return recommended
+
+    try:
+        recommended_index = _PRESET_ORDER.index(recommended)
+    except ValueError:
+        return base_preset
+
+    if recommended_index <= base_index:
+        return base_preset
+
+    allowed_index = min(recommended_index, base_index + 2)
+    return _PRESET_ORDER[allowed_index]
+
+
 @dataclass(frozen=True)
 class StreamingConfig:
     yt_url: Optional[str]
@@ -504,6 +636,11 @@ class StreamingConfig:
     day_start_hour: int
     day_end_hour: int
     tz_offset_hours: int
+    autotune_enabled: bool
+    bitrate_min_kbps: int
+    bitrate_max_kbps: int
+    autotune_interval: float
+    autotune_safety_margin: float
 
 
 def load_config() -> StreamingConfig:
@@ -563,6 +700,20 @@ def load_config() -> StreamingConfig:
         ],
     )
 
+    default_bitrate = _parse_bitrate_from_args(output_args, "-b:v") or 5000
+    default_maxrate = _parse_bitrate_from_args(output_args, "-maxrate") or max(default_bitrate, 6000)
+
+    bitrate_min = _env_int("YT_BITRATE_MIN", default_bitrate)
+    bitrate_max = _env_int("YT_BITRATE_MAX", default_maxrate)
+    if bitrate_min > bitrate_max:
+        bitrate_min, bitrate_max = bitrate_max, bitrate_min
+
+    safety_margin = _env_float("YT_AUTOTUNE_SAFETY", 0.75)
+    if safety_margin < 0.0:
+        safety_margin = 0.0
+    elif safety_margin > 1.0:
+        safety_margin = 1.0
+
     return StreamingConfig(
         yt_url=_resolve_yt_url(),
         input_args=input_args,
@@ -571,6 +722,11 @@ def load_config() -> StreamingConfig:
         day_start_hour=int(os.environ.get("YT_DAY_START_HOUR", "8")),
         day_end_hour=int(os.environ.get("YT_DAY_END_HOUR", "19")),
         tz_offset_hours=int(os.environ.get("YT_TZ_OFFSET_HOURS", "1")),
+        autotune_enabled=_env_flag("YT_AUTOTUNE", False),
+        bitrate_min_kbps=bitrate_min,
+        bitrate_max_kbps=bitrate_max,
+        autotune_interval=_env_float("YT_AUTOTUNE_INTERVAL", 8.0),
+        autotune_safety_margin=safety_margin,
     )
 
 
@@ -592,6 +748,11 @@ class StreamingWorker:
         self._stop_event = threading.Event()
         self._process_lock = threading.Lock()
         self._process: Optional[subprocess.Popen[str]] = None
+        self._base_output_args = list(config.output_args)
+        self._base_preset = _extract_arg_value(self._base_output_args, "-preset")
+        self._last_autotune_bitrate: Optional[int] = None
+        self._last_autotune_preset: Optional[str] = None
+        self._autotune_failed_once = False
 
     def start(self) -> None:
         if self.is_running:
@@ -655,17 +816,30 @@ class StreamingWorker:
                         break
                     continue
 
+                output_args = self._prepare_output_args()
                 cmd = [
                     self._config.ffmpeg,
                     "-hide_banner",
                     "-loglevel",
                     "warning",
                     *self._config.input_args,
-                    *self._config.output_args,
+                    *output_args,
                     "-f",
                     "flv",
                     self._config.yt_url,
                 ]
+                print(
+                    "CMD:",
+                    self._config.ffmpeg,
+                    "-hide_banner",
+                    "-loglevel",
+                    "warning",
+                    *self._config.input_args,
+                    *output_args,
+                    "-f",
+                    "flv",
+                    self._config.yt_url,
+                )
                 log_event("primary", "Launching ffmpeg process")
 
                 with self._process_lock:
@@ -691,6 +865,96 @@ class StreamingWorker:
         finally:
             self._terminate_process()
             log_event("primary", "Streaming loop finished")
+
+    def _prepare_output_args(self) -> list[str]:
+        output_args = list(self._base_output_args)
+
+        if (
+            not self._config.autotune_enabled
+            or self._config.autotune_interval <= 0
+            or self._stop_event.is_set()
+        ):
+            self._autotune_failed_once = False
+            self._last_autotune_bitrate = None
+            self._last_autotune_preset = None
+            self._sync_output_args(output_args)
+            return output_args
+
+        bitrate = estimate_upload_bitrate(
+            interval=self._config.autotune_interval,
+            min_kbps=self._config.bitrate_min_kbps,
+            max_kbps=self._config.bitrate_max_kbps,
+            safety_margin=self._config.autotune_safety_margin,
+        )
+
+        if bitrate is None:
+            if not self._autotune_failed_once:
+                log_event(
+                    "primary",
+                    "Autotune indisponível ou falhou na medição; mantendo bitrate estático.",
+                )
+                self._autotune_failed_once = True
+            self._sync_output_args(output_args)
+            return output_args
+
+        self._autotune_failed_once = False
+        adjusted_args, metadata = self._apply_autotune_settings(output_args, bitrate)
+        self._sync_output_args(adjusted_args)
+
+        preset = metadata.get("preset")
+        if (
+            self._last_autotune_bitrate != metadata["bitrate"]
+            or self._last_autotune_preset != preset
+        ):
+            log_event(
+                "primary",
+                (
+                    "Autotune definiu bitrate {bitrate} kbps, maxrate {maxrate} kbps, "
+                    "bufsize {bufsize} kbps e preset '{preset}'."
+                ).format(
+                    bitrate=metadata["bitrate"],
+                    maxrate=metadata["maxrate"],
+                    bufsize=metadata["bufsize"],
+                    preset=preset or self._base_preset or "desconhecido",
+                ),
+            )
+            self._last_autotune_bitrate = metadata["bitrate"]
+            self._last_autotune_preset = preset
+
+        return adjusted_args
+
+    def _apply_autotune_settings(
+        self, output_args: list[str], measured_bitrate: int
+    ) -> tuple[list[str], dict[str, int | Optional[str]]]:
+        bitrate = max(
+            self._config.bitrate_min_kbps,
+            min(measured_bitrate, self._config.bitrate_max_kbps),
+        )
+
+        computed_maxrate = max(int(bitrate * 1.15), bitrate + 250)
+        maxrate = min(max(computed_maxrate, bitrate), self._config.bitrate_max_kbps)
+        bufsize = min(max(maxrate * 2, bitrate * 2), self._config.bitrate_max_kbps * 2)
+
+        _set_arg_value(output_args, "-b:v", f"{bitrate}k")
+        _set_arg_value(output_args, "-maxrate", f"{maxrate}k")
+        _set_arg_value(output_args, "-bufsize", f"{bufsize}k")
+
+        preset = _select_preset(self._base_preset, bitrate)
+        if preset:
+            _set_arg_value(output_args, "-preset", preset)
+
+        metadata: dict[str, int | Optional[str]] = {
+            "bitrate": bitrate,
+            "maxrate": maxrate,
+            "bufsize": bufsize,
+            "preset": preset,
+        }
+        return output_args, metadata
+
+    def _sync_output_args(self, new_args: list[str]) -> None:
+        config_args = self._config.output_args
+        config_args.clear()
+        config_args.extend(new_args)
 
     def _wait_process(self) -> Optional[int]:
         with self._process_lock:
