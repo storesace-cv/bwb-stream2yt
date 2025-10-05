@@ -49,6 +49,40 @@ def _script_base_dir() -> Path:
     return Path(__file__).resolve().parent
 
 
+def _minimize_console_window() -> None:
+    """Minimize the Windows console without stealing focus."""
+
+    if os.name != "nt":
+        return
+
+    with suppress(Exception):
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        user32 = ctypes.windll.user32  # type: ignore[attr-defined]
+        hwnd = kernel32.GetConsoleWindow()
+        if not hwnd:
+            return
+
+        SW_SHOWMINNOACTIVE = 7
+        user32.ShowWindow(hwnd, SW_SHOWMINNOACTIVE)
+
+        SWP_NOMOVE = 0x0002
+        SWP_NOZORDER = 0x0004
+        SWP_NOACTIVATE = 0x0010
+        width, height = 320, 200
+        HWND_TOP = 0
+        user32.SetWindowPos(
+            hwnd,
+            HWND_TOP,
+            0,
+            0,
+            width,
+            height,
+            SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOZORDER,
+        )
+
+
 def _resolve_log_target() -> tuple[Path, str, str]:
     """Determine the directory, stem and suffix for daily log files."""
 
@@ -771,6 +805,8 @@ def _stop_streaming_instance(timeout: float = 30.0) -> int:
 
 
 def main() -> None:
+    _minimize_console_window()
+
     raw_args = sys.argv[1:]
     normalized_args = [arg.lower() for arg in raw_args]
     if len(normalized_args) > 1:
