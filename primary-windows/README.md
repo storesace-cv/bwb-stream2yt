@@ -4,6 +4,8 @@ Ferramenta oficial para enviar o feed (RTSP/DirectShow) para a URL **primária**
 
 ## Utilização rápida
 
+- O executável agora roda em **modo bandeja** e controla a transmissão em segundo plano. O ícone exibe as opções "Abrir logs…", "Parar/Iniciar transmissão" e "Sair"; sair garante o encerramento limpo do FFmpeg.
+
 ### Executável distribuído
 
 - Siga o [guia de instalação](../docs/primary-windows-instalacao.md#2-executável-distribuído) para posicionar o `stream_to_youtube.exe` em `C:\bwb\apps\YouTube\`. A primeira execução gera automaticamente o `.env` ao lado do binário; edite-o em seguida para informar `YT_KEY`/`YT_URL`, argumentos do FFmpeg e credenciais RTSP conforme o equipamento.
@@ -15,11 +17,18 @@ Ferramenta oficial para enviar o feed (RTSP/DirectShow) para a URL **primária**
    - A primeira execução gera `src/.env` automaticamente a partir do template `src/.env.example`; edite `YT_URL`/`YT_KEY`, argumentos e credenciais antes de iniciar a transmissão.
    - Alternativamente, defina as variáveis manualmente antes de executar (`set YT_KEY=xxxx`).
 2. Execute a partir de `primary-windows/src/` (o `.env` é lido automaticamente):
-   ```bat
-   setlocal
-   cd /d %~dp0src
-   python stream_to_youtube.py
-   ```
+   - Para depurar no console:
+     ```bat
+     setlocal
+     cd /d %~dp0src
+     python -c "from stream_to_youtube import run_forever; run_forever()"
+     ```
+   - Para testar o modo bandeja durante o desenvolvimento (requer ambiente gráfico):
+     ```bat
+     setlocal
+     cd /d %~dp0src
+     pythonw stream_to_youtube.py
+     ```
 
 ## Configuração (variáveis opcionais)
 
@@ -34,14 +43,14 @@ Ferramenta oficial para enviar o feed (RTSP/DirectShow) para a URL **primária**
 ## Build (one-file) com PyInstaller
 
 - Use Python 3.11 para evitar problemas do 3.13 com o PyInstaller.
-- Instale dependências e faça o build:
+- Instale dependências (incluindo `pystray` e `pillow`, necessários para a bandeja) e faça o build:
 
 ```bat
 py -3.11 -m pip install -U pip wheel
-py -3.11 -m pip install -U pyinstaller==6.10
-py -3.11 -m PyInstaller --clean --onefile src/stream_to_youtube.py
+py -3.11 -m pip install -U pyinstaller==6.10 pystray pillow
+py -3.11 -m PyInstaller --clean --onefile --noconsole src/stream_to_youtube.py
 ```
 
-O executável ficará em `dist/stream_to_youtube.exe`.
+O executável ficará em `dist/stream_to_youtube.exe` pronto para execução silenciosa via `pythonw.exe`.
 
 > ⚠️ Antes de lançar o `.exe`, certifique-se de que `YT_URL` ou `YT_KEY` estão definidos no ambiente ou num `.env` ao lado do executável. Nunca embuta chaves no binário.
