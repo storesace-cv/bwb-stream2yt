@@ -192,11 +192,19 @@ def main():
         detail = state["note"] or ""
 
         primary_ok = stream_status == "active" and health in ("good", "ok")
-        primary_bad = stream_status in ("inactive", "?") or health in (
+        primary_bad = stream_status in (
+            "inactive",
+            "?",
+            "error",
+        ) or health in (
             "noData",
             "?",
             "bad",
+            "revoked",
         )
+        # Discovery doc (https://developers.google.com/youtube/v3/live/docs/liveStream#status)
+        # notes that ``error`` and ``revoked`` indicate primary ingest failure, so treat them
+        # like other fatal states even if the stream was previously active.
 
         if primary_ok:
             context.primary_ok_streak += 1

@@ -168,6 +168,42 @@ def test_daytime_without_primary_starts_secondary(monkeypatch):
     assert fields[5] == "day but no primary"
 
 
+def test_daytime_stream_error_starts_secondary(monkeypatch):
+    scenarios = [
+        {
+            "state": {"streamStatus": "error", "health": "bad", "note": ""},
+            "hour": 10,
+            "fallback_active": False,
+        }
+        for _ in range(decider.START_BAD_STREAK)
+    ]
+
+    result = run_cycles(monkeypatch, scenarios)
+
+    assert result["start_calls"] == 1
+    fields = _extract_decision_fields(result)
+    assert fields[4] == "START secondary"
+    assert fields[5] == "day but no primary"
+
+
+def test_daytime_health_revoked_starts_secondary(monkeypatch):
+    scenarios = [
+        {
+            "state": {"streamStatus": "active", "health": "revoked", "note": ""},
+            "hour": 10,
+            "fallback_active": False,
+        }
+        for _ in range(decider.START_BAD_STREAK)
+    ]
+
+    result = run_cycles(monkeypatch, scenarios)
+
+    assert result["start_calls"] == 1
+    fields = _extract_decision_fields(result)
+    assert fields[4] == "START secondary"
+    assert fields[5] == "day but no primary"
+
+
 def test_night_without_primary_starts_secondary(monkeypatch):
     result = run_cycles(
         monkeypatch,
