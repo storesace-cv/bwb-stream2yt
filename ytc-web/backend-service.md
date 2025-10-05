@@ -6,7 +6,7 @@ Este guia descreve como montar um microserviço HTTP na droplet secundária que 
 
 - Droplet já configurada com o token OAuth (`/root/token.json`) utilizado pelos scripts `yt_api_probe_once.py`.
 - Python 3.11 (o mesmo usado no repositório) e dependências listadas em `requirements-dev.txt` para reuso do cliente da API.
-- Pacote `python3-venv` instalado (`apt install python3-venv`) para permitir a criação do ambiente virtual do serviço.
+- Pacote `python3.X-venv` (substitua `X` pela versão menor activa, ex.: `apt install python3.11-venv`) ou `python3-venv` instalado para permitir a criação do ambiente virtual do serviço. Valide antes do deploy com `dpkg -s python3.X-venv` (ajustando para a versão utilizada) **ou** executando `python3 -m ensurepip --help`.
 - Acesso SSH privilegiado para configurar `systemd`, firewalls e variáveis de ambiente.
 
 ## Passos de implementação
