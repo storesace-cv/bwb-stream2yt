@@ -457,9 +457,10 @@ class StreamingWorker:
             self._process = None
 
 
-def run_forever() -> None:
-    worker = StreamingWorker()
-    worker.start()
+def run_forever(existing_worker: Optional["StreamingWorker"] = None) -> None:
+    worker = existing_worker or StreamingWorker()
+    if not worker.is_running:
+        worker.start()
     try:
         worker.join()
     except KeyboardInterrupt:
@@ -469,11 +470,33 @@ def run_forever() -> None:
 
 
 def main() -> None:
-    from system_tray import TrayApplication
+    try:
+        from system_tray import TrayApplication, TRAY_AVAILABLE
+    except Exception as exc:
+        message = f"Modo bandeja indisponível ({exc}); executando em modo console."
+        print(f"[primary] {message}")
+        log_event("primary", message)
+        run_forever()
+        return
+
+    if not TRAY_AVAILABLE:
+        message = "Dependências do modo bandeja ausentes; executando em modo console."
+        print(f"[primary] {message}")
+        log_event("primary", message)
+        run_forever()
+        return
 
     worker = StreamingWorker()
     worker.start()
-    tray = TrayApplication(worker)
+
+    try:
+        tray = TrayApplication(worker)
+    except Exception as exc:
+        message = f"Falha ao iniciar modo bandeja ({exc}); mantendo streaming ativo sem ícone."
+        print(f"[primary] {message}")
+        log_event("primary", message)
+        run_forever(worker)
+        return
 
     try:
         tray.run()
