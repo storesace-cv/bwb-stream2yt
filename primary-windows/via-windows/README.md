@@ -6,13 +6,13 @@ These instructions describe how to package the **stream_to_youtube** Windows exe
 
 1. Windows 10 or newer with administrator privileges.
 2. Python 3.11.x from <https://www.python.org/downloads/windows/> installed for "All Users" with the "Add python.exe to PATH" option enabled.
-3. Local copy of this repository synced to `C:\bwb\src\stream2yt\` (or another working directory of your choice).
+3. Local copy of this repository synced to `C:\myapps\src\stream2yt\` (or another working directory of your choice).
    - If you still need to download the sources, follow the step-by-step guide in [docs/primary-windows-instalacao.md](../../docs/primary-windows-instalacao.md#11-obter-o-repositorio-git-ou-zip).
 
 ## 1. Prepare the virtual environment
 
 ```powershell
-cd C:\bwb\src\stream2yt\primary-windows\via-windows
+cd C:\myapps\src\stream2yt\primary-windows\via-windows
 python -m venv .venv
 .venv\Scripts\activate
 python -m pip install --upgrade pip
@@ -42,10 +42,10 @@ Alternatively, execute `build.bat` to run the same command sequence automaticall
 Copy the generated executable to the target offline location expected by the Windows primary deployment:
 
 ```powershell
-Copy-Item dist\stream_to_youtube.exe C:\bwb\apps\YouTube\stream_to_youtube.exe -Force
+Copy-Item dist\stream_to_youtube.exe C:\myapps\stream_to_youtube.exe -Force
 ```
 
-You can now distribute `C:\bwb\apps\YouTube\stream_to_youtube.exe` to operators or bundle it with the installation media.
+You can now distribute `C:\myapps\stream_to_youtube.exe` to operators or bundle it with the installation media.
 
 ## 4. Clean up (optional)
 

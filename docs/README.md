@@ -12,9 +12,9 @@ Two-module setup:
 
 - 📘 Consulte o [guia completo de instalação no Windows](primary-windows-instalacao.md#2-executável-distribuído) para seguir o fluxo recomendado com o executável distribuído.
 
-1. Posicione `stream_to_youtube.exe` em `C:\bwb\apps\YouTube\` e mantenha o FFmpeg em `C:\bwb\ffmpeg\bin\ffmpeg.exe`.
+1. Posicione `stream_to_youtube.exe` em `C:\myapps\` e mantenha o FFmpeg em `C:\myapps\ffmpeg\bin\ffmpeg.exe`.
 2. Crie um `.env` ao lado do executável com `YT_KEY=<CHAVE_DO_STREAM>` (e, se necessário, `YT_URL` ou um caminho alternativo para `FFMPEG`).
-3. Rode `stream_to_youtube.exe` a partir desse diretório e verifique os logs em `C:\bwb\apps\YouTube\logs\bwb_services.log`.
+3. Rode `stream_to_youtube.exe` a partir desse diretório e verifique os logs em `C:\myapps\logs\bwb_services.log`.
 4. (Opcional) Para manutenção via código-fonte ou geração de novos builds, siga as seções 3 e 4 do mesmo guia.
 
 ### Secondary (Droplet)
