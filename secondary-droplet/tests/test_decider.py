@@ -220,7 +220,7 @@ def test_night_without_primary_starts_secondary(monkeypatch):
     assert result["stop_calls"] == 0
     fields = _extract_decision_fields(result)
     assert fields[4] == "START secondary"
-    assert fields[5] == "night + no primary"
+    assert fields[5] == "night – force secondary on"
 
 
 def test_night_with_healthy_primary_keeps_state(monkeypatch):
@@ -239,7 +239,7 @@ def test_night_with_healthy_primary_keeps_state(monkeypatch):
     assert result["stop_calls"] == 0
     fields = _extract_decision_fields(result)
     assert fields[4] == "KEEP"
-    assert fields[5] == ""
+    assert fields[5] == "night – force secondary on"
 
 
 def test_daytime_primary_needs_hysteresis(monkeypatch):
