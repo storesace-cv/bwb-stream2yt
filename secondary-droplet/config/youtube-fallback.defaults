@@ -1,9 +1,9 @@
 # shellcheck shell=bash
 # Default configuration for youtube_fallback.sh. This file is managed via deploy.
-FALLBACK_IMG="/usr/local/share/youtube-fallback/SignalLost.jpg"
 FALLBACK_WIDTH=1280
 FALLBACK_HEIGHT=720
 FALLBACK_FPS=30
+FALLBACK_LIFE_ARGS=""
 FALLBACK_VBITRATE="1500k"
 FALLBACK_MAXRATE="1800k"
 FALLBACK_BUFSIZE="3000k"
