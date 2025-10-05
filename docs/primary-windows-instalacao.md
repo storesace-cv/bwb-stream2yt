@@ -8,9 +8,9 @@ Este guia explica como preparar um host Windows para executar o módulo **primar
    - Crie `C:\myapps\` para armazenar o executável e arquivos auxiliares.
    - Garanta permissão de escrita para o usuário que operará o serviço (necessário para criação de logs).
 2. **Instale o FFmpeg e configure o caminho padrão**:
-   - Crie a pasta `C:\myapps\ffmpeg\bin\`.
-   - Copie ou extraia `ffmpeg.exe` (e os demais binários do pacote FFmpeg) para esse diretório.
-   - O módulo procura o executável em `C:\myapps\ffmpeg\bin\ffmpeg.exe` através da variável `FFMPEG`; se preferir outro local, ajuste essa variável no `.env`.
+   - Crie a pasta `C:\bwb\ffmpeg\bin\` (ou adapte caso utilize um drive diferente).
+   - Copie ou extraia `ffmpeg.exe` (e os demais binários do pacote FFmpeg) para esse diretório, garantindo que o caminho final seja `C:\bwb\ffmpeg\bin\ffmpeg.exe`.
+   - O módulo utiliza esse caminho por padrão através da variável `FFMPEG`. Se preferir outro local, sobrescreva `FFMPEG` no `.env` posicionado ao lado do executável ou no diretório `primary-windows\src\` (para execuções via código-fonte).
 3. **(Opcional) Prepare o ambiente de desenvolvimento**:
    - Instale o Python 3.11 caso seja necessário executar diretamente a partir do código-fonte ou gerar novos builds com o PyInstaller.
    - Obtenha o repositório `bwb-stream2yt` (via Git ou ZIP) somente se for atuar nessa modalidade.
@@ -81,13 +81,13 @@ Para gerar o executável sem acesso à internet, utilize o kit de build localiza
 1. Instale o Python 3.11 e siga o passo a passo descrito no `README.md` do diretório `via-windows` (ou execute `prepare-env.bat` e `build.bat`).
 2. O spec file `stream_to_youtube.spec` encapsula os mesmos parâmetros da nossa pipeline (`--onefile`, `--noconsole`, `--hidden-import win32timezone`, `--collect-binaries pywin32`, etc.), garantindo que `pywin32` e demais dependências sejam embaladas corretamente.
 3. Ao término do processo, copie `primary-windows\via-windows\dist\stream_to_youtube.exe` para `C:\myapps\` juntamente com um `.env` atualizado.
-4. Durante a distribuição, reforce a necessidade do `ffmpeg.exe` presente em `C:\myapps\ffmpeg\bin\` ou documente o caminho alternativo via variável `FFMPEG`.
+4. Durante a distribuição, reforce a necessidade do `ffmpeg.exe` presente em `C:\bwb\ffmpeg\bin\` ou documente o caminho alternativo via variável `FFMPEG` (caso a equipe opte por outro diretório, basta sobrescrever o valor no `.env`).
 
 ## 5. Checklist de verificação
 
 - [ ] `stream_to_youtube.exe` posicionado em `C:\myapps\`.
 - [ ] `.env` ajustado no mesmo diretório com `YT_KEY` (e, se necessário, `YT_URL`/`FFMPEG`).
-- [ ] `ffmpeg.exe` disponível em `C:\myapps\ffmpeg\bin\` ou caminho ajustado na configuração.
+- [ ] `ffmpeg.exe` disponível em `C:\bwb\ffmpeg\bin\` ou caminho ajustado na configuração.
 - [ ] Execução do executável gera arquivos `C:\myapps\logs\bwb_services-YYYY-MM-DD.log` (com retenção automática de sete dias) sem erros críticos.
 - [ ] Dashboard do YouTube confirma conexão do stream durante o teste.
 - [ ] (Opcional) Ambiente Python 3.11 preparado para manutenção via código-fonte ou geração de novos builds.
