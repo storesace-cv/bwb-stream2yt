@@ -21,6 +21,9 @@ Ferramenta oficial para enviar o feed (RTSP/DirectShow) para a URL **primária**
 - `YT_DAY_START_HOUR`, `YT_DAY_END_HOUR` e `YT_TZ_OFFSET_HOURS` controlam a janela de transmissão.
 - `YT_INPUT_ARGS` / `YT_OUTPUT_ARGS` permitem ajustar os argumentos do ffmpeg.
 - `FFMPEG` aponta para o executável do ffmpeg (por omissão `C:\bwb\ffmpeg\bin\ffmpeg.exe`).
+- `BWB_LOG_FILE` define onde o log compartilhado é gravado. Por padrão usamos
+  `logs/bwb_services.log` ao lado do script/executável, criando a pasta
+  automaticamente no Windows.
 
 ## Build (one-file) com PyInstaller
 
