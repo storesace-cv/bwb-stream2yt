@@ -6,13 +6,13 @@ These instructions describe how to package the **stream_to_youtube** Windows exe
 
 1. Windows 10 or newer with administrator privileges.
 2. Python 3.11.x from <https://www.python.org/downloads/windows/> installed for "All Users" with the "Add python.exe to PATH" option enabled.
-3. Local copy of this repository synced to `C:\myapps\src\stream2yt\` (or another working directory of your choice).
+3. Local copy of this repository synced to the default path `C:\myapps\bwb-stream2yt\` (or another working directory of your choice).
    - If you still need to download the sources, follow the step-by-step guide in [docs/primary-windows-instalacao.md](../../docs/primary-windows-instalacao.md#11-obter-o-repositorio-git-ou-zip).
 
 ## 1. Prepare the virtual environment
 
 ```powershell
-cd C:\myapps\src\stream2yt\primary-windows\via-windows
+cd C:\myapps\bwb-stream2yt\primary-windows\via-windows
 python -m venv .venv
 .venv\Scripts\activate
 python -m pip install --upgrade pip
@@ -20,6 +20,8 @@ pip install -r requirements.txt
 ```
 
 > 💡 If you prefer to automate the bootstrap process, run `prepare-env.bat` instead of executing the commands manually.
+
+These commands have been validated from the default `C:\myapps\bwb-stream2yt\primary-windows\via-windows` folder layout. You can continue using alternate directory structures as long as you adjust the paths accordingly.
 
 ## 2. Build the executable with PyInstaller
 
