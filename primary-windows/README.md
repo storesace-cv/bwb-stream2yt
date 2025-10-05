@@ -7,7 +7,7 @@ Ferramenta oficial para enviar o feed (RTSP/DirectShow) para a URL **primária**
 ### Executável distribuído
 
 - Siga o [guia de instalação](../docs/primary-windows-instalacao.md#2-executável-distribuído) para posicionar o `stream_to_youtube.exe` em `C:\bwb\apps\YouTube\`, criar o `.env` ao lado do binário e apontar para o FFmpeg em `C:\bwb\ffmpeg\bin\ffmpeg.exe`.
-- A execução gera logs em `C:\bwb\apps\YouTube\logs\bwb_services.log`. Utilize-os para homologar a conexão com o YouTube.
+- A execução gera arquivos diários em `C:\bwb\apps\YouTube\logs\bwb_services-YYYY-MM-DD.log` (retenção automática de sete dias). Utilize-os para homologar a conexão com o YouTube.
 
 ### Código-fonte (desenvolvimento)
 
@@ -28,9 +28,8 @@ Ferramenta oficial para enviar o feed (RTSP/DirectShow) para a URL **primária**
 - `YT_DAY_START_HOUR`, `YT_DAY_END_HOUR` e `YT_TZ_OFFSET_HOURS` controlam a janela de transmissão.
 - `YT_INPUT_ARGS` / `YT_OUTPUT_ARGS` permitem ajustar os argumentos do ffmpeg.
 - `FFMPEG` aponta para o executável do ffmpeg (por omissão `C:\bwb\ffmpeg\bin\ffmpeg.exe`).
-- `BWB_LOG_FILE` define onde o log compartilhado é gravado. Por padrão usamos
-  `logs/bwb_services.log` ao lado do script/executável, criando a pasta
-  automaticamente no Windows.
+- `BWB_LOG_FILE` define o caminho base dos logs. Gravamos arquivos diários no formato
+  `<nome>-YYYY-MM-DD.log` e mantemos automaticamente somente os últimos sete dias.
 
 ## Build (one-file) com PyInstaller
 
