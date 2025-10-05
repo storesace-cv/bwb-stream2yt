@@ -6,13 +6,21 @@ pyinstaller --onefile --noconsole --hidden-import win32timezone --collect-binari
     primary-windows/src/stream_to_youtube.py
 """
 
+import inspect
 from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_all
 
 block_cipher = None
 
-BASE_DIR = Path(__file__).resolve().parent
+if "__file__" in globals():
+    BASE_DIR = Path(__file__).resolve().parent
+else:
+    current_frame = inspect.currentframe()
+    try:
+        BASE_DIR = Path(inspect.getfile(current_frame)).resolve().parent
+    finally:
+        del current_frame
 SRC_DIR = (BASE_DIR / ".." / "src").resolve()
 SCRIPT = SRC_DIR / "stream_to_youtube.py"
 
