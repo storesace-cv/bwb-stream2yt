@@ -1,0 +1,18 @@
+[Unit]
+Description=YTC Web Backend (FastAPI)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+EnvironmentFile=/etc/ytc-web-backend.env
+WorkingDirectory=/opt/ytc-web-service
+ExecStart=/opt/ytc-web-service/venv/bin/uvicorn app:app --host 127.0.0.1 --port 8081
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target
