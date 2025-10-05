@@ -8,7 +8,7 @@
 ## ffmpeg
 - Conservative defaults:
   - 1080p30 primary (Windows) with `-preset veryfast`, `-g 60`, `-b:v 5000k` (or tune for your uplink).
-  - 720p30 backup (Droplet) with `-b:v 1500k`, `-g 60`, scroll/static texts overlay to indicate fallback.
+  - 720p30 backup (Droplet) with `-b:v 3200k`, `-maxrate 3500k`, `-bufsize 6000k`, `-ar 44100`, scroll/static texts overlay to indicate fallback.
 
 ## Logs
 - Human-oriented console logs + ficheiro unificado (`/root/bwb_services.log`) com transições relevantes do decider e estado dos serviços.

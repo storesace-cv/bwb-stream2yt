@@ -47,12 +47,14 @@ A **URL secundária é interrompida automaticamente** quando:
    - Resolução: `1280x720`
    - FPS: `30`
    - Delay: `3.0s`
-   - Bitrate vídeo: `1500k`
+   - Bitrate vídeo: `3200k` (taxa alvo), `3500k` (maxrate) e `6000k` (bufsize)
    - Bitrate áudio: `128k`
+   - Sample rate áudio: `44100`
    - Texto 1 (scroll): `BEACHCAM | CABO LEDO | ANGOLA`
    - Texto 2 (estático): `VOLTAREMOS DENTRO DE MOMENTOS`
 
 4. O fallback **nunca deve ser desligado à noite**; deve permanecer ativo caso o primário falhe durante o período de inatividade local.
+5. Após qualquer alteração de parâmetros, confirmar via `journalctl -u youtube-fallback` e pelas *Estatísticas para nerds* da stream que o bitrate estabiliza próximo dos **3,2 Mbps**, sem underruns.
 
 ---
 
