@@ -4,7 +4,7 @@ Ferramenta oficial para enviar o feed (RTSP/DirectShow) para a URL **primária**
 
 ## Utilização rápida
 
-- O executável agora roda em **modo bandeja** e controla a transmissão em segundo plano. O ícone exibe as opções "Abrir logs…", "Parar/Iniciar transmissão" e "Sair"; sair garante o encerramento limpo do FFmpeg.
+- O executável agora roda em **modo bandeja** e controla a transmissão em segundo plano. O ícone exibe as opções "Abrir logs…", "Parar/Iniciar transmissão" e "Sair"; sair garante o encerramento limpo do FFmpeg. Caso `pystray`/`pillow` não estejam instalados, o script registra o ocorrido e continua ativo apenas no console (sem ícone).
 
 ### Executável distribuído
 
