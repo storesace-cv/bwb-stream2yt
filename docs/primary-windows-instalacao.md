@@ -15,6 +15,32 @@ Este guia explica como preparar um host Windows para executar o módulo **primar
    - Instale o Python 3.11 caso seja necessário executar diretamente a partir do código-fonte ou gerar novos builds com o PyInstaller.
    - Obtenha o repositório `bwb-stream2yt` (via Git ou ZIP) somente se for atuar nessa modalidade.
 
+### 1.1 Obter o repositório (Git ou ZIP)
+
+Escolha uma das opções abaixo para copiar o conteúdo do repositório para o seu computador antes de seguir para as próximas etapas.
+
+#### Método A — Git for Windows e `git clone`
+
+1. Acesse <https://git-scm.com/download/win> e faça o download do instalador **Git for Windows** compatível com a sua arquitetura.
+2. Execute o instalador, mantendo as opções padrão recomendadas (incluindo a instalação do **Git Bash**).
+3. Após concluir a instalação, abra o **Git Bash** e navegue até a pasta em que deseja manter o código, por exemplo:
+   ```bash
+   cd /c/myapps
+   ```
+4. Faça o clone do repositório oficial com o comando:
+   ```bash
+   git clone https://github.com/storesace-cv/bwb-stream2yt.git
+   ```
+5. Ao término do processo, você terá os arquivos disponíveis em `C:\myapps\bwb-stream2yt\` (ou no diretório escolhido no passo 3).
+
+#### Método B — Download direto do GitHub (ZIP)
+
+1. Visite <https://github.com/storesace-cv/bwb-stream2yt> em um navegador.
+2. Clique no botão **Code ▸ Download ZIP** para baixar o pacote compactado com os arquivos do projeto.
+3. Extraia o conteúdo do arquivo ZIP utilizando o Explorador de Arquivos do Windows (ou outra ferramenta de sua preferência).
+4. Mova a pasta extraída para o local desejado, como `C:\myapps\bwb-stream2yt\`, mantendo a estrutura de diretórios original.
+5. Caso venha a utilizar scripts ou caminhos predefinidos, ajuste referências para apontar para o diretório onde posicionou a pasta extraída.
+
 ## 2. Executável distribuído
 
 1. **Posicione o binário oficial** em `C:\bwb\apps\YouTube\stream_to_youtube.exe`.

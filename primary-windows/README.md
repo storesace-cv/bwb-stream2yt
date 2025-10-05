@@ -5,6 +5,7 @@ Ferramenta oficial para enviar o feed (RTSP/DirectShow) para a URL **primária**
 ## Utilização rápida
 
 - O executável roda em **modo headless** e mantém o FFmpeg ativo em segundo plano enquanto houver janela de transmissão configurada. Utilize os logs gerados automaticamente para acompanhar o estado do worker.
+- Caso ainda não tenha obtido os arquivos locais, siga o passo a passo de download descrito em [docs/primary-windows-instalacao.md](../docs/primary-windows-instalacao.md#11-obter-o-repositorio-git-ou-zip).
 
 ### Executável distribuído
 
