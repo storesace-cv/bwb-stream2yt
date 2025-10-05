@@ -2,14 +2,11 @@
 """PyInstaller build configuration for the Windows primary executable.
 
 This mirrors the CLI invocation:
-pyinstaller --onefile --noconsole --hidden-import win32timezone --collect-binaries pywin32 \
-    primary-windows/src/stream_to_youtube.py
+pyinstaller --onefile --noconsole primary-windows/src/stream_to_youtube.py
 """
 
 import inspect
 from pathlib import Path
-
-from PyInstaller.utils.hooks import collect_all
 
 block_cipher = None
 
@@ -24,14 +21,12 @@ else:
 SRC_DIR = (BASE_DIR / ".." / "src").resolve()
 SCRIPT = SRC_DIR / "stream_to_youtube.py"
 
-pywin32_datas, pywin32_binaries, pywin32_hiddenimports = collect_all("pywin32")
-
 analysis = Analysis(
     [str(SCRIPT)],
     pathex=[str(SRC_DIR)],
-    binaries=pywin32_binaries,
-    datas=pywin32_datas,
-    hiddenimports=["win32timezone", *pywin32_hiddenimports],
+    binaries=[],
+    datas=[],
+    hiddenimports=[],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

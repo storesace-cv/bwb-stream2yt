@@ -11,11 +11,7 @@ Ferramenta oficial para enviar o feed (RTSP/DirectShow) para a URL **primária**
 
 - Siga o [guia de instalação](../docs/primary-windows-instalacao.md#2-executável-distribuído) para posicionar o `stream_to_youtube.exe` em `C:\myapps\`. A primeira execução gera automaticamente o `.env` ao lado do binário; edite-o em seguida para informar `YT_KEY`/`YT_URL`, argumentos do FFmpeg e credenciais RTSP conforme o equipamento (o valor padrão de `FFMPEG` aponta para `C:\bwb\ffmpeg\bin\ffmpeg.exe`, mas é possível sobrescrevê-lo nesse arquivo se desejar outro diretório).
 - A execução gera arquivos diários em `C:\myapps\logs\bwb_services-YYYY-MM-DD.log` (retenção automática de sete dias). Utilize-os para homologar a conexão com o YouTube.
-- Para instalar o serviço do Windows, execute o binário uma vez com `stream_to_youtube.exe /service`. Em seguida:
-  - Inicie com `stream_to_youtube.exe /start`.
-  - Interrompa com `stream_to_youtube.exe /stop`.
-  - Remova com `stream_to_youtube.exe /noservice`.
-  Todos os comandos registram eventos no log compartilhado descrito acima.
+- O executável mantém um arquivo `stream_to_youtube.pid` ao lado do binário para garantir execução única. Utilize `stream_to_youtube.exe /stop` para encerrar a instância em segundo plano; novas execuções (inclusive duplo clique) reutilizam o mesmo fluxo de inicialização e falham com mensagem caso já haja um processo ativo.
 
 ### Código-fonte (desenvolvimento)
 
@@ -39,23 +35,10 @@ Ferramenta oficial para enviar o feed (RTSP/DirectShow) para a URL **primária**
 - `BWB_LOG_FILE` define o caminho base dos logs. Gravamos arquivos diários no formato
   `<nome>-YYYY-MM-DD.log` e mantemos automaticamente somente os últimos sete dias.
 
-## Serviço do Windows
-
-O executável expõe flags para administrar a instalação do serviço `BWBStreamToYouTube`:
-
-```bat
-stream_to_youtube.exe /service   & rem instala/atualiza o serviço apontando para o executável atual
-stream_to_youtube.exe /start     & rem inicia o serviço registrado
-stream_to_youtube.exe /stop      & rem interrompe o serviço
-stream_to_youtube.exe /noservice & rem remove o serviço do Windows
-```
-
-O serviço executa o mesmo worker da versão em foreground (com logs em `logs\bwb_services-*.log`). Após instalar, abra `services.msc` para ajustar credenciais ou comportamento de inicialização se necessário.
-
 ## Build (one-file) com PyInstaller
 
 - Utilize o kit offline documentado em [`primary-windows/via-windows/`](./via-windows/README.md) para reproduzir o executável oficial com Python 3.11, requirements e o `stream_to_youtube.spec` configurado com os mesmos parâmetros da pipeline.
-- O `build.bat` presente nesse diretório executa o PyInstaller com `--onefile`, `--noconsole` e inclui automaticamente os binários do `pywin32`, gerando `dist/stream_to_youtube.exe` pronto para distribuição.
+- O `build.bat` presente nesse diretório executa o PyInstaller com `--onefile` e `--noconsole`, gerando `dist/stream_to_youtube.exe` pronto para distribuição.
 - O script `prepare-env.bat` cria o ambiente virtual e instala as dependências necessárias antes do build.
 
 > ⚠️ Antes de lançar o `.exe`, certifique-se de que `YT_URL` ou `YT_KEY` estão definidos no ambiente ou num `.env` ao lado do executável. Nunca embuta chaves no binário.
