@@ -53,20 +53,8 @@ O serviço executa o mesmo worker da versão em foreground (com logs em `logs\bw
 
 ## Build (one-file) com PyInstaller
 
-- Use Python 3.11 para evitar problemas do 3.13 com o PyInstaller.
-- Instale dependências e faça o build:
-
-```bat
-py -3.11 -m pip install -U pip wheel
-py -3.11 -m pip install -U pyinstaller==6.10 pywin32 pyinstaller-hooks-contrib
-py -3.11 -m PyInstaller --clean --onefile --noconsole ^
-    --hidden-import win32timezone ^
-    --collect-binaries pywin32 ^
-    --collect-submodules win32service ^
-    --collect-submodules win32timezone ^
-    src/stream_to_youtube.py
-```
-
-O executável ficará em `dist/stream_to_youtube.exe` pronto para execução silenciosa via `pythonw.exe`.
+- Utilize o kit offline documentado em [`primary-windows/via-windows/`](./via-windows/README.md) para reproduzir o executável oficial com Python 3.11, requirements e o `stream_to_youtube.spec` configurado com os mesmos parâmetros da pipeline.
+- O `build.bat` presente nesse diretório executa o PyInstaller com `--onefile`, `--noconsole` e inclui automaticamente os binários do `pywin32`, gerando `dist/stream_to_youtube.exe` pronto para distribuição.
+- O script `prepare-env.bat` cria o ambiente virtual e instala as dependências necessárias antes do build.
 
 > ⚠️ Antes de lançar o `.exe`, certifique-se de que `YT_URL` ou `YT_KEY` estão definidos no ambiente ou num `.env` ao lado do executável. Nunca embuta chaves no binário.

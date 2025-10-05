@@ -23,6 +23,16 @@ logs/
 # OS
 .DS_Store
 
+# Windows offline kit (ignore generated artifacts but keep documentation)
+primary-windows/via-windows/
+!primary-windows/via-windows/
+primary-windows/via-windows/*
+!primary-windows/via-windows/README.md
+!primary-windows/via-windows/requirements.txt
+!primary-windows/via-windows/stream_to_youtube.spec
+!primary-windows/via-windows/build.bat
+!primary-windows/via-windows/prepare-env.bat
+
 # Secrets
 *.env
 **/secrets/**
