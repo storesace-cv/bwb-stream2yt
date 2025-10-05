@@ -4,6 +4,13 @@ Ferramenta oficial para enviar o feed (RTSP/DirectShow) para a URL **primária**
 
 ## Utilização rápida
 
+### Executável distribuído
+
+- Siga o [guia de instalação](../docs/primary-windows-instalacao.md#2-executável-distribuído) para posicionar o `stream_to_youtube.exe` em `C:\bwb\apps\YouTube\`, criar o `.env` ao lado do binário e apontar para o FFmpeg em `C:\bwb\ffmpeg\bin\ffmpeg.exe`.
+- A execução gera logs em `C:\bwb\apps\YouTube\logs\bwb_services.log`. Utilize-os para homologar a conexão com o YouTube.
+
+### Código-fonte (desenvolvimento)
+
 1. Configure as variáveis de ambiente:
    - Copie `src/.env.example` para `src/.env` e edite `YT_URL` ou `YT_KEY`; ou
    - Defina-as manualmente antes de executar (`set YT_KEY=xxxx`).

@@ -10,16 +10,12 @@ Two-module setup:
 
 ### Primary (Windows)
 
-- 📘 Consulte o [guia completo de instalação no Windows](primary-windows-instalacao.md) para um passo a passo detalhado.
+- 📘 Consulte o [guia completo de instalação no Windows](primary-windows-instalacao.md#2-executável-distribuído) para seguir o fluxo recomendado com o executável distribuído.
 
-1. Install Python 3.11 and PyInstaller.
-2. Configure the stream credentials via environment variables or a `.env` file:
-   - `YT_URL` — URL completo `rtmps://a.rtmps.youtube.com/live2/<KEY>`.
-   - `YT_KEY` — apenas a chave; o URL é construído automaticamente.
-   Copie `primary-windows/src/.env.example` para `.env` (no mesmo diretório) ou defina as variáveis antes de executar.
-3. Ajuste `primary-windows/src/stream_to_youtube.py` apenas se precisar alterar o dispositivo de entrada.
-4. Build: `py -3.11 -m pip install -U pyinstaller==6.10` then `py -3.11 -m PyInstaller --clean --onefile primary-windows/src/stream_to_youtube.py`.
-5. Run the generated `dist/stream_to_youtube.exe`, garantindo que `YT_URL` ou `YT_KEY` estejam presentes no ambiente.
+1. Posicione `stream_to_youtube.exe` em `C:\bwb\apps\YouTube\` e mantenha o FFmpeg em `C:\bwb\ffmpeg\bin\ffmpeg.exe`.
+2. Crie um `.env` ao lado do executável com `YT_KEY=<CHAVE_DO_STREAM>` (e, se necessário, `YT_URL` ou um caminho alternativo para `FFMPEG`).
+3. Rode `stream_to_youtube.exe` a partir desse diretório e verifique os logs em `C:\bwb\apps\YouTube\logs\bwb_services.log`.
+4. (Opcional) Para manutenção via código-fonte ou geração de novos builds, siga as seções 3 e 4 do mesmo guia.
 
 ### Secondary (Droplet)
 1. Defaults ship in `/usr/local/config/youtube-fallback.defaults`; adjust there if the standard slate settings need to change.
