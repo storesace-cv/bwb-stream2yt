@@ -49,9 +49,10 @@ Escolha uma das opções abaixo para copiar o conteúdo do repositório para o s
    - Em seguida, edite o `.env` recém-criado e configure ao menos `YT_KEY=<CHAVE_DO_STREAM>` (ou `YT_URL` completo, se preferir).
    - Ajuste `YT_INPUT_ARGS`, `YT_OUTPUT_ARGS`, as credenciais RTSP e `FFMPEG` conforme a necessidade do equipamento local.
 3. **Controle da execução**:
-   - Execute `stream_to_youtube.exe` diretamente (duplo clique ou sem argumentos) para iniciar o worker. O script cria `stream_to_youtube.pid` ao lado do binário e impede inicializações duplicadas.
-   - Para interromper com segurança, abra um *Prompt de Comando* em `C:\myapps\` e execute `stream_to_youtube.exe /stop`. O comando localiza o PID registrado, envia o sinal de parada e remove o arquivo de controle ao finalizar.
-   - Em caso de desligamentos inesperados, basta executar novamente; o script limpa automaticamente registros obsoletos.
+   - O fluxo é direto, sem criação de serviço do Windows: execute `stream_to_youtube.exe /start` (ou apenas `stream_to_youtube.exe`) para iniciar o worker em segundo plano.
+   - O binário grava `stream_to_youtube.pid` com o PID ativo e utiliza a sentinela `stream_to_youtube.stop` para registrar pedidos de parada; ambos ficam na mesma pasta do executável.
+   - Para interromper com segurança, abra um *Prompt de Comando* em `C:\myapps\` e execute `stream_to_youtube.exe /stop`. O comando localiza o PID registrado, gera a sentinela e remove os arquivos de controle assim que o worker encerra.
+   - Em caso de desligamentos inesperados, basta executar novamente; o script elimina automaticamente registros obsoletos antes de reiniciar.
 4. **Verifique os logs**:
    - Os registros são gravados em arquivos diários `C:\myapps\logs\bwb_services-YYYY-MM-DD.log` (a pasta `logs\` é criada se necessário e mantemos somente os últimos sete dias).
    - Utilize esses arquivos para confirmar a inicialização do FFmpeg e eventuais erros de autenticação.
