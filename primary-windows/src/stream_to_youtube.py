@@ -11,6 +11,8 @@ import subprocess
 import datetime
 import shlex
 from pathlib import Path
+import threading
+from typing import Optional
 
 
 ENV_TEMPLATE_CONTENT = """# Configurações para stream_to_youtube.py
@@ -301,59 +303,183 @@ def in_day_window(now_utc=None):
     return DAY_START_HOUR <= local.hour < DAY_END_HOUR
 
 
-def run_loop():
-    print(
-        "===== START {} =====".format(
-            datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        )
-    )
-    print(
-        "CMD:",
-        FFMPEG,
-        "-hide_banner -loglevel warning",
-        *INPUT_ARGS,
-        *OUTPUT_ARGS,
-        "-f",
-        "flv",
-        YT_URL,
-    )
-    log_event("primary", "Streaming loop started")
-    while True:
-        if not in_day_window():
-            # Still keep process alive but don't transmit: short sleep and re-check
-            print("[primary] Night period — holding (no transmit).")
-            time.sleep(30)
-            continue
+class StreamingWorker:
+    """Background controller that keeps ffmpeg alive while streaming."""
 
-        cmd = [
+    def __init__(self) -> None:
+        self._thread: Optional[threading.Thread] = None
+        self._stop_event = threading.Event()
+        self._process_lock = threading.Lock()
+        self._process: Optional[subprocess.Popen[str]] = None
+
+    def start(self) -> None:
+        if self.is_running:
+            return
+
+        self._stop_event.clear()
+        self._thread = threading.Thread(target=self._run_loop, name="StreamingWorker", daemon=True)
+        self._thread.start()
+
+    def stop(self, timeout: Optional[float] = 10.0) -> None:
+        if not self._thread:
+            return
+
+        self._stop_event.set()
+        self._terminate_process()
+
+        if timeout is not None:
+            self._thread.join(timeout=timeout)
+        else:
+            self._thread.join()
+
+        if self._thread.is_alive():
+            log_event("primary", "Streaming worker thread did not stop within timeout")
+        self._thread = None
+
+    def join(self) -> None:
+        thread = self._thread
+        if thread:
+            thread.join()
+
+    @property
+    def is_running(self) -> bool:
+        thread = self._thread
+        return bool(thread and thread.is_alive())
+
+    def _run_loop(self) -> None:
+        print(
+            "===== START {} =====".format(
+                datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            )
+        )
+        print(
+            "CMD:",
             FFMPEG,
-            "-hide_banner",
-            "-loglevel",
-            "warning",
+            "-hide_banner -loglevel warning",
             *INPUT_ARGS,
             *OUTPUT_ARGS,
             "-f",
             "flv",
             YT_URL,
-        ]
-        log_event("primary", "Launching ffmpeg process")
-        proc = subprocess.Popen(cmd)
+        )
+        log_event("primary", "Streaming loop started")
+
         try:
-            code = proc.wait()
-            print(f"[primary] ffmpeg exited code {code}; restarting in 5s.")
-            log_event("primary", f"ffmpeg exited with code {code}; retrying in 5s")
-            time.sleep(5)
-        except KeyboardInterrupt:
+            while not self._stop_event.is_set():
+                if not in_day_window():
+                    print("[primary] Night period — holding (no transmit).")
+                    if self._stop_event.wait(30):
+                        break
+                    continue
+
+                cmd = [
+                    FFMPEG,
+                    "-hide_banner",
+                    "-loglevel",
+                    "warning",
+                    *INPUT_ARGS,
+                    *OUTPUT_ARGS,
+                    "-f",
+                    "flv",
+                    YT_URL,
+                ]
+                log_event("primary", "Launching ffmpeg process")
+
+                with self._process_lock:
+                    try:
+                        self._process = subprocess.Popen(cmd)
+                    except OSError as exc:
+                        log_event("primary", f"Falha ao iniciar ffmpeg: {exc}")
+                        if self._stop_event.wait(5):
+                            break
+                        continue
+
+                code = self._wait_process()
+                if code is None:
+                    break
+
+                print(f"[primary] ffmpeg exited code {code}; reiniciando em 5s.")
+                log_event(
+                    "primary",
+                    f"ffmpeg exited with code {code}; retrying in 5s",
+                )
+                if self._stop_event.wait(5):
+                    break
+        finally:
+            self._terminate_process()
+            log_event("primary", "Streaming loop finished")
+
+    def _wait_process(self) -> Optional[int]:
+        with self._process_lock:
+            proc = self._process
+
+        if proc is None:
+            return None
+
+        while True:
+            try:
+                code = proc.wait(timeout=1)
+                break
+            except subprocess.TimeoutExpired:
+                if self._stop_event.is_set():
+                    self._terminate_process()
+                    return None
+
+        with self._process_lock:
+            self._process = None
+
+        return code
+
+    def _terminate_process(self) -> None:
+        with self._process_lock:
+            proc = self._process
+
+        if proc is None:
+            return
+
+        if proc.poll() is None:
             try:
                 proc.terminate()
             except Exception:
                 pass
-            print("[primary] Stopped by user.")
-            log_event("primary", "Streaming loop interrupted by user")
-            break
 
-    log_event("primary", "Streaming loop finished")
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+                else:
+                    proc.wait()
+
+        with self._process_lock:
+            self._process = None
+
+
+def run_forever() -> None:
+    worker = StreamingWorker()
+    worker.start()
+    try:
+        worker.join()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        worker.stop()
+
+
+def main() -> None:
+    from system_tray import TrayApplication
+
+    worker = StreamingWorker()
+    worker.start()
+    tray = TrayApplication(worker)
+
+    try:
+        tray.run()
+    finally:
+        worker.stop()
 
 
 if __name__ == "__main__":
-    run_loop()
+    main()
