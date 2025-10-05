@@ -48,12 +48,10 @@ Escolha uma das opções abaixo para copiar o conteúdo do repositório para o s
    - Ao executar o binário pela primeira vez, o script cria automaticamente um `.env` no mesmo diretório usando o template padrão.
    - Em seguida, edite o `.env` recém-criado e configure ao menos `YT_KEY=<CHAVE_DO_STREAM>` (ou `YT_URL` completo, se preferir).
    - Ajuste `YT_INPUT_ARGS`, `YT_OUTPUT_ARGS`, as credenciais RTSP e `FFMPEG` conforme a necessidade do equipamento local.
-3. **Instale e opere o serviço**:
-   - Abra um *Prompt de Comando* com privilégios administrativos e navegue até `C:\myapps\`.
-   - Instale ou atualize o serviço com `stream_to_youtube.exe /service`.
-   - Inicie e interrompa a execução conforme necessário com `stream_to_youtube.exe /start` e `stream_to_youtube.exe /stop`.
-   - Remova o serviço com `stream_to_youtube.exe /noservice` quando não for mais necessário.
-   - O `.env` será carregado automaticamente durante a inicialização do executável (seja via serviço ou execução direta).
+3. **Controle da execução**:
+   - Execute `stream_to_youtube.exe` diretamente (duplo clique ou sem argumentos) para iniciar o worker. O script cria `stream_to_youtube.pid` ao lado do binário e impede inicializações duplicadas.
+   - Para interromper com segurança, abra um *Prompt de Comando* em `C:\myapps\` e execute `stream_to_youtube.exe /stop`. O comando localiza o PID registrado, envia o sinal de parada e remove o arquivo de controle ao finalizar.
+   - Em caso de desligamentos inesperados, basta executar novamente; o script limpa automaticamente registros obsoletos.
 4. **Verifique os logs**:
    - Os registros são gravados em arquivos diários `C:\myapps\logs\bwb_services-YYYY-MM-DD.log` (a pasta `logs\` é criada se necessário e mantemos somente os últimos sete dias).
    - Utilize esses arquivos para confirmar a inicialização do FFmpeg e eventuais erros de autenticação.
@@ -79,7 +77,7 @@ Escolha uma das opções abaixo para copiar o conteúdo do repositório para o s
 Para gerar o executável sem acesso à internet, utilize o kit de build localizado em [`primary-windows/via-windows/`](../primary-windows/via-windows/README.md):
 
 1. Instale o Python 3.11 e siga o passo a passo descrito no `README.md` do diretório `via-windows` (ou execute `prepare-env.bat` e `build.bat`).
-2. O spec file `stream_to_youtube.spec` encapsula os mesmos parâmetros da nossa pipeline (`--onefile`, `--noconsole`, `--hidden-import win32timezone`, `--collect-binaries pywin32`, etc.), garantindo que `pywin32` e demais dependências sejam embaladas corretamente.
+2. O spec file `stream_to_youtube.spec` encapsula os mesmos parâmetros da nossa pipeline (`--onefile`, `--noconsole` e demais ajustes necessários) sem dependências específicas de serviço do Windows.
 3. Ao término do processo, copie `primary-windows\via-windows\dist\stream_to_youtube.exe` para `C:\myapps\` juntamente com um `.env` atualizado.
 4. Durante a distribuição, reforce a necessidade do `ffmpeg.exe` presente em `C:\bwb\ffmpeg\bin\` ou documente o caminho alternativo via variável `FFMPEG` (caso a equipe opte por outro diretório, basta sobrescrever o valor no `.env`).
 

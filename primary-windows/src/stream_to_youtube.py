@@ -4,15 +4,18 @@
 # - Robust ffmpeg process handling and auto-restarts on error.
 # - Default input is RTSP; change to dshow as needed.
 
-import os
-import sys
-import time
-import subprocess
+import atexit
 import datetime
+import os
 import shlex
+import signal
+import subprocess
+import sys
+import threading
+import time
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
-import threading
 from typing import Optional
 
 
@@ -69,6 +72,142 @@ def _resolve_log_target() -> tuple[Path, str, str]:
 LOG_DIR, LOG_STEM, LOG_SUFFIX = _resolve_log_target()
 LOG_PATTERN = f"{LOG_STEM}-*.log"
 LOG_RETENTION_DAYS = 7
+
+_PID_FILE_NAME = "stream_to_youtube.pid"
+_SIGNAL_HANDLERS_INSTALLED = False
+_ACTIVE_WORKER: Optional["StreamingWorker"] = None
+
+
+def _pid_file_path() -> Path:
+    return _script_base_dir() / _PID_FILE_NAME
+
+
+def _read_pid_file(path: Optional[Path] = None) -> Optional[int]:
+    if path is None:
+        path = _pid_file_path()
+    try:
+        content = path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    if not content:
+        return None
+    try:
+        return int(content)
+    except ValueError:
+        return None
+
+
+def _is_pid_running(pid: int) -> bool:
+    if pid <= 0:
+        return False
+
+    if os.name == "nt":
+        with suppress(Exception):
+            import ctypes
+
+            PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+            kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+            handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+            if handle:
+                kernel32.CloseHandle(handle)
+                return True
+            error_code = ctypes.get_last_error()
+            if error_code == 5:  # ACCESS_DENIED
+                return True
+        return False
+
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    else:
+        return True
+
+
+def _claim_pid_file() -> None:
+    path = _pid_file_path()
+    existing_pid = _read_pid_file(path)
+    if existing_pid and _is_pid_running(existing_pid):
+        raise RuntimeError(
+            f"Já existe uma instância ativa (PID {existing_pid}). Utilize /stop antes de reiniciar."
+        )
+
+    with suppress(OSError):
+        path.unlink()
+
+    tmp_path = path.with_suffix(".tmp")
+    tmp_path.write_text(str(os.getpid()), encoding="utf-8")
+    os.replace(tmp_path, path)
+    log_event("primary", f"Registrado PID {os.getpid()} em {path}")
+
+
+def _release_pid_file(expected_pid: Optional[int] = None) -> None:
+    path = _pid_file_path()
+    try:
+        content = path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return
+
+    try:
+        recorded_pid = int(content)
+    except ValueError:
+        recorded_pid = None
+
+    if expected_pid is None:
+        expected_pid = os.getpid()
+
+    if recorded_pid is not None and recorded_pid != expected_pid:
+        return
+
+    with suppress(OSError):
+        path.unlink()
+        log_event("primary", f"Registro de PID removido de {path}")
+
+
+def _send_stop_signal(pid: int) -> bool:
+    signals_to_try: list[int] = []
+    if os.name == "nt" and hasattr(signal, "CTRL_BREAK_EVENT"):
+        signals_to_try.append(signal.CTRL_BREAK_EVENT)  # type: ignore[attr-defined]
+    if hasattr(signal, "SIGTERM"):
+        signals_to_try.append(signal.SIGTERM)
+    if hasattr(signal, "SIGINT"):
+        signals_to_try.append(signal.SIGINT)
+
+    for sig in signals_to_try:
+        try:
+            os.kill(pid, sig)
+        except OSError:
+            continue
+        else:
+            return True
+    return False
+
+
+def _handle_shutdown_signal(signum, _frame) -> None:
+    log_event("primary", f"Sinal {signum} recebido; encerrando worker.")
+    worker = _ACTIVE_WORKER
+    if worker:
+        worker.stop()
+
+
+def _ensure_signal_handlers() -> None:
+    global _SIGNAL_HANDLERS_INSTALLED
+    if _SIGNAL_HANDLERS_INSTALLED:
+        return
+
+    handled = [sig for sig in (getattr(signal, "SIGINT", None), getattr(signal, "SIGTERM", None)) if sig]
+    if os.name == "nt" and hasattr(signal, "SIGBREAK"):
+        handled.append(signal.SIGBREAK)  # type: ignore[attr-defined]
+
+    for sig in handled:
+        signal.signal(sig, _handle_shutdown_signal)
+
+    _SIGNAL_HANDLERS_INSTALLED = True
+
+
+atexit.register(_release_pid_file)
 
 
 def _current_log_file(now: datetime.datetime | None = None) -> Path:
@@ -474,12 +613,14 @@ def run_forever(
     config: Optional[StreamingConfig] = None,
     existing_worker: Optional["StreamingWorker"] = None,
 ) -> None:
+    global _ACTIVE_WORKER
     if existing_worker is not None:
         worker = existing_worker
     else:
         if config is None:
             config = load_config()
         worker = StreamingWorker(config)
+    _ACTIVE_WORKER = worker
     if not worker.is_running:
         worker.start()
     try:
@@ -488,68 +629,101 @@ def run_forever(
         pass
     finally:
         worker.stop()
+        _ACTIVE_WORKER = None
+
+
+def _start_streaming_instance() -> int:
+    try:
+        _claim_pid_file()
+    except RuntimeError as exc:
+        message = str(exc)
+        print(f"[primary] {message}", file=sys.stderr)
+        log_event("primary", message)
+        return 1
+    except OSError as exc:
+        message = f"Falha ao registrar PID: {exc}"
+        print(f"[primary] {message}", file=sys.stderr)
+        log_event("primary", message)
+        return 1
+
+    try:
+        _ensure_signal_handlers()
+        config = load_config()
+        if not config.yt_url:
+            message = "Credenciais YT_URL/YT_KEY ausentes; streaming worker finalizado."
+            print(f"[primary] {message}", file=sys.stderr)
+            log_event("primary", message)
+            return 2
+
+        log_event("primary", f"Iniciando worker (PID {os.getpid()})")
+        run_forever(config=config)
+        log_event("primary", "Worker finalizado")
+        return 0
+    finally:
+        _release_pid_file()
+
+
+def _stop_streaming_instance(timeout: float = 30.0) -> int:
+    path = _pid_file_path()
+    pid = _read_pid_file(path)
+    if pid is None:
+        message = "Nenhuma instância ativa encontrada."
+        print(f"[primary] {message}")
+        log_event("primary", message)
+        return 0
+
+    if not _is_pid_running(pid):
+        message = f"Registro de PID obsoleto ({pid}); removendo arquivo."
+        print(f"[primary] {message}")
+        log_event("primary", message)
+        _release_pid_file(expected_pid=pid)
+        return 0
+
+    if not _send_stop_signal(pid):
+        message = f"Falha ao sinalizar parada para o PID {pid}."
+        print(f"[primary] {message}", file=sys.stderr)
+        log_event("primary", message)
+        return 1
+
+    log_event("primary", f"Sinal de parada enviado para PID {pid}")
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if not _is_pid_running(pid):
+            _release_pid_file(expected_pid=pid)
+            message = "Instância interrompida com sucesso."
+            print(f"[primary] {message}")
+            log_event("primary", message)
+            return 0
+        time.sleep(0.5)
+
+    message = "Timeout ao aguardar a parada do worker."
+    print(f"[primary] {message}", file=sys.stderr)
+    log_event("primary", message)
+    return 1
 
 
 def main() -> None:
-    from windows_service import (
-        SERVICE_NAME,
-        build_install_command,
-        install_service,
-        maybe_handle_service_invocation,
-        remove_service,
-        start_service,
-        stop_service,
-    )
-
     raw_args = sys.argv[1:]
-    if maybe_handle_service_invocation(sys.argv):
-        return
-
     normalized_args = [arg.lower() for arg in raw_args]
-    if normalized_args:
-        action = normalized_args[0]
-        if action not in {"/service", "/noservice", "/start", "/stop"}:
-            message = f"Flag desconhecida: {raw_args[0]}"
-            print(f"[primary] {message}", file=sys.stderr)
-            log_event("service", message)
-            sys.exit(1)
-
-        try:
-            if action == "/service":
-                exe_name, exe_args = build_install_command()
-                install_service(exe_name, exe_args)
-                print(
-                    f"[primary] Serviço {SERVICE_NAME} instalado. Configure via services.msc."
-                )
-            elif action == "/noservice":
-                remove_service()
-                print(f"[primary] Serviço {SERVICE_NAME} removido.")
-            elif action == "/start":
-                start_service()
-                print(f"[primary] Serviço {SERVICE_NAME} iniciado.")
-            elif action == "/stop":
-                stop_service()
-                print(f"[primary] Serviço {SERVICE_NAME} interrompido.")
-        except RuntimeError as exc:
-            message = f"Operação de serviço indisponível: {exc}"
-            print(f"[primary] {message}", file=sys.stderr)
-            log_event("service", message)
-            sys.exit(1)
-        except Exception as exc:  # noqa: BLE001
-            message = f"Falha ao executar ação de serviço ({exc})."
-            print(f"[primary] {message}", file=sys.stderr)
-            log_event("service", message)
-            sys.exit(1)
-        return
-
-    config = load_config()
-    if not config.yt_url:
-        message = "Credenciais YT_URL/YT_KEY ausentes; streaming worker finalizado."
+    if len(normalized_args) > 1:
+        message = "Utilize no máximo uma flag (/start ou /stop)."
         print(f"[primary] {message}", file=sys.stderr)
         log_event("primary", message)
-        sys.exit(2)
+        sys.exit(1)
 
-    run_forever(config=config)
+    command = normalized_args[0] if normalized_args else "/start"
+    if command not in {"/start", "/stop"}:
+        message = f"Flag desconhecida: {raw_args[0]}"
+        print(f"[primary] {message}", file=sys.stderr)
+        log_event("primary", message)
+        sys.exit(1)
+
+    if command == "/stop":
+        exit_code = _stop_streaming_instance()
+        sys.exit(exit_code)
+
+    exit_code = _start_streaming_instance()
+    sys.exit(exit_code)
 
 
 if __name__ == "__main__":
