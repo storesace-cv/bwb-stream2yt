@@ -41,6 +41,7 @@ if win32serviceutil is not None:  # pragma: no branch - platform specific
             self._worker = StreamingWorker()
             try:
                 self._worker.start()
+                self.ReportServiceStatus(win32service.SERVICE_RUNNING)
                 win32event.WaitForSingleObject(self._stop_event, win32event.INFINITE)
             except Exception as exc:  # noqa: BLE001 - must log and continue shutdown
                 log_event("service", f"Falha inesperada no serviço: {exc}")
