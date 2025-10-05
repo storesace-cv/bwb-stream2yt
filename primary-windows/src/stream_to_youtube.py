@@ -13,7 +13,29 @@ import shlex
 from pathlib import Path
 
 
-LOG_FILE = Path("/root/bwb_services.log")
+def _script_base_dir() -> Path:
+    if getattr(sys, "frozen", False):  # PyInstaller one-file executables
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent
+
+
+def _resolve_log_file() -> Path:
+    """Determine where shared logs should be written."""
+
+    script_dir = _script_base_dir()
+    raw_path = os.environ.get("BWB_LOG_FILE", "").strip()
+
+    if raw_path:
+        expanded = os.path.expandvars(raw_path)
+        candidate = Path(expanded).expanduser()
+        if not candidate.is_absolute():
+            candidate = (script_dir / candidate).resolve()
+        return candidate
+
+    return script_dir / "logs" / "bwb_services.log"
+
+
+LOG_FILE = _resolve_log_file()
 
 
 def log_event(component: str, message: str) -> None:
@@ -22,6 +44,12 @@ def log_event(component: str, message: str) -> None:
     timestamp = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     line = f"{timestamp} [{component}] {message}\n"
     try:
+        if LOG_FILE.parent:
+            try:
+                LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+            except OSError:
+                # Directory creation shouldn't abort logging; continue to attempt write.
+                pass
         with LOG_FILE.open("a", encoding="utf-8") as handle:
             handle.write(line)
     except OSError:
