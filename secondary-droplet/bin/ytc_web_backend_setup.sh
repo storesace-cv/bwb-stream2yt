@@ -67,13 +67,25 @@ ensure_firewall_rule() {
 log "Preparando diretório da aplicação em ${INSTALL_DIR}"
 install -d -m 755 -o root -g root "${INSTALL_DIR}"
 
-if [ ! -d "${VENV_DIR}" ]; then
-  log "Criando virtualenv em ${VENV_DIR}"
-  python3 -m venv "${VENV_DIR}"
+if [[ -x "${VENV_DIR}/bin/pip" ]]; then
+  log "Reaproveitando virtualenv existente em ${VENV_DIR}"
+else
+  if [[ -d "${VENV_DIR}" ]]; then
+    log "pip ausente ou não executável; removendo virtualenv corrompido em ${VENV_DIR}"
+    rm -rf "${VENV_DIR}"
+  fi
+
+  log "Reconstruindo virtualenv em ${VENV_DIR}"
+  if python3 -m venv "${VENV_DIR}"; then
+    log "Virtualenv recriado com sucesso"
+  else
+    log "Falha ao criar virtualenv em ${VENV_DIR}" >&2
+    exit 1
+  fi
 fi
 
 log "Actualizando pip e instalando dependências"
-"${VENV_DIR}/bin/pip" install --upgrade pip
+"${VENV_DIR}/bin/python" -m pip install --upgrade pip
 "${VENV_DIR}/bin/pip" install -r "${PROJECT_ROOT}/requirements.txt"
 "${VENV_DIR}/bin/pip" install -r "${APP_SRC}/requirements.txt"
 

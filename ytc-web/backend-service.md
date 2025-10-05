@@ -45,6 +45,7 @@ Este guia descreve como montar um microserviço HTTP na droplet secundária que 
 
 - O deploy automático é orquestrado por `scripts/deploy_to_droplet.sh`, que sincroniza `secondary-droplet/` (incluindo `ytc-web-backend/`) e executa `scripts/post_deploy.sh`.
 - O script `secondary-droplet/bin/ytc_web_backend_setup.sh` prepara `/opt/ytc-web-service`, cria o virtualenv, instala as dependências (`secondary-droplet/requirements.txt` + `ytc-web-backend/requirements.txt`) e aplica o unit file `secondary-droplet/systemd/ytc-web-backend.service`.
+- Caso o virtualenv fique corrompido (ex.: `pip` ausente), o deploy remove automaticamente `/opt/ytc-web-service/venv` e recria tudo na execução seguinte; confirme o estado com `ls /opt/ytc-web-service/venv/bin/pip` para garantir que o binário existe e é executável.
 - As variáveis sensíveis vivem em `/etc/ytc-web-backend.env`. Edite `YT_OAUTH_TOKEN_PATH` (padrão: `/root/token.json`) e `YTC_WEB_BACKEND_CACHE_TTL_SECONDS` conforme a necessidade; o ficheiro é criado com `chmod 600`.
 - Após o deploy, valide o serviço com `systemctl status ytc-web-backend.service` e analise logs recentes via `journalctl -u ytc-web-backend.service -n 50`.
 
