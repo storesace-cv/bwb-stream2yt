@@ -9,6 +9,9 @@ Two-module setup:
 ## Quick start
 
 ### Primary (Windows)
+
+- 📘 Consulte o [guia completo de instalação no Windows](primary-windows-instalacao.md) para um passo a passo detalhado.
+
 1. Install Python 3.11 and PyInstaller.
 2. Configure the stream credentials via environment variables or a `.env` file:
    - `YT_URL` — URL completo `rtmps://a.rtmps.youtube.com/live2/<KEY>`.
