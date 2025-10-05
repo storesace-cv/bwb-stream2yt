@@ -10,6 +10,7 @@ import time
 import subprocess
 import datetime
 import shlex
+from dataclasses import dataclass
 from pathlib import Path
 import threading
 from typing import Optional
@@ -196,11 +197,7 @@ def _load_env_files():
             continue
 
 
-_ensure_env_file()
-_load_env_files()
-
-
-def _resolve_yt_url():
+def _resolve_yt_url() -> Optional[str]:
     url = os.environ.get("YT_URL", "").strip()
     if url:
         return url
@@ -209,22 +206,10 @@ def _resolve_yt_url():
     if key:
         return f"rtmps://a.rtmps.youtube.com/live2/{key}"
 
-    print("[primary] ERRO: defina YT_URL ou YT_KEY (consulte README).", file=sys.stderr)
-    sys.exit(2)
+    return None
 
 
 # === CONFIG (edit if needed) ===
-# YouTube Primary URL (lido de variáveis/env file)
-YT_URL = _resolve_yt_url()
-
-# Day window (Africa/Luanda time offset — overridable via env)
-DAY_START_HOUR = int(os.environ.get("YT_DAY_START_HOUR", "8"))
-DAY_END_HOUR = int(os.environ.get("YT_DAY_END_HOUR", "19"))
-TZ_OFFSET_HOURS = int(
-    os.environ.get("YT_TZ_OFFSET_HOURS", "1")
-)  # Luanda currently UTC+1
-
-
 # FFmpeg input/output (example: RTSP)
 def _split_args(value: str, default: list[str]) -> list[str]:
     value = value.strip()
@@ -233,80 +218,106 @@ def _split_args(value: str, default: list[str]) -> list[str]:
     return shlex.split(value)
 
 
-INPUT_ARGS = _split_args(
-    os.environ.get("YT_INPUT_ARGS", ""),
-    [
-        "-rtsp_transport",
-        "tcp",
-        "-rtsp_flags",
-        "prefer_tcp",
-        "-fflags",
-        "nobuffer",
-        "-flags",
-        "low_delay",
-        "-use_wallclock_as_timestamps",
-        "1",
-        "-i",
-        "rtsp://BEACHCAM:QueriasEntrar123@10.0.254.50:554/Streaming/Channels/101",
-    ],
-)
-OUTPUT_ARGS = _split_args(
-    os.environ.get("YT_OUTPUT_ARGS", ""),
-    [
-        "-vf",
-        "scale=1920:1080:flags=bicubic,format=yuv420p",
-        "-r",
-        "30",
-        "-c:v",
-        "libx264",
-        "-preset",
-        "veryfast",
-        "-profile:v",
-        "high",
-        "-level",
-        "4.2",
-        "-b:v",
-        "5000k",
-        "-maxrate",
-        "6000k",
-        "-bufsize",
-        "12000k",
-        "-g",
-        "60",
-        "-sc_threshold",
-        "0",
-        "-pix_fmt",
-        "yuv420p",
-        "-filter:a",
-        (
-            "aresample=async=1:first_pts=0,"
-            " aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo"
-        ),
-        "-c:a",
-        "aac",
-        "-b:a",
-        "128k",
-        "-ar",
-        "44100",
-        "-ac",
-        "2",
-    ],
-)
-
-FFMPEG = os.environ.get("FFMPEG", r"C:\bwb\ffmpeg\bin\ffmpeg.exe")
+@dataclass(frozen=True)
+class StreamingConfig:
+    yt_url: Optional[str]
+    input_args: list[str]
+    output_args: list[str]
+    ffmpeg: str
+    day_start_hour: int
+    day_end_hour: int
+    tz_offset_hours: int
 
 
-def in_day_window(now_utc=None):
+def load_config() -> StreamingConfig:
+    _ensure_env_file()
+    _load_env_files()
+
+    input_args = _split_args(
+        os.environ.get("YT_INPUT_ARGS", ""),
+        [
+            "-rtsp_transport",
+            "tcp",
+            "-rtsp_flags",
+            "prefer_tcp",
+            "-fflags",
+            "nobuffer",
+            "-flags",
+            "low_delay",
+            "-use_wallclock_as_timestamps",
+            "1",
+            "-i",
+            "rtsp://BEACHCAM:QueriasEntrar123@10.0.254.50:554/Streaming/Channels/101",
+        ],
+    )
+    output_args = _split_args(
+        os.environ.get("YT_OUTPUT_ARGS", ""),
+        [
+            "-vf",
+            "scale=1920:1080:flags=bicubic,format=yuv420p",
+            "-r",
+            "30",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-profile:v",
+            "high",
+            "-level",
+            "4.2",
+            "-b:v",
+            "5000k",
+            "-maxrate",
+            "6000k",
+            "-bufsize",
+            "12000k",
+            "-g",
+            "60",
+            "-sc_threshold",
+            "0",
+            "-pix_fmt",
+            "yuv420p",
+            "-filter:a",
+            (
+                "aresample=async=1:first_pts=0,"
+                " aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo"
+            ),
+            "-c:a",
+            "aac",
+            "-b:a",
+            "128k",
+            "-ar",
+            "44100",
+            "-ac",
+            "2",
+        ],
+    )
+
+    return StreamingConfig(
+        yt_url=_resolve_yt_url(),
+        input_args=input_args,
+        output_args=output_args,
+        ffmpeg=os.environ.get("FFMPEG", r"C:\bwb\ffmpeg\bin\ffmpeg.exe"),
+        day_start_hour=int(os.environ.get("YT_DAY_START_HOUR", "8")),
+        day_end_hour=int(os.environ.get("YT_DAY_END_HOUR", "19")),
+        tz_offset_hours=int(os.environ.get("YT_TZ_OFFSET_HOURS", "1")),
+    )
+
+
+def in_day_window(config: StreamingConfig, now_utc=None):
     if now_utc is None:
         now_utc = datetime.datetime.utcnow()
-    local = now_utc + datetime.timedelta(hours=TZ_OFFSET_HOURS)
-    return DAY_START_HOUR <= local.hour < DAY_END_HOUR
+    local = now_utc + datetime.timedelta(hours=config.tz_offset_hours)
+    return config.day_start_hour <= local.hour < config.day_end_hour
 
 
 class StreamingWorker:
     """Background controller that keeps ffmpeg alive while streaming."""
 
-    def __init__(self) -> None:
+    def __init__(self, config: StreamingConfig) -> None:
+        if not config.yt_url:
+            raise ValueError("Streaming worker requires a resolved YouTube ingest URL.")
+        self._config = config
         self._thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
         self._process_lock = threading.Lock()
@@ -354,34 +365,36 @@ class StreamingWorker:
         )
         print(
             "CMD:",
-            FFMPEG,
-            "-hide_banner -loglevel warning",
-            *INPUT_ARGS,
-            *OUTPUT_ARGS,
+            self._config.ffmpeg,
+            "-hide_banner",
+            "-loglevel",
+            "warning",
+            *self._config.input_args,
+            *self._config.output_args,
             "-f",
             "flv",
-            YT_URL,
+            self._config.yt_url,
         )
         log_event("primary", "Streaming loop started")
 
         try:
             while not self._stop_event.is_set():
-                if not in_day_window():
+                if not in_day_window(self._config):
                     print("[primary] Night period — holding (no transmit).")
                     if self._stop_event.wait(30):
                         break
                     continue
 
                 cmd = [
-                    FFMPEG,
+                    self._config.ffmpeg,
                     "-hide_banner",
                     "-loglevel",
                     "warning",
-                    *INPUT_ARGS,
-                    *OUTPUT_ARGS,
+                    *self._config.input_args,
+                    *self._config.output_args,
                     "-f",
                     "flv",
-                    YT_URL,
+                    self._config.yt_url,
                 ]
                 log_event("primary", "Launching ffmpeg process")
 
@@ -457,8 +470,16 @@ class StreamingWorker:
             self._process = None
 
 
-def run_forever(existing_worker: Optional["StreamingWorker"] = None) -> None:
-    worker = existing_worker or StreamingWorker()
+def run_forever(
+    config: Optional[StreamingConfig] = None,
+    existing_worker: Optional["StreamingWorker"] = None,
+) -> None:
+    if existing_worker is not None:
+        worker = existing_worker
+    else:
+        if config is None:
+            config = load_config()
+        worker = StreamingWorker(config)
     if not worker.is_running:
         worker.start()
     try:
@@ -521,7 +542,14 @@ def main() -> None:
             sys.exit(1)
         return
 
-    run_forever()
+    config = load_config()
+    if not config.yt_url:
+        message = "Credenciais YT_URL/YT_KEY ausentes; streaming worker finalizado."
+        print(f"[primary] {message}", file=sys.stderr)
+        log_event("primary", message)
+        sys.exit(2)
+
+    run_forever(config=config)
 
 
 if __name__ == "__main__":
