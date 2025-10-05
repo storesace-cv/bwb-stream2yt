@@ -23,10 +23,10 @@ if [ -r "$DEFAULTS_FILE" ]; then
   # shellcheck source=../config/youtube-fallback.defaults
   . "$DEFAULTS_FILE"
 else
-  FALLBACK_IMG="/usr/local/share/youtube-fallback/SignalLost.jpg"
   FALLBACK_WIDTH=1280
   FALLBACK_HEIGHT=720
   FALLBACK_FPS=30
+  FALLBACK_LIFE_ARGS=""
   FALLBACK_VBITRATE="1500k"
   FALLBACK_MAXRATE="1800k"
   FALLBACK_BUFSIZE="3000k"
@@ -203,7 +203,7 @@ progress_watcher() {
 
 set +e
 ffmpeg -progress "$PROGRESS_FILE" -hide_banner -loglevel "${FALLBACK_LOGLEVEL}" -nostats \
-  -re -stream_loop -1 -framerate "${FALLBACK_FPS}" -i "${FALLBACK_IMG}" \
+  -re -f lavfi -i "life=s=${FALLBACK_WIDTH}x${FALLBACK_HEIGHT}:rate=${FALLBACK_FPS}${FALLBACK_LIFE_ARGS:+:${FALLBACK_LIFE_ARGS}}" \
   -f lavfi -i "anullsrc=channel_layout=stereo:sample_rate=${FALLBACK_AR}" \
   -filter_complex "[0:v]scale=${FALLBACK_WIDTH}:${FALLBACK_HEIGHT}:force_original_aspect_ratio=decrease,pad=${FALLBACK_WIDTH}:${FALLBACK_HEIGHT}:(ow-iw)/2:(oh-ih)/2:color=black,format=yuv420p,setpts=PTS+${FALLBACK_DELAY_SEC}/TB,drawtext=fontfile=${FALLBACK_FONT}:text='${FALLBACK_SCROLL_TEXT}':fontsize=36:fontcolor=white:shadowcolor=black@0.85:shadowx=2:shadowy=2:x=w-mod(t*30*8\,w+text_w):y=H-60,drawtext=fontfile=${FALLBACK_FONT}:text='${FALLBACK_STATIC_TEXT}':fontsize=28:fontcolor=white:shadowcolor=black@0.85:shadowx=2:shadowy=2:x=(w-text_w)/2:y=60[vb];[1:a]asetpts=PTS+${FALLBACK_DELAY_SEC}/TB[ab]" \
   -map "[vb]" -map "[ab]" \
