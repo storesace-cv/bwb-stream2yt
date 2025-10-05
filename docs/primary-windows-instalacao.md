@@ -50,22 +50,11 @@ Este guia explica como preparar um host Windows para executar o módulo **primar
 
 ## 4. Build one-file com PyInstaller (referência)
 
-1. Instale o PyInstaller e as dependências necessárias (exige Python 3.11):
-   ```bat
-   py -3.11 -m pip install -U pip wheel
-   py -3.11 -m pip install -U pyinstaller==6.10 pywin32 pyinstaller-hooks-contrib
-   ```
-2. Gere o executável a partir do diretório `primary-windows\`:
-   ```bat
-   py -3.11 -m PyInstaller --clean --onefile --noconsole ^
-       --hidden-import win32timezone ^
-       --collect-binaries pywin32 ^
-       --collect-submodules win32service ^
-       --collect-submodules win32timezone ^
-       src/stream_to_youtube.py
-   ```
-   Essas opções incorporam todas as dependências do `pywin32`; sem elas, o executável não inclui os binários necessários e os comandos `/service` falham ao registrar o serviço.
-3. O binário será produzido em `dist/stream_to_youtube.exe` e deve ser movido para `C:\bwb\apps\YouTube\` junto com um `.env` válido.
+Para gerar o executável sem acesso à internet, utilize o kit de build localizado em [`primary-windows/via-windows/`](../primary-windows/via-windows/README.md):
+
+1. Instale o Python 3.11 e siga o passo a passo descrito no `README.md` do diretório `via-windows` (ou execute `prepare-env.bat` e `build.bat`).
+2. O spec file `stream_to_youtube.spec` encapsula os mesmos parâmetros da nossa pipeline (`--onefile`, `--noconsole`, `--hidden-import win32timezone`, `--collect-binaries pywin32`, etc.), garantindo que `pywin32` e demais dependências sejam embaladas corretamente.
+3. Ao término do processo, copie `primary-windows\via-windows\dist\stream_to_youtube.exe` para `C:\bwb\apps\YouTube\` juntamente com um `.env` atualizado.
 4. Durante a distribuição, reforce a necessidade do `ffmpeg.exe` presente em `C:\bwb\ffmpeg\bin\` ou documente o caminho alternativo via variável `FFMPEG`.
 
 ## 5. Checklist de verificação
