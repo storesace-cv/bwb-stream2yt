@@ -14,5 +14,5 @@ rsync -avz --delete \
 rsync -avz --delete \
   "$(dirname "$0")/post_deploy.sh" "${DEST_USER}@${DEST_IP}:${DEST_DIR}/scripts/post_deploy.sh"
 
-ssh -o StrictHostKeyChecking=accept-new "${DEST_USER}@${DEST_IP}" "bash '${DEST_DIR}/scripts/post_deploy.sh'"
-echo "[deploy] Done."
+echo "[deploy] Sincronização concluída. Execute manualmente:"
+echo "  ssh ${DEST_USER}@${DEST_IP} 'bash ${DEST_DIR}/scripts/post_deploy.sh'"

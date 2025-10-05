@@ -57,4 +57,4 @@ systemctl restart youtube-fallback
 
 ### 5) Atualizações posteriores
 
-Use `scripts/deploy_to_droplet.sh` e depois `scripts/post_deploy.sh`.
+Use `scripts/deploy_to_droplet.sh` para sincronizar ficheiros e, em seguida, conecte via SSH para executar `bash /root/bwb-stream2yt/scripts/post_deploy.sh` manualmente.

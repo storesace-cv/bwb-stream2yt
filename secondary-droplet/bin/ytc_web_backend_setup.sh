@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+APP_SRC="/root/bwb-stream2yt/secondary-droplet/ytc-web-backend"
+APP_DEST="/opt/ytc-web-service"
+VENV_DIR="${APP_DEST}/venv"
+SYSTEMD_SRC="/root/bwb-stream2yt/secondary-droplet/systemd/ytc-web-backend.service"
+SYSTEMD_DEST="/etc/systemd/system/ytc-web-backend.service"
+ENV_FILE="/etc/ytc-web-backend.env"
+BACKEND_PORT="${YTC_WEB_BACKEND_PORT:-8081}"
+FIREWALL_IP="${YTC_WEB_ALLOWED_IP:-94.46.15.210}"
+
+log() {
+    echo "[ytc-web-backend-setup] $*"
+}
+
+install -d -m 755 "${APP_DEST}" "${APP_DEST}/app"
+
+log "Preparando diretório da aplicação em ${APP_DEST}"
+rsync -a --delete "${APP_SRC}/" "${APP_DEST}/app/"
+
+if [[ -d "${VENV_DIR}" && ! -x "${VENV_DIR}/bin/pip" ]]; then
+    log "pip ausente ou não executável; removendo virtualenv corrompido em ${VENV_DIR}"
+    rm -rf "${VENV_DIR}"
+fi
+
+if [[ ! -d "${VENV_DIR}" ]]; then
+    log "Reconstruindo virtualenv em ${VENV_DIR}"
+    python3 -m venv "${VENV_DIR}" || {
+        log "Falha ao criar virtualenv em ${VENV_DIR}"
+        exit 1
+    }
+else
+    log "Reaproveitando virtualenv existente em ${VENV_DIR}"
+fi
+
+log "Actualizando pip e instalando dependências"
+export PIP_NO_CACHE_DIR=1
+"${VENV_DIR}/bin/python" -m pip install --disable-pip-version-check --upgrade pip
+"${VENV_DIR}/bin/python" -m pip install --disable-pip-version-check -r "${APP_SRC}/requirements.txt"
+unset PIP_NO_CACHE_DIR
+
+if [[ ! -f "${ENV_FILE}" ]]; then
+    log "Criando ficheiro de ambiente em ${ENV_FILE}"
+    cat <<EOT > "${ENV_FILE}"
+# Variáveis consumidas por ytc-web-backend.service
+YT_OAUTH_TOKEN_PATH=/root/token.json
+YTC_WEB_CACHE_TTL=30
+YTC_WEB_HTTP_CACHE=10
+YTC_WEB_BACKEND_HOST=127.0.0.1
+YTC_WEB_BACKEND_PORT=${BACKEND_PORT}
+EOT
+    chmod 640 "${ENV_FILE}"
+else
+    log "Ficheiro de ambiente existente preservado em ${ENV_FILE}"
+fi
+
+log "Instalando unit do systemd"
+install -m 644 "${SYSTEMD_SRC}" "${SYSTEMD_DEST}"
+systemctl daemon-reload
+systemctl enable --now ytc-web-backend.service
+systemctl restart ytc-web-backend.service || true
+
+configure_firewall() {
+    if ! command -v ufw >/dev/null 2>&1; then
+        log "ufw não encontrado; saltando configuração de firewall"
+        return
+    fi
+
+    local status
+    status=$(ufw status | head -n1 || true)
+    if [[ "${status}" == "Status: inactive" ]]; then
+        log "ufw inactivo; nenhuma regra alterada"
+        return
+    fi
+
+    log "Garantindo regra de acesso apenas para ${FIREWALL_IP} na porta ${BACKEND_PORT}"
+    ufw --force delete allow ${BACKEND_PORT}/tcp >/dev/null 2>&1 || true
+    ufw --force allow from "${FIREWALL_IP}" to any port "${BACKEND_PORT}" proto tcp
+}
+
+configure_firewall
+
+log "Configuração do backend concluída"
