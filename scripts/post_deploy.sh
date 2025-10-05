@@ -5,28 +5,33 @@ cd /root/bwb-stream2yt/secondary-droplet
 
 # Garante que o módulo venv esteja disponível antes de preparar o backend
 ensure_python3_venv() {
-    if python3 -m venv --help >/dev/null 2>&1; then
-        echo "[post_deploy] python3 venv disponível; nenhum pacote adicional necessário."
+    local python_minor_version
+    python_minor_version="$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+
+    if python3 -m ensurepip --help >/dev/null 2>&1; then
+        echo "[post_deploy] python3 ensurepip disponível; nenhum pacote adicional necessário."
         return
     fi
 
-    echo "[post_deploy] python3 venv ausente; iniciando instalação do pacote python3-venv..."
+    echo "[post_deploy] python3 ensurepip ausente; instalando suporte a venv para Python ${python_minor_version}..."
     apt-get update
 
-    if apt-get install -y python3-venv; then
-        echo "[post_deploy] Pacote python3-venv instalado com sucesso."
+    if apt-get install -y "python${python_minor_version}-venv"; then
+        echo "[post_deploy] Pacote python${python_minor_version}-venv instalado com sucesso."
     else
-        python_minor_version="$(python3 -V 2>&1 | awk '{print $2}' | cut -d. -f1,2)"
-        fallback_package="python${python_minor_version}-venv"
-        echo "[post_deploy] python3-venv indisponível; tentando instalar ${fallback_package}..."
-        apt-get install -y "${fallback_package}"
-        echo "[post_deploy] Pacote ${fallback_package} instalado com sucesso."
+        echo "[post_deploy] Pacote python${python_minor_version}-venv indisponível; tentando python3-venv..."
+        if apt-get install -y python3-venv; then
+            echo "[post_deploy] Pacote python3-venv instalado com sucesso."
+        else
+            echo "[post_deploy] ERRO: Falha ao instalar python3-venv." >&2
+        fi
     fi
 
-    if python3 -m venv --help >/dev/null 2>&1; then
-        echo "[post_deploy] python3 venv validado após instalação."
+    if python3 -m ensurepip --help >/dev/null 2>&1; then
+        echo "[post_deploy] python3 ensurepip validado após instalação."
     else
-        echo "[post_deploy] ERRO: python3 venv permanece indisponível após instalar dependências." >&2
+        echo "[post_deploy] ERRO: python3 ensurepip permanece indisponível após instalar dependências." >&2
+        echo "[post_deploy] Abandonando deploy do backend para evitar estado parcialmente configurado." >&2
         exit 1
     fi
 }
