@@ -15,7 +15,7 @@ Ferramenta oficial para enviar o feed (RTSP/DirectShow) para a URL **primária**
 
 - Siga o [guia de instalação](../docs/primary-windows-instalacao.md#2-executável-distribuído) para posicionar o `stream_to_youtube.exe` em `C:\myapps\`. A primeira execução gera automaticamente o `.env` ao lado do binário; edite-o em seguida para informar `YT_KEY`/`YT_URL`, argumentos do FFmpeg e credenciais RTSP conforme o equipamento (o valor padrão de `FFMPEG` aponta para `C:\bwb\ffmpeg\bin\ffmpeg.exe`, mas é possível sobrescrevê-lo nesse arquivo se desejar outro diretório).
 - A execução gera arquivos diários em `C:\myapps\logs\bwb_services-YYYY-MM-DD.log` (retenção automática de sete dias). Utilize-os para homologar a conexão com o YouTube.
-- O executável mantém um arquivo `stream_to_youtube.pid` ao lado do binário para garantir execução única. Utilize `stream_to_youtube.exe /stop` para encerrar a instância em segundo plano; novas execuções (inclusive duplo clique) reutilizam o mesmo fluxo de inicialização e falham com mensagem caso já haja um processo ativo.
+- O controle é feito diretamente via flags: execute `stream_to_youtube.exe /start` (ou apenas `stream_to_youtube.exe`) para iniciar o worker e `stream_to_youtube.exe /stop` para interromper. O aplicativo mantém `stream_to_youtube.pid` com o PID ativo e usa a sentinela `stream_to_youtube.stop` para sinalizar a parada; ambos ficam no mesmo diretório do executável.
 
 ### Código-fonte (desenvolvimento)
 
