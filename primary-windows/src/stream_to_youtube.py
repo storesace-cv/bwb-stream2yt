@@ -19,8 +19,8 @@ def _script_base_dir() -> Path:
     return Path(__file__).resolve().parent
 
 
-def _resolve_log_file() -> Path:
-    """Determine where shared logs should be written."""
+def _resolve_log_target() -> tuple[Path, str, str]:
+    """Determine the directory, stem and suffix for daily log files."""
 
     script_dir = _script_base_dir()
     raw_path = os.environ.get("BWB_LOG_FILE", "").strip()
@@ -30,12 +30,49 @@ def _resolve_log_file() -> Path:
         candidate = Path(expanded).expanduser()
         if not candidate.is_absolute():
             candidate = (script_dir / candidate).resolve()
-        return candidate
+    else:
+        candidate = script_dir / "logs" / "bwb_services.log"
 
-    return script_dir / "logs" / "bwb_services.log"
+    directory = candidate.parent if candidate.parent else script_dir / "logs"
+    suffix = candidate.suffix or ".log"
+    stem = candidate.stem or "bwb_services"
+    return directory, stem, suffix
 
 
-LOG_FILE = _resolve_log_file()
+LOG_DIR, LOG_STEM, LOG_SUFFIX = _resolve_log_target()
+LOG_PATTERN = f"{LOG_STEM}-*.log"
+LOG_RETENTION_DAYS = 7
+
+
+def _current_log_file(now: datetime.datetime | None = None) -> Path:
+    if now is None:
+        now = datetime.datetime.utcnow()
+    filename = f"{LOG_STEM}-{now.strftime('%Y-%m-%d')}{LOG_SUFFIX}"
+    return LOG_DIR / filename
+
+
+def prune_old_logs(active_file: Path | None = None) -> None:
+    """Remove log files older than the retention window."""
+
+    try:
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return
+
+    cutoff_ts = time.time() - (LOG_RETENTION_DAYS * 24 * 60 * 60)
+    try:
+        candidates = list(LOG_DIR.glob(LOG_PATTERN))
+    except OSError:
+        return
+
+    for path in candidates:
+        try:
+            if active_file is not None and path.resolve() == active_file.resolve():
+                continue
+            if path.stat().st_mtime < cutoff_ts:
+                path.unlink()
+        except OSError:
+            continue
 
 
 def log_event(component: str, message: str) -> None:
@@ -43,14 +80,17 @@ def log_event(component: str, message: str) -> None:
 
     timestamp = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     line = f"{timestamp} [{component}] {message}\n"
+    log_file = _current_log_file()
+
+    prune_old_logs(active_file=log_file)
+
     try:
-        if LOG_FILE.parent:
-            try:
-                LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
-            except OSError:
-                # Directory creation shouldn't abort logging; continue to attempt write.
-                pass
-        with LOG_FILE.open("a", encoding="utf-8") as handle:
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return
+
+    try:
+        with log_file.open("a", encoding="utf-8") as handle:
             handle.write(line)
     except OSError:
         # Logging should never interrupt the streaming loop.

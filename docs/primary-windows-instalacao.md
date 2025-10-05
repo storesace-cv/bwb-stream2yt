@@ -27,8 +27,8 @@ Este guia explica como preparar um host Windows para executar o módulo **primar
    - Abra um *Prompt de Comando*, navegue até `C:\bwb\apps\YouTube\` e rode `stream_to_youtube.exe`; também é possível criar um atalho ou agendamento apontando para esse caminho.
    - O `.env` será carregado automaticamente durante a inicialização do executável.
 4. **Verifique os logs**:
-   - Os registros são gravados em `C:\bwb\apps\YouTube\logs\bwb_services.log` (a pasta `logs\` é criada se necessário).
-   - Utilize esse arquivo para confirmar a inicialização do FFmpeg e eventuais erros de autenticação.
+   - Os registros são gravados em arquivos diários `C:\bwb\apps\YouTube\logs\bwb_services-YYYY-MM-DD.log` (a pasta `logs\` é criada se necessário e mantemos somente os últimos sete dias).
+   - Utilize esses arquivos para confirmar a inicialização do FFmpeg e eventuais erros de autenticação.
 5. **Homologação rápida**:
    - Confirme, durante o primeiro teste, se o YouTube recebe o stream na URL primária e se o log indica status `connected`.
 
@@ -42,7 +42,7 @@ Este guia explica como preparar um host Windows para executar o módulo **primar
    - Preencha as variáveis `YT_KEY` e, se desejado, `YT_URL` e demais parâmetros (`YT_INPUT_ARGS`, `YT_OUTPUT_ARGS`, `FFMPEG`, etc.).
 3. **Execução**:
    - Abra um *Prompt de Comando* em `primary-windows\src\` e execute `python stream_to_youtube.py`.
-   - O log compartilhado é gravado em `primary-windows\src\logs\bwb_services.log`.
+   - O log compartilhado é gravado em arquivos diários `primary-windows\src\logs\bwb_services-YYYY-MM-DD.log` com retenção automática de sete dias.
 4. **Validação**:
    - Monitore o mesmo log para verificar a inicialização do FFmpeg e confirme a recepção do stream no painel do YouTube.
 
@@ -62,7 +62,7 @@ Este guia explica como preparar um host Windows para executar o módulo **primar
 - [ ] `stream_to_youtube.exe` posicionado em `C:\bwb\apps\YouTube\`.
 - [ ] `.env` criado no mesmo diretório com `YT_KEY` (e, se necessário, `YT_URL`/`FFMPEG`).
 - [ ] `ffmpeg.exe` disponível em `C:\bwb\ffmpeg\bin\` ou caminho ajustado na configuração.
-- [ ] Execução do executável gera `C:\bwb\apps\YouTube\logs\bwb_services.log` sem erros críticos.
+- [ ] Execução do executável gera arquivos `C:\bwb\apps\YouTube\logs\bwb_services-YYYY-MM-DD.log` (com retenção automática de sete dias) sem erros críticos.
 - [ ] Dashboard do YouTube confirma conexão do stream durante o teste.
 - [ ] (Opcional) Ambiente Python 3.11 preparado para manutenção via código-fonte ou geração de novos builds.
 
