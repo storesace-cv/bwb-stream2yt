@@ -47,7 +47,7 @@ Escolha uma das opções abaixo para copiar o conteúdo do repositório para o s
 2. **Ajuste o arquivo de configuração**:
    - Ao executar o binário pela primeira vez, o script cria automaticamente um `.env` no mesmo diretório usando o template padrão.
    - Em seguida, edite o `.env` recém-criado e configure ao menos `YT_KEY=<CHAVE_DO_STREAM>` (ou `YT_URL` completo, se preferir).
-   - Ajuste `YT_INPUT_ARGS`, `YT_OUTPUT_ARGS`, as credenciais RTSP e `FFMPEG` conforme a necessidade do equipamento local.
+   - Para configurar o RTSP mais rapidamente, deixe `YT_INPUT_ARGS` em branco e informe `RTSP_HOST`, `RTSP_PORT`, `RTSP_PATH` e, se necessário, `RTSP_USERNAME`/`RTSP_PASSWORD`; o script monta a URL automaticamente com base nesses campos. Caso precise de ajustes avançados, continue podendo preencher `YT_INPUT_ARGS` manualmente (que tem precedência total), além de `YT_OUTPUT_ARGS` e `FFMPEG` conforme a necessidade do equipamento local.
 3. **Controle da execução**:
    - O fluxo é direto, sem criação de serviço do Windows: execute `stream_to_youtube.exe /start` (ou apenas `stream_to_youtube.exe`) para iniciar o worker em segundo plano.
    - O binário grava `stream_to_youtube.pid` com o PID ativo e utiliza a sentinela `stream_to_youtube.stop` para registrar pedidos de parada; ambos ficam na mesma pasta do executável.
@@ -67,7 +67,7 @@ Escolha uma das opções abaixo para copiar o conteúdo do repositório para o s
    - Repositório `bwb-stream2yt` disponível localmente (clone ou pacote ZIP extraído).
 2. **Configuração do `.env`**:
    - A primeira execução de `python stream_to_youtube.py` cria automaticamente `primary-windows\src\.env` com o template padrão.
-   - Edite o arquivo para preencher `YT_KEY` (ou `YT_URL`) e personalize os parâmetros `YT_INPUT_ARGS`, `YT_OUTPUT_ARGS`, credenciais RTSP e `FFMPEG` conforme necessário.
+   - Edite o arquivo para preencher `YT_KEY` (ou `YT_URL`). Se preferir a configuração simplificada, deixe `YT_INPUT_ARGS` em branco e defina `RTSP_HOST`, `RTSP_PORT`, `RTSP_PATH` e, opcionalmente, `RTSP_USERNAME`/`RTSP_PASSWORD`; o script gera o endereço RTSP com base nessas variáveis. Para personalizações completas, continue podendo especificar manualmente `YT_INPUT_ARGS`, `YT_OUTPUT_ARGS` e `FFMPEG`.
 3. **Execução**:
    - Abra um *Prompt de Comando* em `primary-windows\src\` e execute `python stream_to_youtube.py`.
    - O log compartilhado é gravado em arquivos diários `primary-windows\src\logs\bwb_services-YYYY-MM-DD.log` com retenção automática de sete dias.
