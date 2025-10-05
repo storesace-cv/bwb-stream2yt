@@ -18,11 +18,10 @@ Este guia explica como preparar um host Windows para executar o módulo **primar
 ## 2. Executável distribuído
 
 1. **Posicione o binário oficial** em `C:\bwb\apps\YouTube\stream_to_youtube.exe`.
-2. **Crie o arquivo de configuração**:
-   - No mesmo diretório do executável, copie `example.env` (quando fornecido) para `.env` ou crie o arquivo manualmente.
-   - Defina ao menos `YT_KEY=<CHAVE_DO_STREAM>`.
-   - Opcionalmente informe `YT_URL` (`rtmps://a.rtmps.youtube.com/live2/<CHAVE>`) caso queira fixar a URL completa.
-   - Ajuste `FFMPEG` apenas se o binário estiver em local diferente do padrão `C:\bwb\ffmpeg\bin\ffmpeg.exe`.
+2. **Ajuste o arquivo de configuração**:
+   - Ao executar o binário pela primeira vez, o script cria automaticamente um `.env` no mesmo diretório usando o template padrão.
+   - Em seguida, edite o `.env` recém-criado e configure ao menos `YT_KEY=<CHAVE_DO_STREAM>` (ou `YT_URL` completo, se preferir).
+   - Ajuste `YT_INPUT_ARGS`, `YT_OUTPUT_ARGS`, as credenciais RTSP e `FFMPEG` conforme a necessidade do equipamento local.
 3. **Execute o serviço**:
    - Abra um *Prompt de Comando*, navegue até `C:\bwb\apps\YouTube\` e rode `stream_to_youtube.exe`; também é possível criar um atalho ou agendamento apontando para esse caminho.
    - O `.env` será carregado automaticamente durante a inicialização do executável.
@@ -38,8 +37,8 @@ Este guia explica como preparar um host Windows para executar o módulo **primar
    - Python 3.11 instalado e acessível no `PATH`.
    - Repositório `bwb-stream2yt` disponível localmente (clone ou pacote ZIP extraído).
 2. **Configuração do `.env`**:
-   - No diretório `primary-windows\src\`, copie `example.env` (ou `.env.example`) para `.env`.
-   - Preencha as variáveis `YT_KEY` e, se desejado, `YT_URL` e demais parâmetros (`YT_INPUT_ARGS`, `YT_OUTPUT_ARGS`, `FFMPEG`, etc.).
+   - A primeira execução de `python stream_to_youtube.py` cria automaticamente `primary-windows\src\.env` com o template padrão.
+   - Edite o arquivo para preencher `YT_KEY` (ou `YT_URL`) e personalize os parâmetros `YT_INPUT_ARGS`, `YT_OUTPUT_ARGS`, credenciais RTSP e `FFMPEG` conforme necessário.
 3. **Execução**:
    - Abra um *Prompt de Comando* em `primary-windows\src\` e execute `python stream_to_youtube.py`.
    - O log compartilhado é gravado em arquivos diários `primary-windows\src\logs\bwb_services-YYYY-MM-DD.log` com retenção automática de sete dias.
@@ -60,7 +59,7 @@ Este guia explica como preparar um host Windows para executar o módulo **primar
 ## 5. Checklist de verificação
 
 - [ ] `stream_to_youtube.exe` posicionado em `C:\bwb\apps\YouTube\`.
-- [ ] `.env` criado no mesmo diretório com `YT_KEY` (e, se necessário, `YT_URL`/`FFMPEG`).
+- [ ] `.env` ajustado no mesmo diretório com `YT_KEY` (e, se necessário, `YT_URL`/`FFMPEG`).
 - [ ] `ffmpeg.exe` disponível em `C:\bwb\ffmpeg\bin\` ou caminho ajustado na configuração.
 - [ ] Execução do executável gera arquivos `C:\bwb\apps\YouTube\logs\bwb_services-YYYY-MM-DD.log` (com retenção automática de sete dias) sem erros críticos.
 - [ ] Dashboard do YouTube confirma conexão do stream durante o teste.
