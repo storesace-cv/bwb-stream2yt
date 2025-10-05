@@ -470,6 +470,57 @@ def run_forever(existing_worker: Optional["StreamingWorker"] = None) -> None:
 
 
 def main() -> None:
+    from windows_service import (
+        SERVICE_NAME,
+        build_install_command,
+        install_service,
+        maybe_handle_service_invocation,
+        remove_service,
+        start_service,
+        stop_service,
+    )
+
+    raw_args = sys.argv[1:]
+    if maybe_handle_service_invocation(sys.argv):
+        return
+
+    normalized_args = [arg.lower() for arg in raw_args]
+    if normalized_args:
+        action = normalized_args[0]
+        if action not in {"/service", "/noservice", "/start", "/stop"}:
+            message = f"Flag desconhecida: {raw_args[0]}"
+            print(f"[primary] {message}", file=sys.stderr)
+            log_event("service", message)
+            sys.exit(1)
+
+        try:
+            if action == "/service":
+                exe_name, exe_args = build_install_command()
+                install_service(exe_name, exe_args)
+                print(
+                    f"[primary] Serviço {SERVICE_NAME} instalado. Configure via services.msc."
+                )
+            elif action == "/noservice":
+                remove_service()
+                print(f"[primary] Serviço {SERVICE_NAME} removido.")
+            elif action == "/start":
+                start_service()
+                print(f"[primary] Serviço {SERVICE_NAME} iniciado.")
+            elif action == "/stop":
+                stop_service()
+                print(f"[primary] Serviço {SERVICE_NAME} interrompido.")
+        except RuntimeError as exc:
+            message = f"Operação de serviço indisponível: {exc}"
+            print(f"[primary] {message}", file=sys.stderr)
+            log_event("service", message)
+            sys.exit(1)
+        except Exception as exc:  # noqa: BLE001
+            message = f"Falha ao executar ação de serviço ({exc})."
+            print(f"[primary] {message}", file=sys.stderr)
+            log_event("service", message)
+            sys.exit(1)
+        return
+
     try:
         from system_tray import TrayApplication, TRAY_AVAILABLE
     except Exception as exc:

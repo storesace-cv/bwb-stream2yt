@@ -10,6 +10,7 @@ Ferramenta oficial para enviar o feed (RTSP/DirectShow) para a URL **primária**
 
 - Siga o [guia de instalação](../docs/primary-windows-instalacao.md#2-executável-distribuído) para posicionar o `stream_to_youtube.exe` em `C:\bwb\apps\YouTube\`. A primeira execução gera automaticamente o `.env` ao lado do binário; edite-o em seguida para informar `YT_KEY`/`YT_URL`, argumentos do FFmpeg e credenciais RTSP conforme o equipamento.
 - A execução gera arquivos diários em `C:\bwb\apps\YouTube\logs\bwb_services-YYYY-MM-DD.log` (retenção automática de sete dias). Utilize-os para homologar a conexão com o YouTube.
+- Para instalar o serviço do Windows, execute o binário uma vez com `stream_to_youtube.exe /service`. Depois utilize `/start` e `/stop` para controlar o serviço ou `/noservice` para removê-lo. Os comandos registram eventos no log compartilhado descrito acima.
 
 ### Código-fonte (desenvolvimento)
 
@@ -40,6 +41,19 @@ Ferramenta oficial para enviar o feed (RTSP/DirectShow) para a URL **primária**
 - `BWB_LOG_FILE` define o caminho base dos logs. Gravamos arquivos diários no formato
   `<nome>-YYYY-MM-DD.log` e mantemos automaticamente somente os últimos sete dias.
 
+## Serviço do Windows
+
+O executável expõe flags para administrar a instalação do serviço `BWBStreamToYouTube`:
+
+```bat
+stream_to_youtube.exe /service   & rem instala/atualiza o serviço apontando para o executável atual
+stream_to_youtube.exe /start     & rem inicia o serviço registrado
+stream_to_youtube.exe /stop      & rem interrompe o serviço
+stream_to_youtube.exe /noservice & rem remove o serviço do Windows
+```
+
+O serviço executa o mesmo worker da versão em foreground (com logs em `logs\bwb_services-*.log`). Após instalar, abra `services.msc` para ajustar credenciais ou comportamento de inicialização se necessário.
+
 ## Build (one-file) com PyInstaller
 
 - Use Python 3.11 para evitar problemas do 3.13 com o PyInstaller.
@@ -47,8 +61,13 @@ Ferramenta oficial para enviar o feed (RTSP/DirectShow) para a URL **primária**
 
 ```bat
 py -3.11 -m pip install -U pip wheel
-py -3.11 -m pip install -U pyinstaller==6.10 pystray pillow
-py -3.11 -m PyInstaller --clean --onefile --noconsole src/stream_to_youtube.py
+py -3.11 -m pip install -U pyinstaller==6.10 pystray pillow pywin32 pyinstaller-hooks-contrib
+py -3.11 -m PyInstaller --clean --onefile --noconsole ^
+    --hidden-import win32timezone ^
+    --collect-binaries pywin32 ^
+    --collect-submodules win32service ^
+    --collect-submodules win32timezone ^
+    src/stream_to_youtube.py
 ```
 
 O executável ficará em `dist/stream_to_youtube.exe` pronto para execução silenciosa via `pythonw.exe`.
