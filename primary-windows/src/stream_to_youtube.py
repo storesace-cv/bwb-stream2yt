@@ -74,12 +74,18 @@ LOG_PATTERN = f"{LOG_STEM}-*.log"
 LOG_RETENTION_DAYS = 7
 
 _PID_FILE_NAME = "stream_to_youtube.pid"
+_STOP_SENTINEL_NAME = "stream_to_youtube.stop"
 _SIGNAL_HANDLERS_INSTALLED = False
 _ACTIVE_WORKER: Optional["StreamingWorker"] = None
+_CTRL_HANDLER_REF = None
 
 
 def _pid_file_path() -> Path:
     return _script_base_dir() / _PID_FILE_NAME
+
+
+def _stop_sentinel_path() -> Path:
+    return _script_base_dir() / _STOP_SENTINEL_NAME
 
 
 def _read_pid_file(path: Optional[Path] = None) -> Optional[int]:
@@ -166,25 +172,6 @@ def _release_pid_file(expected_pid: Optional[int] = None) -> None:
         log_event("primary", f"Registro de PID removido de {path}")
 
 
-def _send_stop_signal(pid: int) -> bool:
-    signals_to_try: list[int] = []
-    if os.name == "nt" and hasattr(signal, "CTRL_BREAK_EVENT"):
-        signals_to_try.append(signal.CTRL_BREAK_EVENT)  # type: ignore[attr-defined]
-    if hasattr(signal, "SIGTERM"):
-        signals_to_try.append(signal.SIGTERM)
-    if hasattr(signal, "SIGINT"):
-        signals_to_try.append(signal.SIGINT)
-
-    for sig in signals_to_try:
-        try:
-            os.kill(pid, sig)
-        except OSError:
-            continue
-        else:
-            return True
-    return False
-
-
 def _handle_shutdown_signal(signum, _frame) -> None:
     log_event("primary", f"Sinal {signum} recebido; encerrando worker.")
     worker = _ACTIVE_WORKER
@@ -192,12 +179,45 @@ def _handle_shutdown_signal(signum, _frame) -> None:
         worker.stop()
 
 
+def _install_console_control_guards() -> None:
+    global _CTRL_HANDLER_REF
+
+    sigint = getattr(signal, "SIGINT", None)
+    if sigint is not None:
+        try:
+            signal.signal(sigint, signal.SIG_IGN)
+        except (OSError, RuntimeError, ValueError):
+            pass
+
+    if os.name != "nt":
+        return
+
+    try:
+        import ctypes
+
+        HandlerRoutine = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_uint)
+        ignored_events = {0, 2}  # CTRL_C_EVENT, CTRL_CLOSE_EVENT
+
+        def handler(ctrl_type: int) -> bool:
+            return ctrl_type in ignored_events
+
+        handler_ref = HandlerRoutine(handler)
+        kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        if not kernel32.SetConsoleCtrlHandler(handler_ref, True):
+            raise ctypes.WinError()
+        _CTRL_HANDLER_REF = handler_ref
+    except Exception:
+        _CTRL_HANDLER_REF = None
+
+
 def _ensure_signal_handlers() -> None:
     global _SIGNAL_HANDLERS_INSTALLED
     if _SIGNAL_HANDLERS_INSTALLED:
         return
 
-    handled = [sig for sig in (getattr(signal, "SIGINT", None), getattr(signal, "SIGTERM", None)) if sig]
+    _install_console_control_guards()
+
+    handled = [sig for sig in (getattr(signal, "SIGTERM", None),) if sig]
     if os.name == "nt" and hasattr(signal, "SIGBREAK"):
         handled.append(signal.SIGBREAK)  # type: ignore[attr-defined]
 
@@ -208,6 +228,34 @@ def _ensure_signal_handlers() -> None:
 
 
 atexit.register(_release_pid_file)
+
+
+def _stop_request_active() -> bool:
+    path = _stop_sentinel_path()
+    try:
+        return path.exists()
+    except OSError:
+        return False
+
+
+def _clear_stop_request() -> None:
+    path = _stop_sentinel_path()
+    with suppress(OSError):
+        path.unlink()
+
+
+def _request_stop_via_sentinel() -> bool:
+    path = _stop_sentinel_path()
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass
+
+    try:
+        path.write_text(str(time.time()), encoding="utf-8")
+    except OSError:
+        return False
+    return True
 
 
 def _current_log_file(now: datetime.datetime | None = None) -> Path:
@@ -486,10 +534,10 @@ class StreamingWorker:
             log_event("primary", "Streaming worker thread did not stop within timeout")
         self._thread = None
 
-    def join(self) -> None:
+    def join(self, timeout: Optional[float] = None) -> None:
         thread = self._thread
         if thread:
-            thread.join()
+            thread.join(timeout=timeout)
 
     @property
     def is_running(self) -> bool:
@@ -621,15 +669,24 @@ def run_forever(
             config = load_config()
         worker = StreamingWorker(config)
     _ACTIVE_WORKER = worker
-    if not worker.is_running:
+    if not worker.is_running and not _stop_request_active():
         worker.start()
+    stop_logged = False
     try:
-        worker.join()
-    except KeyboardInterrupt:
-        pass
+        while True:
+            if _stop_request_active():
+                if not stop_logged:
+                    log_event("primary", "Stop sentinel detected; shutting down worker.")
+                    stop_logged = True
+                worker.stop()
+                _clear_stop_request()
+            if not worker.is_running:
+                break
+            worker.join(timeout=0.5)
     finally:
         worker.stop()
         _ACTIVE_WORKER = None
+        _clear_stop_request()
 
 
 def _start_streaming_instance() -> int:
@@ -670,6 +727,7 @@ def _stop_streaming_instance(timeout: float = 30.0) -> int:
         message = "Nenhuma instância ativa encontrada."
         print(f"[primary] {message}")
         log_event("primary", message)
+        _clear_stop_request()
         return 0
 
     if not _is_pid_running(pid):
@@ -677,19 +735,28 @@ def _stop_streaming_instance(timeout: float = 30.0) -> int:
         print(f"[primary] {message}")
         log_event("primary", message)
         _release_pid_file(expected_pid=pid)
+        _clear_stop_request()
         return 0
 
-    if not _send_stop_signal(pid):
-        message = f"Falha ao sinalizar parada para o PID {pid}."
+    if not _request_stop_via_sentinel():
+        message = "Falha ao registrar solicitação de parada (sentinela)."
         print(f"[primary] {message}", file=sys.stderr)
         log_event("primary", message)
         return 1
 
-    log_event("primary", f"Sinal de parada enviado para PID {pid}")
+    message = f"Solicitação de parada registrada para PID {pid}; aguardando finalização."
+    print(f"[primary] {message}")
+    log_event("primary", message)
+
     deadline = time.time() + timeout
+    sentinel_acknowledged = False
     while time.time() < deadline:
+        if not sentinel_acknowledged and not _stop_request_active():
+            log_event("primary", "Sentinela de parada reconhecida pelo worker")
+            sentinel_acknowledged = True
         if not _is_pid_running(pid):
             _release_pid_file(expected_pid=pid)
+            _clear_stop_request()
             message = "Instância interrompida com sucesso."
             print(f"[primary] {message}")
             log_event("primary", message)
@@ -699,6 +766,7 @@ def _stop_streaming_instance(timeout: float = 30.0) -> int:
     message = "Timeout ao aguardar a parada do worker."
     print(f"[primary] {message}", file=sys.stderr)
     log_event("primary", message)
+    _clear_stop_request()
     return 1
 
 
