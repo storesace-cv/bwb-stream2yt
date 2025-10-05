@@ -31,15 +31,20 @@ ENV_TEMPLATE_CONTENT = """# Configurações para stream_to_youtube.py
 # Parâmetros de entrada para o ffmpeg. Ajuste o endereço RTSP conforme necessário.
 #YT_INPUT_ARGS=-rtsp_transport tcp -rtsp_flags prefer_tcp -fflags nobuffer -flags low_delay -use_wallclock_as_timestamps 1 -i rtsp://USUARIO:SenhaFort3@10.0.254.50:554/Streaming/Channels/101
 
+# Também é possível deixar `YT_INPUT_ARGS` vazio e informar as variáveis abaixo para montar
+# automaticamente a URL RTSP. Todas são opcionais e só são utilizadas quando `YT_INPUT_ARGS`
+# permanecer em branco.
+#RTSP_HOST=10.0.254.50
+#RTSP_PORT=554
+#RTSP_PATH=Streaming/Channels/101
+#RTSP_USERNAME=USUARIO
+#RTSP_PASSWORD=SenhaFort3
+
 # Parâmetros de saída para o ffmpeg. Utilize para alterar codec, bitrate ou filtros.
 #YT_OUTPUT_ARGS=-vf scale=1920:1080:flags=bicubic,format=yuv420p -r 30 -c:v libx264 -preset veryfast -profile:v high -level 4.2 -b:v 4500k -pix_fmt yuv420p -g 60 -c:a aac -b:a 128k -ar 44100 -f flv
 
 # Caminho para o executável ffmpeg. Deixe vazio para usar o ffmpeg no PATH.
 #FFMPEG=C:\\caminho\\para\\ffmpeg.exe
-
-# Credenciais RTSP padrão (exemplo). Substitua conforme o dispositivo utilizado.
-#RTSP_USERNAME=USUARIO
-#RTSP_PASSWORD=SenhaFort3
 """
 
 
@@ -432,11 +437,62 @@ def _resolve_yt_url() -> Optional[str]:
 
 # === CONFIG (edit if needed) ===
 # FFmpeg input/output (example: RTSP)
+
+
+_DEFAULT_INPUT_ARGS = [
+    "-rtsp_transport",
+    "tcp",
+    "-rtsp_flags",
+    "prefer_tcp",
+    "-fflags",
+    "nobuffer",
+    "-flags",
+    "low_delay",
+    "-use_wallclock_as_timestamps",
+    "1",
+    "-i",
+    "rtsp://BEACHCAM:QueriasEntrar123@10.0.254.50:554/Streaming/Channels/101",
+]
+
+
+def _default_input_args() -> list[str]:
+    return list(_DEFAULT_INPUT_ARGS)
+
+
 def _split_args(value: str, default: list[str]) -> list[str]:
     value = value.strip()
     if not value:
         return default
     return shlex.split(value)
+
+
+def _build_rtsp_url_from_env() -> Optional[str]:
+    host = os.environ.get("RTSP_HOST", "").strip()
+    path = os.environ.get("RTSP_PATH", "").strip()
+
+    if not host or not path:
+        return None
+
+    username = os.environ.get("RTSP_USERNAME", "").strip()
+    password = os.environ.get("RTSP_PASSWORD", "").strip()
+    port = os.environ.get("RTSP_PORT", "").strip()
+
+    credentials = ""
+    if username:
+        credentials = username
+        if password:
+            credentials += f":{password}"
+        credentials += "@"
+    elif password:
+        # Não é possível utilizar senha sem usuário; caia para o padrão.
+        return None
+
+    authority = host
+    if port:
+        authority = f"{authority}:{port}"
+
+    normalized_path = path if path.startswith("/") else f"/{path}"
+    return f"rtsp://{credentials}{authority}{normalized_path}"
 
 
 @dataclass(frozen=True)
@@ -454,23 +510,16 @@ def load_config() -> StreamingConfig:
     _ensure_env_file()
     _load_env_files()
 
-    input_args = _split_args(
-        os.environ.get("YT_INPUT_ARGS", ""),
-        [
-            "-rtsp_transport",
-            "tcp",
-            "-rtsp_flags",
-            "prefer_tcp",
-            "-fflags",
-            "nobuffer",
-            "-flags",
-            "low_delay",
-            "-use_wallclock_as_timestamps",
-            "1",
-            "-i",
-            "rtsp://BEACHCAM:QueriasEntrar123@10.0.254.50:554/Streaming/Channels/101",
-        ],
-    )
+    raw_input_args = os.environ.get("YT_INPUT_ARGS", "")
+    if raw_input_args.strip():
+        input_args = shlex.split(raw_input_args)
+    else:
+        default_input_args = _default_input_args()
+        rtsp_url = _build_rtsp_url_from_env()
+        if rtsp_url:
+            input_args = default_input_args[:-1] + [rtsp_url]
+        else:
+            input_args = default_input_args
     output_args = _split_args(
         os.environ.get("YT_OUTPUT_ARGS", ""),
         [
