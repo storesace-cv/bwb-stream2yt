@@ -13,6 +13,30 @@ import shlex
 from pathlib import Path
 
 
+ENV_TEMPLATE_CONTENT = """# Configurações para stream_to_youtube.py
+# Copie este arquivo para ".env" ou deixe que o script gere um automaticamente e depois personalize.
+
+# Chave do YouTube Live. Se preenchida, a URL final será gerada automaticamente.
+#YT_KEY=SEU_CODIGO_DO_YOUTUBE
+
+# URL completa do ingest RTMP. Use se preferir definir manualmente em vez da chave.
+#YT_URL=rtmps://a.rtmps.youtube.com/live2/SEU_CODIGO_DO_YOUTUBE
+
+# Parâmetros de entrada para o ffmpeg. Ajuste o endereço RTSP conforme necessário.
+#YT_INPUT_ARGS=-rtsp_transport tcp -rtsp_flags prefer_tcp -fflags nobuffer -flags low_delay -use_wallclock_as_timestamps 1 -i rtsp://USUARIO:SenhaFort3@10.0.254.50:554/Streaming/Channels/101
+
+# Parâmetros de saída para o ffmpeg. Utilize para alterar codec, bitrate ou filtros.
+#YT_OUTPUT_ARGS=-vf scale=1920:1080:flags=bicubic,format=yuv420p -r 30 -c:v libx264 -preset veryfast -profile:v high -level 4.2 -b:v 4500k -pix_fmt yuv420p -g 60 -c:a aac -b:a 128k -ar 44100 -f flv
+
+# Caminho para o executável ffmpeg. Deixe vazio para usar o ffmpeg no PATH.
+#FFMPEG=C:\\caminho\\para\\ffmpeg.exe
+
+# Credenciais RTSP padrão (exemplo). Substitua conforme o dispositivo utilizado.
+#RTSP_USERNAME=USUARIO
+#RTSP_PASSWORD=SenhaFort3
+"""
+
+
 def _script_base_dir() -> Path:
     if getattr(sys, "frozen", False):  # PyInstaller one-file executables
         return Path(sys.executable).resolve().parent
@@ -97,9 +121,48 @@ def log_event(component: str, message: str) -> None:
         pass
 
 
+def _load_env_template(base_dir: Path) -> str:
+    template_path = base_dir / ".env.example"
+    try:
+        content = template_path.read_text(encoding="utf-8")
+        if not content.endswith("\n"):
+            content += "\n"
+        return content
+    except OSError:
+        content = ENV_TEMPLATE_CONTENT
+        if not content.endswith("\n"):
+            content += "\n"
+        return content
+
+
+def _ensure_env_file() -> None:
+    base_dir = _script_base_dir()
+    env_path = base_dir / ".env"
+
+    if env_path.exists():
+        return
+
+    template_content = _load_env_template(base_dir)
+
+    try:
+        env_path.write_text(template_content, encoding="utf-8")
+    except OSError as exc:
+        error_message = f"Falha ao criar .env automaticamente ({exc})."
+        print(f"[primary] {error_message}", file=sys.stderr)
+        log_event("primary", error_message)
+        return
+
+    message = (
+        f"Arquivo .env criado automaticamente em {env_path}. "
+        "Edite os campos destacados antes de transmitir."
+    )
+    print(f"[primary] {message}")
+    log_event("primary", message)
+
+
 def _load_env_files():
     """Populate os.environ with values from nearby .env files."""
-    script_dir = Path(__file__).resolve().parent
+    script_dir = _script_base_dir()
     env_paths = [
         script_dir / ".env",
         script_dir.parent / ".env",
@@ -131,6 +194,7 @@ def _load_env_files():
             continue
 
 
+_ensure_env_file()
 _load_env_files()
 
 

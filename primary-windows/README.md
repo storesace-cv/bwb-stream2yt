@@ -6,14 +6,14 @@ Ferramenta oficial para enviar o feed (RTSP/DirectShow) para a URL **primária**
 
 ### Executável distribuído
 
-- Siga o [guia de instalação](../docs/primary-windows-instalacao.md#2-executável-distribuído) para posicionar o `stream_to_youtube.exe` em `C:\bwb\apps\YouTube\`, criar o `.env` ao lado do binário e apontar para o FFmpeg em `C:\bwb\ffmpeg\bin\ffmpeg.exe`.
+- Siga o [guia de instalação](../docs/primary-windows-instalacao.md#2-executável-distribuído) para posicionar o `stream_to_youtube.exe` em `C:\bwb\apps\YouTube\`. A primeira execução gera automaticamente o `.env` ao lado do binário; edite-o em seguida para informar `YT_KEY`/`YT_URL`, argumentos do FFmpeg e credenciais RTSP conforme o equipamento.
 - A execução gera arquivos diários em `C:\bwb\apps\YouTube\logs\bwb_services-YYYY-MM-DD.log` (retenção automática de sete dias). Utilize-os para homologar a conexão com o YouTube.
 
 ### Código-fonte (desenvolvimento)
 
 1. Configure as variáveis de ambiente:
-   - Copie `src/.env.example` para `src/.env` e edite `YT_URL` ou `YT_KEY`; ou
-   - Defina-as manualmente antes de executar (`set YT_KEY=xxxx`).
+   - A primeira execução gera `src/.env` automaticamente a partir do template `src/.env.example`; edite `YT_URL`/`YT_KEY`, argumentos e credenciais antes de iniciar a transmissão.
+   - Alternativamente, defina as variáveis manualmente antes de executar (`set YT_KEY=xxxx`).
 2. Execute a partir de `primary-windows/src/` (o `.env` é lido automaticamente):
    ```bat
    setlocal
