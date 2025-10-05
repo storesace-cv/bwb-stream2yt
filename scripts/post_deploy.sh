@@ -1,45 +1,42 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-cd /root/bwb-stream2yt/secondary-droplet
+log() {
+    echo "[post_deploy] $*"
+}
 
-# Garante que o módulo venv esteja disponível antes de preparar o backend
-ensure_python3_venv() {
-    local python_minor_version
-    python_minor_version="$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
-
-    if python3 -m ensurepip --help >/dev/null 2>&1; then
-        echo "[post_deploy] python3 ensurepip disponível; nenhum pacote adicional necessário."
+ensure_python_venv() {
+    local python_bin=${PYTHON_BIN:-python3}
+    if "${python_bin}" -m ensurepip --help >/dev/null 2>&1; then
+        log "python3 venv disponível; nenhum pacote adicional necessário."
         return
     fi
 
-    echo "[post_deploy] python3 ensurepip ausente; instalando suporte a venv para Python ${python_minor_version}..."
+    log "python3 venv indisponível; instalando pacotes do sistema."
+    export DEBIAN_FRONTEND=noninteractive
     apt-get update
 
-    if apt-get install -y "python${python_minor_version}-venv"; then
-        echo "[post_deploy] Pacote python${python_minor_version}-venv instalado com sucesso."
-    else
-        echo "[post_deploy] Pacote python${python_minor_version}-venv indisponível; tentando python3-venv..."
-        if apt-get install -y python3-venv; then
-            echo "[post_deploy] Pacote python3-venv instalado com sucesso."
-        else
-            echo "[post_deploy] ERRO: Falha ao instalar python3-venv." >&2
-        fi
+    local version
+    version=$("${python_bin}" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+    local pkg="python${version}-venv"
+    if ! apt-get install -y "${pkg}"; then
+        log "Pacote ${pkg} indisponível; tentando python3-venv."
+        apt-get install -y python3-venv
     fi
 
-    if python3 -m ensurepip --help >/dev/null 2>&1; then
-        echo "[post_deploy] python3 ensurepip validado após instalação."
-    else
-        echo "[post_deploy] ERRO: python3 ensurepip permanece indisponível após instalar dependências." >&2
-        echo "[post_deploy] Abandonando deploy do backend para evitar estado parcialmente configurado." >&2
+    if ! "${python_bin}" -m ensurepip --help >/dev/null 2>&1; then
+        log "Falha ao preparar python3-venv mesmo após instalação."
         exit 1
     fi
+
+    log "python${version} ensurepip validado após instalação."
 }
 
-# Instalar dependências (idempotente)
-pip3 install -r requirements.txt
+cd /root/bwb-stream2yt/secondary-droplet
 
-# Instalar/atualizar serviços
+log "Instalando dependências base do fallback"
+pip3 install --no-cache-dir -r requirements.txt
+
 install -m 755 -o root -g root bin/youtube_fallback.sh /usr/local/bin/youtube_fallback.sh
 install -m 644 -o root -g root systemd/youtube-fallback.service /etc/systemd/system/youtube-fallback.service
 
@@ -84,13 +81,14 @@ systemctl daemon-reload
 systemctl enable --now youtube-fallback.service
 systemctl restart youtube-fallback.service || true
 
-# Mantemos token.json intacto; /etc/youtube-fallback.env é regenerado preservando YT_KEY.
-echo "[post_deploy] youtube-fallback atualizado e env sincronizado."
+log "youtube-fallback atualizado e env sincronizado."
 
-# Se algum passo anterior activou um virtualenv, garantimos que a shell
-# regressa ao ambiente global ao terminar o script. Isto evita que sessões
-# interactivas fiquem "presas" num venv quando o operador executa o
-# `post_deploy.sh` manualmente.
+log "Preparando backend do ytc-web via secondary-droplet/bin/ytc_web_backend_setup.sh..."
+ensure_python_venv
+bash bin/ytc_web_backend_setup.sh
+
+log "Operação concluída."
+
 if command -v deactivate >/dev/null 2>&1; then
     deactivate
 fi

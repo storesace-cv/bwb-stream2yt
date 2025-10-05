@@ -18,7 +18,7 @@ Esta pasta documenta e reúne artefactos auxiliares para criar um "add-on" web q
 
 ## Workflow sugerido
 
-1. **Preparar o backend** seguindo `backend-service.md`, garantindo que o endpoint consulta `liveBroadcasts`/`liveStreams` e respeita as quotas.
+1. **Preparar o backend** seguindo `backend-service.md`, sincronizando o repositório e executando `post_deploy.sh` na droplet para configurar automaticamente o serviço FastAPI e a firewall.
 2. **Validar o contrato** comparando a resposta real com o documento `status-endpoint.md` e ajustando conforme necessário.
 3. **Implementar o site** com base nas orientações de `frontend-integration.md`, mantendo o tráfego de vídeo sempre através do YouTube.
 

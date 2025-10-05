@@ -1,18 +1,19 @@
 [Unit]
-Description=YTC Web Backend (FastAPI)
-After=network-online.target
-Wants=network-online.target
+Description=YTC Web Backend (YouTube status API)
+After=network.target
 
 [Service]
 Type=simple
 User=root
 Group=root
+WorkingDirectory=/opt/ytc-web-service/app
 EnvironmentFile=/etc/ytc-web-backend.env
-WorkingDirectory=/opt/ytc-web-service
-ExecStart=/opt/ytc-web-service/venv/bin/uvicorn app:app --host 127.0.0.1 --port 8081
+Environment=PYTHONUNBUFFERED=1
+Environment=YTC_WEB_BACKEND_HOST=127.0.0.1
+Environment=YTC_WEB_BACKEND_PORT=8081
+ExecStart=/opt/ytc-web-service/venv/bin/uvicorn app:app --host ${YTC_WEB_BACKEND_HOST} --port ${YTC_WEB_BACKEND_PORT}
 Restart=on-failure
 RestartSec=5
-TimeoutStopSec=30
 
 [Install]
 WantedBy=multi-user.target
