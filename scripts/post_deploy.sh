@@ -82,10 +82,9 @@ systemctl restart youtube-fallback.service || true
 # Mantemos token.json intacto; /etc/youtube-fallback.env é regenerado preservando YT_KEY.
 echo "[post_deploy] youtube-fallback atualizado e env sincronizado."
 
+echo "[post_deploy] Preparando backend do ytc-web via secondary-droplet/bin/ytc_web_backend_setup.sh..."
 ensure_python3_venv
-
-echo "[post_deploy] Configurando ytc-web-backend..."
-bin/ytc_web_backend_setup.sh
+/root/bwb-stream2yt/secondary-droplet/bin/ytc_web_backend_setup.sh
 
 systemctl daemon-reload
 systemctl enable --now ytc-web-backend.service
