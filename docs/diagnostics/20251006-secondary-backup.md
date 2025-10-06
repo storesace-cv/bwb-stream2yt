@@ -6,6 +6,7 @@ Fonte: [`diags/history/diagnostics-antes-restart-20251006-002341Z.txt`](../../di
 - O `youtube-fallback.service`, responsável por enviar o slate para a URL secundária, está a ser terminado repetidamente pelo OOM killer (código de saída 137) e por falhas subsequentes do `ffmpeg` logo após o reinício.
 - A máquina analisada tem apenas 957 MiB de RAM disponível e **sem swap**, com ~412 MiB já utilizados no momento da recolha, o que deixa pouca margem para o `ffmpeg` operar de forma estável.
 - A queda do serviço secundário coincide temporalmente com falhas no `yt-decider-daemon`, que não consegue contactar `oauth2.googleapis.com` (falhas DNS temporárias) para renovar as credenciais, impedindo qualquer automatização de recuperação.
+- O mini-projecto **ytc-web** é independente destes serviços de fallback; `yt-decider-daemon` e `youtube-fallback` integram a infraestrutura de emissão secundária e devem permanecer activos mesmo quando o backend web está em manutenção.
 
 ## Evidências principais
 

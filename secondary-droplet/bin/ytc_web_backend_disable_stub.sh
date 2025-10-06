@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Desliga apenas o backend ytc-web. Não afecta os serviços de fallback (yt-decider-daemon/youtube-fallback).
 set -euo pipefail
 
 log() {
@@ -17,24 +18,4 @@ else
     log "ytc-web-backend.service não encontrado no systemd"
 fi
 
-if systemctl is-active --quiet yt-decider-daemon.service 2>/dev/null; then
-    log "Parando yt-decider-daemon.service (dependência do ytc-web)"
-    systemctl stop yt-decider-daemon.service || log "Aviso: falha ao parar yt-decider-daemon.service"
-fi
-
-if systemctl list-unit-files | grep -q '^yt-decider-daemon.service'; then
-    log "Desativando arranque automático do yt-decider-daemon.service"
-    systemctl disable yt-decider-daemon.service || log "Aviso: falha ao desativar yt-decider-daemon.service"
-fi
-
-if systemctl is-active --quiet youtube-fallback.service 2>/dev/null; then
-    log "Parando youtube-fallback.service para isolar o fallback secundário"
-    systemctl stop youtube-fallback.service || log "Aviso: falha ao parar youtube-fallback.service"
-fi
-
-if systemctl list-unit-files | grep -q '^youtube-fallback.service'; then
-    log "Desativando arranque automático do youtube-fallback.service"
-    systemctl disable youtube-fallback.service || log "Aviso: falha ao desativar youtube-fallback.service"
-fi
-
-log "Serviços relacionados ao ytc-web desligados (sem remoção de ficheiros)."
+log "ytc-web-backend.service desligado (demais serviços permanecem activos)."
