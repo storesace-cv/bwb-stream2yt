@@ -1,0 +1,3968 @@
+Diagnóstico gerado em: 2025-10-06 00:23:41Z
+Host: ubuntu-s-1vcpu-512mb-10gb-fra1-01
+
+== Informações de sistema ==
+$ uname -a
+(returncode=0)
+stdout:
+Linux ubuntu-s-1vcpu-512mb-10gb-fra1-01 5.15.0-157-generic #167-Ubuntu SMP Wed Sep 17 21:35:53 UTC 2025 x86_64 x86_64 x86_64 GNU/Linux
+
+$ lsb_release -a
+(returncode=0)
+stdout:
+Distributor ID:	Ubuntu
+Description:	Ubuntu 22.04.4 LTS
+Release:	22.04
+Codename:	jammy
+stderr:
+No LSB modules are available.
+
+$ uptime
+(returncode=0)
+stdout:
+00:23:41 up 27 min,  1 user,  load average: 1.87, 1.89, 1.63
+
+$ who -b
+(returncode=0)
+stdout:
+system boot  2025-10-05 23:56
+
+$ df -h
+(returncode=0)
+stdout:
+Filesystem      Size  Used Avail Use% Mounted on
+tmpfs            96M  1.1M   95M   2% /run
+/dev/vda1       9.6G  3.4G  6.2G  35% /
+tmpfs           479M     0  479M   0% /dev/shm
+tmpfs           5.0M     0  5.0M   0% /run/lock
+/dev/vda15      105M  6.1M   99M   6% /boot/efi
+tmpfs            96M  4.0K   96M   1% /run/user/0
+
+$ free -h
+(returncode=0)
+stdout:
+total        used        free      shared  buff/cache   available
+Mem:           957Mi       412Mi        88Mi       4.0Mi       456Mi       389Mi
+Swap:             0B          0B          0B
+
+$ python3 --version
+(returncode=0)
+stdout:
+Python 3.10.12
+
+$ ffmpeg -version
+(returncode=0)
+stdout:
+ffmpeg version 4.4.2-0ubuntu0.22.04.1 Copyright (c) 2000-2021 the FFmpeg developers
+built with gcc 11 (Ubuntu 11.2.0-19ubuntu1)
+configuration: --prefix=/usr --extra-version=0ubuntu0.22.04.1 --toolchain=hardened --libdir=/usr/lib/x86_64-linux-gnu --incdir=/usr/include/x86_64-linux-gnu --arch=amd64 --enable-gpl --disable-stripping --enable-gnutls --enable-ladspa --enable-libaom --enable-libass --enable-libbluray --enable-libbs2b --enable-libcaca --enable-libcdio --enable-libcodec2 --enable-libdav1d --enable-libflite --enable-libfontconfig --enable-libfreetype --enable-libfribidi --enable-libgme --enable-libgsm --enable-libjack --enable-libmp3lame --enable-libmysofa --enable-libopenjpeg --enable-libopenmpt --enable-libopus --enable-libpulse --enable-librabbitmq --enable-librubberband --enable-libshine --enable-libsnappy --enable-libsoxr --enable-libspeex --enable-libsrt --enable-libssh --enable-libtheora --enable-libtwolame --enable-libvidstab --enable-libvorbis --enable-libvpx --enable-libwebp --enable-libx265 --enable-libxml2 --enable-libxvid --enable-libzimg --enable-libzmq --enable-libzvbi --enable-lv2 --enable-omx --enable-openal --enable-opencl --enable-opengl --enable-sdl2 --enable-pocketsphinx --enable-librsvg --enable-libmfx --enable-libdc1394 --enable-libdrm --enable-libiec61883 --enable-chromaprint --enable-frei0r --enable-libx264 --enable-shared
+libavutil      56. 70.100 / 56. 70.100
+libavcodec     58.134.100 / 58.134.100
+libavformat    58. 76.100 / 58. 76.100
+libavdevice    58. 13.100 / 58. 13.100
+libavfilter     7.110.100 /  7.110.100
+libswscale      5.  9.100 /  5.  9.100
+libswresample   3.  9.100 /  3.  9.100
+libpostproc    55.  9.100 / 55.  9.100
+
+$ pgrep -af ffmpeg
+(returncode=0)
+stdout:
+1714 ffmpeg -progress /run/youtube-fallback.progress -hide_banner -loglevel warning -nostats -re -f lavfi -i life=s=1280x720:rate=30 -f lavfi -i anullsrc=channel_layout=stereo:sample_rate=44100 -filter_complex [0:v]scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=black,format=yuv420p,setpts=PTS+3.0/TB,drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:text='BEACHCAM | CABO LEDO | ANGOLA':fontsize=44:fontcolor=white:shadowcolor=black@0.85:shadowx=2:shadowy=2:x=w-mod(t*30*8\,w+text_w):y=H-120,drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:text='VOLTAREMOS DENTRO DE MOMENTOS':fontsize=28:fontcolor=white:shadowcolor=black@0.85:shadowx=2:shadowy=2:x=(w-text_w)/2:y=(h-text_h)/2:enable='lt(mod(t\,1)\,0.5)'[vb];[1:a]asetpts=PTS+3.0/TB[ab] -map [vb] -map [ab] -c:v libx264 -preset veryfast -pix_fmt yuv420p -profile:v high -level 4.1 -b:v 3200k -maxrate 3500k -bufsize 6000k -g 60 -keyint_min 60 -sc_threshold 0 -c:a aac -b:a 128k -ar 44100 -ac 2 -f flv rtmps://b.rtmps.youtube.com/live2?backup=1/f4ex-ztrk-vc4h-2pvc-2kg4
+
+$ ss -tulpn
+(returncode=0)
+stdout:
+Netid State  Recv-Q Send-Q Local Address:Port Peer Address:PortProcess                                   
+udp   UNCONN 0      0      127.0.0.53%lo:53        0.0.0.0:*    users:(("systemd-resolve",pid=543,fd=13))
+tcp   LISTEN 0      2048       127.0.0.1:8081      0.0.0.0:*    users:(("uvicorn",pid=1793,fd=13))       
+tcp   LISTEN 0      128          0.0.0.0:22        0.0.0.0:*    users:(("sshd",pid=714,fd=3))            
+tcp   LISTEN 0      4096   127.0.0.53%lo:53        0.0.0.0:*    users:(("systemd-resolve",pid=543,fd=14))
+tcp   LISTEN 0      128             [::]:22           [::]:*    users:(("sshd",pid=714,fd=4))
+
+== Serviços principais ==
+-- ytc-web-backend.service --
+$ systemctl status --no-pager ytc-web-backend.service
+(returncode=0)
+stdout:
+● ytc-web-backend.service - YTC Web Backend (YouTube status API)
+     Loaded: loaded (/etc/systemd/system/ytc-web-backend.service; enabled; vendor preset: enabled)
+     Active: active (running) since Mon 2025-10-06 00:21:29 UTC; 2min 11s ago
+   Main PID: 1793 (uvicorn)
+      Tasks: 6 (limit: 1101)
+     Memory: 39.2M
+        CPU: 949ms
+     CGroup: /system.slice/ytc-web-backend.service
+             └─1793 /opt/ytc-web-service/venv/bin/python /opt/ytc-web-service/venv/bin/uvicorn app:app --host 127.0.0.1 --port 8081
+
+Oct 06 00:21:29 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: ytc-web-backend.service: Deactivated successfully.
+Oct 06 00:21:29 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YTC Web Backend (YouTube status API).
+Oct 06 00:21:29 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: ytc-web-backend.service: Consumed 3.040s CPU time.
+Oct 06 00:21:29 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YTC Web Backend (YouTube status API).
+Oct 06 00:21:31 ubuntu-s-1vcpu-512mb-10gb-fra1-01 uvicorn[1793]: INFO:     Started server process [1793]
+Oct 06 00:21:31 ubuntu-s-1vcpu-512mb-10gb-fra1-01 uvicorn[1793]: INFO:     Waiting for application startup.
+Oct 06 00:21:31 ubuntu-s-1vcpu-512mb-10gb-fra1-01 uvicorn[1793]: INFO:     Application startup complete.
+Oct 06 00:21:31 ubuntu-s-1vcpu-512mb-10gb-fra1-01 uvicorn[1793]: INFO:     Uvicorn running on http://127.0.0.1:8081 (Press CTRL+C to quit)
+
+$ journalctl -o short-iso --no-pager -u ytc-web-backend.service -n 200
+(returncode=0)
+stdout:
+2025-10-05T23:57:39+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YTC Web Backend (YouTube status API).
+2025-10-05T23:57:39+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopping YTC Web Backend (YouTube status API)...
+2025-10-05T23:57:39+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: ytc-web-backend.service: Deactivated successfully.
+2025-10-05T23:57:39+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YTC Web Backend (YouTube status API).
+2025-10-05T23:57:39+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YTC Web Backend (YouTube status API).
+2025-10-05T23:57:41+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 uvicorn[1145]: INFO:     Started server process [1145]
+2025-10-05T23:57:41+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 uvicorn[1145]: INFO:     Waiting for application startup.
+2025-10-05T23:57:41+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 uvicorn[1145]: INFO:     Application startup complete.
+2025-10-05T23:57:41+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 uvicorn[1145]: INFO:     Uvicorn running on http://127.0.0.1:8081 (Press CTRL+C to quit)
+2025-10-06T00:21:29+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopping YTC Web Backend (YouTube status API)...
+2025-10-06T00:21:29+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 uvicorn[1145]: INFO:     Shutting down
+2025-10-06T00:21:29+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 uvicorn[1145]: INFO:     Waiting for application shutdown.
+2025-10-06T00:21:29+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 uvicorn[1145]: INFO:     Application shutdown complete.
+2025-10-06T00:21:29+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 uvicorn[1145]: INFO:     Finished server process [1145]
+2025-10-06T00:21:29+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: ytc-web-backend.service: Deactivated successfully.
+2025-10-06T00:21:29+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YTC Web Backend (YouTube status API).
+2025-10-06T00:21:29+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: ytc-web-backend.service: Consumed 3.040s CPU time.
+2025-10-06T00:21:29+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YTC Web Backend (YouTube status API).
+2025-10-06T00:21:31+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 uvicorn[1793]: INFO:     Started server process [1793]
+2025-10-06T00:21:31+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 uvicorn[1793]: INFO:     Waiting for application startup.
+2025-10-06T00:21:31+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 uvicorn[1793]: INFO:     Application startup complete.
+2025-10-06T00:21:31+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 uvicorn[1793]: INFO:     Uvicorn running on http://127.0.0.1:8081 (Press CTRL+C to quit)
+
+-- yt-decider-daemon.service --
+$ systemctl status --no-pager yt-decider-daemon.service
+(returncode=0)
+stdout:
+● yt-decider-daemon.service - YouTube Decider Daemon (produção: liga/desliga youtube-fallback e garante broadcast)
+     Loaded: loaded (/etc/systemd/system/yt-decider-daemon.service; enabled; vendor preset: enabled)
+     Active: active (running) since Sun 2025-10-05 23:57:01 UTC; 26min ago
+   Main PID: 660 (python3)
+      Tasks: 1 (limit: 1101)
+     Memory: 65.5M
+        CPU: 13.241s
+     CGroup: /system.slice/yt-decider-daemon.service
+             └─660 /usr/bin/python3 /usr/local/bin/yt_decider_daemon.py
+
+Oct 05 23:57:01 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Decider Daemon (produção: liga/desliga youtube-fallback e garante broadcast).
+
+$ journalctl -o short-iso --no-pager -u yt-decider-daemon.service -n 200
+(returncode=0)
+stdout:
+2025-10-04T10:55:26+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[3098]: KEEP primário only
+2025-10-04T10:55:46+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[3098]: KEEP primário only
+2025-10-04T10:56:07+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[3098]: KEEP primário only
+2025-10-04T10:56:27+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[3098]: KEEP primário only
+2025-10-04T10:56:47+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[3098]: KEEP primário only
+2025-10-04T10:57:08+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[3098]: KEEP primário only
+2025-10-04T10:57:28+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[3098]: KEEP primário only
+2025-10-04T10:57:48+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[3098]: KEEP primário only
+2025-10-04T10:58:09+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[3098]: KEEP primário only
+2025-10-04T10:58:29+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[3098]: KEEP primário only
+2025-10-04T10:58:49+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[3098]: KEEP primário only
+2025-10-04T10:59:10+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[3098]: KEEP primário only
+2025-10-04T10:59:30+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[3098]: KEEP primário only
+2025-10-04T10:59:50+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[3098]: KEEP primário only
+2025-10-04T11:00:11+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[3098]: KEEP primário only
+2025-10-04T11:00:31+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[3098]: KEEP primário only
+2025-10-04T11:00:51+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[3098]: KEEP primário only
+2025-10-04T11:01:12+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[3098]: KEEP primário only
+2025-10-04T11:01:32+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[3098]: KEEP primário only
+2025-10-04T11:01:52+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[3098]: KEEP primário only
+2025-10-04T11:02:13+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[3098]: KEEP primário only
+2025-10-04T11:02:33+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[3098]: KEEP primário only
+2025-10-04T11:02:53+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[3098]: KEEP primário only
+2025-10-04T11:03:14+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[3098]: KEEP primário only
+2025-10-04T11:03:34+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[3098]: KEEP primário only
+2025-10-04T11:03:54+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[3098]: KEEP primário only
+2025-10-04T11:04:15+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[3098]: KEEP primário only
+2025-10-04T11:04:35+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[3098]: KEEP primário only
+2025-10-04T11:04:55+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[3098]: KEEP primário only
+2025-10-04T11:05:16+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[3098]: KEEP primário only
+2025-10-04T11:05:36+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[3098]: KEEP primário only
+2025-10-04T11:05:49+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopping YouTube Decider Daemon (produção: liga/desliga youtube-fallback conforme "Sem dados")...
+2025-10-04T11:05:49+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: yt-decider-daemon.service: Deactivated successfully.
+2025-10-04T11:05:49+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Decider Daemon (produção: liga/desliga youtube-fallback conforme "Sem dados").
+2025-10-04T11:05:49+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: yt-decider-daemon.service: Consumed 19.346s CPU time.
+2025-10-04T11:05:49+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Decider Daemon (produção: liga/desliga youtube-fallback conforme "Sem dados").
+2025-10-04T11:05:50+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[17175]: == yt_decider_daemon — PRODUÇÃO (STOP diurno quando primário OK) ==
+2025-10-04T11:05:50+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopping YouTube Decider Daemon (produção: liga/desliga youtube-fallback conforme "Sem dados")...
+2025-10-04T11:05:50+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: yt-decider-daemon.service: Deactivated successfully.
+2025-10-04T11:05:50+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Decider Daemon (produção: liga/desliga youtube-fallback conforme "Sem dados").
+2025-10-04T11:05:50+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Decider Daemon (produção: liga/desliga youtube-fallback conforme "Sem dados").
+2025-10-04T11:05:51+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[17178]: == yt_decider_daemon — PRODUÇÃO (STOP diurno quando primário OK) ==
+2025-10-04T11:05:51+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopping YouTube Decider Daemon (produção: liga/desliga youtube-fallback conforme "Sem dados")...
+2025-10-04T11:05:51+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: yt-decider-daemon.service: Deactivated successfully.
+2025-10-04T11:05:51+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Decider Daemon (produção: liga/desliga youtube-fallback conforme "Sem dados").
+2025-10-04T11:05:51+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Decider Daemon (produção: liga/desliga youtube-fallback conforme "Sem dados").
+2025-10-04T11:05:52+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[17180]: == yt_decider_daemon — PRODUÇÃO (STOP diurno quando primário OK) ==
+2025-10-04T11:05:52+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopping YouTube Decider Daemon (produção: liga/desliga youtube-fallback conforme "Sem dados")...
+2025-10-04T11:05:52+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: yt-decider-daemon.service: Deactivated successfully.
+2025-10-04T11:05:52+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Decider Daemon (produção: liga/desliga youtube-fallback conforme "Sem dados").
+2025-10-04T11:05:52+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Decider Daemon (produção: liga/desliga youtube-fallback conforme "Sem dados").
+2025-10-04T11:05:53+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[17183]: == yt_decider_daemon — PRODUÇÃO (STOP diurno quando primário OK) ==
+2025-10-04T11:05:54+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopping YouTube Decider Daemon (produção: liga/desliga youtube-fallback conforme "Sem dados")...
+2025-10-04T11:05:54+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: yt-decider-daemon.service: Deactivated successfully.
+2025-10-04T11:05:54+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Decider Daemon (produção: liga/desliga youtube-fallback conforme "Sem dados").
+2025-10-04T11:05:54+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Decider Daemon (produção: liga/desliga youtube-fallback conforme "Sem dados").
+2025-10-04T11:05:54+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[17186]: == yt_decider_daemon — PRODUÇÃO (STOP diurno quando primário OK) ==
+2025-10-04T11:05:55+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopping YouTube Decider Daemon (produção: liga/desliga youtube-fallback conforme "Sem dados")...
+2025-10-04T11:05:55+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: yt-decider-daemon.service: Deactivated successfully.
+2025-10-04T11:05:55+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Decider Daemon (produção: liga/desliga youtube-fallback conforme "Sem dados").
+2025-10-04T11:05:55+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: yt-decider-daemon.service: Start request repeated too quickly.
+2025-10-04T11:05:55+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: yt-decider-daemon.service: Failed with result 'start-limit-hit'.
+2025-10-04T11:05:55+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Failed to start YouTube Decider Daemon (produção: liga/desliga youtube-fallback conforme "Sem dados").
+-- Boot bc247e2d98a04b0a97d47aa6337c10d2 --
+2025-10-04T11:08:10+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Decider Daemon (produção: liga/desliga youtube-fallback conforme "Sem dados").
+2025-10-04T11:08:12+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[661]: == yt_decider_daemon — PRODUÇÃO (STOP diurno quando primário OK) ==
+2025-10-04T11:10:15+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopping YouTube Decider Daemon (produção: liga/desliga youtube-fallback conforme "Sem dados")...
+2025-10-04T11:10:15+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: yt-decider-daemon.service: Deactivated successfully.
+2025-10-04T11:10:15+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Decider Daemon (produção: liga/desliga youtube-fallback conforme "Sem dados").
+2025-10-04T11:10:15+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: yt-decider-daemon.service: Consumed 1.164s CPU time.
+2025-10-04T11:10:15+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Decider Daemon (produção: liga/desliga youtube-fallback conforme "Sem dados").
+2025-10-04T11:10:15+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[1115]: == yt_decider_daemon — PRODUÇÃO (STOP diurno quando primário OK) ==
+2025-10-04T11:18:12+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopping YouTube Decider Daemon (produção: liga/desliga youtube-fallback conforme "Sem dados")...
+2025-10-04T11:18:12+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: yt-decider-daemon.service: Deactivated successfully.
+2025-10-04T11:18:12+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Decider Daemon (produção: liga/desliga youtube-fallback conforme "Sem dados").
+2025-10-04T11:18:12+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: yt-decider-daemon.service: Consumed 4.170s CPU time.
+2025-10-04T11:18:12+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Decider Daemon (produção: liga/desliga youtube-fallback conforme "Sem dados").
+2025-10-04T11:18:13+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[1543]: == yt_decider_daemon — PRODUÇÃO (STOP diurno quando primário OK) ==
+2025-10-04T11:33:08+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopping YouTube Decider Daemon (produção: liga/desliga youtube-fallback conforme "Sem dados")...
+2025-10-04T11:33:08+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: yt-decider-daemon.service: Deactivated successfully.
+2025-10-04T11:33:08+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Decider Daemon (produção: liga/desliga youtube-fallback conforme "Sem dados").
+2025-10-04T11:33:08+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: yt-decider-daemon.service: Consumed 7.281s CPU time.
+-- Boot 847ae41c718a44af95ca10cb3932acf6 --
+2025-10-04T11:33:35+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Decider Daemon (produção: liga/desliga youtube-fallback conforme "Sem dados").
+2025-10-04T11:33:36+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[660]: == yt_decider_daemon — PRODUÇÃO (STOP diurno quando primário OK) ==
+2025-10-04T13:41:29+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopping YouTube Decider Daemon (produção: liga/desliga youtube-fallback conforme "Sem dados")...
+2025-10-04T13:41:29+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: yt-decider-daemon.service: Deactivated successfully.
+2025-10-04T13:41:29+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Decider Daemon (produção: liga/desliga youtube-fallback conforme "Sem dados").
+2025-10-04T13:41:29+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: yt-decider-daemon.service: Consumed 1min 1.486s CPU time.
+2025-10-04T13:41:29+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Decider Daemon (produção: liga/desliga youtube-fallback conforme "Sem dados").
+2025-10-04T13:41:29+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[3144]: == yt_decider_daemon — PRODUÇÃO (STOP diurno quando primário OK) ==
+2025-10-04T16:54:00+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopping YouTube Decider Daemon (produção: liga/desliga youtube-fallback e garante broadcast)...
+2025-10-04T16:54:00+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: yt-decider-daemon.service: Deactivated successfully.
+2025-10-04T16:54:00+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Decider Daemon (produção: liga/desliga youtube-fallback e garante broadcast).
+2025-10-04T16:54:00+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: yt-decider-daemon.service: Consumed 1min 34.484s CPU time.
+-- Boot 2a694034ca5f4d0a800cdae49275d431 --
+2025-10-04T16:54:29+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Decider Daemon (produção: liga/desliga youtube-fallback e garante broadcast).
+2025-10-04T17:13:30+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopping YouTube Decider Daemon (produção: liga/desliga youtube-fallback e garante broadcast)...
+2025-10-04T17:13:30+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: yt-decider-daemon.service: Deactivated successfully.
+2025-10-04T17:13:30+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Decider Daemon (produção: liga/desliga youtube-fallback e garante broadcast).
+2025-10-04T17:13:30+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: yt-decider-daemon.service: Consumed 9.556s CPU time.
+-- Boot bdcbd34d27ee48e69e3a551a88a892c6 --
+2025-10-04T17:13:57+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Decider Daemon (produção: liga/desliga youtube-fallback e garante broadcast).
+2025-10-04T20:06:30+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopping YouTube Decider Daemon (produção: liga/desliga youtube-fallback e garante broadcast)...
+2025-10-04T20:06:31+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: yt-decider-daemon.service: Deactivated successfully.
+2025-10-04T20:06:31+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Decider Daemon (produção: liga/desliga youtube-fallback e garante broadcast).
+2025-10-04T20:06:31+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: yt-decider-daemon.service: Consumed 1min 23.647s CPU time.
+-- Boot 9c9c27e6c55f4a4cb3295ab2f1b58b94 --
+2025-10-04T20:06:59+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Decider Daemon (produção: liga/desliga youtube-fallback e garante broadcast).
+2025-10-04T22:40:56+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopping YouTube Decider Daemon (produção: liga/desliga youtube-fallback e garante broadcast)...
+2025-10-04T22:40:56+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: yt-decider-daemon.service: Deactivated successfully.
+2025-10-04T22:40:56+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Decider Daemon (produção: liga/desliga youtube-fallback e garante broadcast).
+2025-10-04T22:40:56+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: yt-decider-daemon.service: Consumed 1min 16.106s CPU time.
+-- Boot ac96418fe8424ec5a67c69acb6c3482d --
+2025-10-04T22:41:24+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Decider Daemon (produção: liga/desliga youtube-fallback e garante broadcast).
+2025-10-04T22:59:10+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopping YouTube Decider Daemon (produção: liga/desliga youtube-fallback e garante broadcast)...
+2025-10-04T22:59:10+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: yt-decider-daemon.service: Deactivated successfully.
+2025-10-04T22:59:10+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Decider Daemon (produção: liga/desliga youtube-fallback e garante broadcast).
+2025-10-04T22:59:10+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: yt-decider-daemon.service: Consumed 8.796s CPU time.
+-- Boot d3cef8779fd54e72a44cbd13d6f0df41 --
+2025-10-04T22:59:38+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Decider Daemon (produção: liga/desliga youtube-fallback e garante broadcast).
+2025-10-04T23:54:33+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopping YouTube Decider Daemon (produção: liga/desliga youtube-fallback e garante broadcast)...
+2025-10-04T23:54:33+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: yt-decider-daemon.service: Deactivated successfully.
+2025-10-04T23:54:33+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Decider Daemon (produção: liga/desliga youtube-fallback e garante broadcast).
+2025-10-04T23:54:33+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: yt-decider-daemon.service: Consumed 27.664s CPU time.
+-- Boot 1072a5f3a97a490d8cc7c512c0e2ac5a --
+2025-10-04T23:55:02+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Decider Daemon (produção: liga/desliga youtube-fallback e garante broadcast).
+2025-10-05T00:07:33+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopping YouTube Decider Daemon (produção: liga/desliga youtube-fallback e garante broadcast)...
+2025-10-05T00:07:33+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: yt-decider-daemon.service: Deactivated successfully.
+2025-10-05T00:07:33+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Decider Daemon (produção: liga/desliga youtube-fallback e garante broadcast).
+2025-10-05T00:07:33+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: yt-decider-daemon.service: Consumed 6.592s CPU time.
+-- Boot 720a916e1982403e9759f73bc77bc962 --
+2025-10-05T00:08:03+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Decider Daemon (produção: liga/desliga youtube-fallback e garante broadcast).
+2025-10-05T01:18:41+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopping YouTube Decider Daemon (produção: liga/desliga youtube-fallback e garante broadcast)...
+2025-10-05T01:18:42+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: yt-decider-daemon.service: Deactivated successfully.
+2025-10-05T01:18:42+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Decider Daemon (produção: liga/desliga youtube-fallback e garante broadcast).
+2025-10-05T01:18:42+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: yt-decider-daemon.service: Consumed 39.613s CPU time.
+2025-10-05T01:18:42+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Decider Daemon (produção: liga/desliga youtube-fallback e garante broadcast).
+2025-10-05T20:03:04+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopping YouTube Decider Daemon (produção: liga/desliga youtube-fallback e garante broadcast)...
+2025-10-05T20:03:04+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: yt-decider-daemon.service: Deactivated successfully.
+2025-10-05T20:03:04+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Decider Daemon (produção: liga/desliga youtube-fallback e garante broadcast).
+2025-10-05T20:03:04+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: yt-decider-daemon.service: Consumed 10min 1.986s CPU time.
+2025-10-05T20:03:04+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Decider Daemon (produção: liga/desliga youtube-fallback e garante broadcast).
+2025-10-05T20:20:15+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[40116]: == yt_decider_daemon — PRODUÇÃO (STOP diurno quando primário OK) ==
+2025-10-05T20:21:50+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[40116]: Traceback (most recent call last):
+2025-10-05T20:21:50+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[40116]:   File "/usr/lib/python3/dist-packages/httplib2/__init__.py", line 1363, in _conn_request
+2025-10-05T20:21:50+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[40116]:     conn.connect()
+2025-10-05T20:21:50+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[40116]:   File "/usr/lib/python3/dist-packages/httplib2/__init__.py", line 1139, in connect
+2025-10-05T20:21:50+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[40116]:     address_info = socket.getaddrinfo(host, port, 0, socket.SOCK_STREAM)
+2025-10-05T20:21:50+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[40116]:   File "/usr/lib/python3.10/socket.py", line 955, in getaddrinfo
+2025-10-05T20:21:50+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[40116]:     for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+2025-10-05T20:21:50+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[40116]: socket.gaierror: [Errno -3] Temporary failure in name resolution
+2025-10-05T20:21:50+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[40116]: During handling of the above exception, another exception occurred:
+2025-10-05T20:21:50+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[40116]: Traceback (most recent call last):
+2025-10-05T20:21:50+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[40116]:   File "/usr/local/lib/python3.10/dist-packages/google_auth_httplib2.py", line 119, in __call__
+2025-10-05T20:21:50+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[40116]:     response, data = self.http.request(
+2025-10-05T20:21:50+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[40116]:   File "/usr/lib/python3/dist-packages/httplib2/__init__.py", line 1725, in request
+2025-10-05T20:21:50+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[40116]:     (response, content) = self._request(
+2025-10-05T20:21:50+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[40116]:   File "/usr/lib/python3/dist-packages/httplib2/__init__.py", line 1441, in _request
+2025-10-05T20:21:50+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[40116]:     (response, content) = self._conn_request(conn, request_uri, method, body, headers)
+2025-10-05T20:21:50+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[40116]:   File "/usr/lib/python3/dist-packages/httplib2/__init__.py", line 1370, in _conn_request
+2025-10-05T20:21:50+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[40116]:     raise ServerNotFoundError("Unable to find the server at %s" % conn.host)
+2025-10-05T20:21:50+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[40116]: httplib2.error.ServerNotFoundError: Unable to find the server at oauth2.googleapis.com
+2025-10-05T20:21:50+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[40116]: During handling of the above exception, another exception occurred:
+2025-10-05T20:21:50+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[40116]: Traceback (most recent call last):
+2025-10-05T20:21:50+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[40116]:   File "/usr/local/bin/yt_decider_daemon.py", line 237, in <module>
+2025-10-05T20:21:50+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[40116]:     try: main()
+2025-10-05T20:21:50+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[40116]:   File "/usr/local/bin/yt_decider_daemon.py", line 160, in main
+2025-10-05T20:21:50+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[40116]:     b=get_live_item(yt)
+2025-10-05T20:21:50+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[40116]:   File "/usr/local/bin/yt_decider_daemon.py", line 118, in get_live_item
+2025-10-05T20:21:50+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[40116]:     b=yt.liveBroadcasts().list(part="id,contentDetails,status", mine=True, maxResults=5).execute()
+2025-10-05T20:21:50+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[40116]:   File "/usr/local/lib/python3.10/dist-packages/googleapiclient/_helpers.py", line 130, in positional_wrapper
+2025-10-05T20:21:50+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[40116]:     return wrapped(*args, **kwargs)
+2025-10-05T20:21:50+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[40116]:   File "/usr/local/lib/python3.10/dist-packages/googleapiclient/http.py", line 923, in execute
+2025-10-05T20:21:50+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[40116]:     resp, content = _retry_request(
+2025-10-05T20:21:51+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[40116]:   File "/usr/local/lib/python3.10/dist-packages/googleapiclient/http.py", line 191, in _retry_request
+2025-10-05T20:21:51+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[40116]:     resp, content = http.request(uri, method, *args, **kwargs)
+2025-10-05T20:21:51+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[40116]:   File "/usr/local/lib/python3.10/dist-packages/google_auth_httplib2.py", line 209, in request
+2025-10-05T20:21:51+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[40116]:     self.credentials.before_request(self._request, method, uri, request_headers)
+2025-10-05T20:21:51+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[40116]:   File "/usr/local/lib/python3.10/dist-packages/google/auth/credentials.py", line 228, in before_request
+2025-10-05T20:21:51+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[40116]:     self._blocking_refresh(request)
+2025-10-05T20:21:51+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[40116]:   File "/usr/local/lib/python3.10/dist-packages/google/auth/credentials.py", line 191, in _blocking_refresh
+2025-10-05T20:21:51+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[40116]:     self.refresh(request)
+2025-10-05T20:21:51+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[40116]:   File "/usr/local/lib/python3.10/dist-packages/google/oauth2/credentials.py", line 431, in refresh
+2025-10-05T20:21:51+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[40116]:     ) = reauth.refresh_grant(
+2025-10-05T20:21:51+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[40116]:   File "/usr/local/lib/python3.10/dist-packages/google/oauth2/reauth.py", line 333, in refresh_grant
+2025-10-05T20:21:51+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[40116]:     response_status_ok, response_data, retryable_error = _client._token_endpoint_request_no_throw(
+2025-10-05T20:21:51+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[40116]:   File "/usr/local/lib/python3.10/dist-packages/google/oauth2/_client.py", line 191, in _token_endpoint_request_no_throw
+2025-10-05T20:21:51+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[40116]:     response = request(
+2025-10-05T20:21:51+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[40116]:   File "/usr/local/lib/python3.10/dist-packages/google_auth_httplib2.py", line 126, in __call__
+2025-10-05T20:21:51+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[40116]:     raise exceptions.TransportError(exc)
+2025-10-05T20:21:51+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 python3[40116]: google.auth.exceptions.TransportError: Unable to find the server at oauth2.googleapis.com
+2025-10-05T20:21:51+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: yt-decider-daemon.service: Main process exited, code=exited, status=1/FAILURE
+2025-10-05T20:21:51+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: yt-decider-daemon.service: Failed with result 'exit-code'.
+2025-10-05T20:21:51+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: yt-decider-daemon.service: Consumed 17.123s CPU time.
+2025-10-05T20:22:01+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: yt-decider-daemon.service: Scheduled restart job, restart counter is at 1.
+2025-10-05T20:22:01+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Decider Daemon (produção: liga/desliga youtube-fallback e garante broadcast).
+2025-10-05T20:22:01+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: yt-decider-daemon.service: Consumed 17.123s CPU time.
+2025-10-05T20:22:01+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Decider Daemon (produção: liga/desliga youtube-fallback e garante broadcast).
+2025-10-05T23:31:31+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopping YouTube Decider Daemon (produção: liga/desliga youtube-fallback e garante broadcast)...
+2025-10-05T23:31:31+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: yt-decider-daemon.service: Deactivated successfully.
+2025-10-05T23:31:31+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Decider Daemon (produção: liga/desliga youtube-fallback e garante broadcast).
+2025-10-05T23:31:31+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: yt-decider-daemon.service: Consumed 1min 52.996s CPU time.
+-- Boot 72474ead779e40279b4439b9c82a71a3 --
+2025-10-05T23:32:00+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Decider Daemon (produção: liga/desliga youtube-fallback e garante broadcast).
+2025-10-05T23:54:19+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopping YouTube Decider Daemon (produção: liga/desliga youtube-fallback e garante broadcast)...
+2025-10-05T23:54:19+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: yt-decider-daemon.service: Deactivated successfully.
+2025-10-05T23:54:19+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Decider Daemon (produção: liga/desliga youtube-fallback e garante broadcast).
+2025-10-05T23:54:19+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: yt-decider-daemon.service: Consumed 11.563s CPU time.
+-- Boot a362766dbadb46eba11a26b6acf35149 --
+2025-10-05T23:57:01+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Decider Daemon (produção: liga/desliga youtube-fallback e garante broadcast).
+
+-- youtube-fallback.service --
+$ systemctl status --no-pager youtube-fallback.service
+(returncode=0)
+stdout:
+● youtube-fallback.service - YouTube Secondary (Backup) - Slate 720p com imagem e textos
+     Loaded: loaded (/etc/systemd/system/youtube-fallback.service; enabled; vendor preset: enabled)
+     Active: active (running) since Mon 2025-10-06 00:21:25 UTC; 2min 16s ago
+   Main PID: 1704 (bash)
+      Tasks: 4 (limit: 1101)
+     Memory: 95.5M
+        CPU: 2min 10.714s
+     CGroup: /system.slice/youtube-fallback.service
+             ├─1704 bash /usr/local/bin/youtube_fallback.sh
+             └─1714 ffmpeg -progress /run/youtube-fallback.progress -hide_banner -loglevel warning -nostats -re -f lavfi -i life=s=1280x720:rate=30 -f lavfi -i anullsrc=channel_layout=stereo:sample_rate=44100 -filter_complex "[0:v]scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=black,format=yuv420p,setpts=PTS+3.0/TB,drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:text='BEACHCAM | CABO LEDO | ANGOLA':fontsize=44:fontcolor=white:shadowcolor=black@0.85:shadowx=2:shadowy=2:x=w-mod(t*30*8\\,w+text_w):y=H-120,drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:text='VOLTAREMOS DENTRO DE MOMENTOS':fontsize=28:fontcolor=white:shadowcolor=black@0.85:shadowx=2:shadowy=2:x=(w-text_w)/2:y=(h-text_h)/2:enable='lt(mod(t\\,1)\\,0.5)'[vb];[1:a]asetpts=PTS+3.0/TB[ab]" -map "[vb]" -map "[ab]" -c:v libx264 -preset veryfast -pix_fmt yuv420p -profile:v high -level 4.1 -b:v 3200k -maxrate 3500k -bufsize 6000k -g 60 -keyint_min 60 -sc_threshold 0 -c:a aac -b:a 128k -ar 44100 -ac 2 -f flv "rtmps://b.rtmps.youtube.com/live2?backup=1/f4ex-ztrk-vc4h-2pvc-2kg4"
+
+Oct 06 00:21:25 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Deactivated successfully.
+Oct 06 00:21:25 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+Oct 06 00:21:25 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Consumed 23min 19.614s CPU time.
+Oct 06 00:21:25 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+
+$ journalctl -o short-iso --no-pager -u youtube-fallback.service -n 200
+(returncode=0)
+stdout:
+2025-10-05T19:35:31+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Scheduled restart job, restart counter is at 1.
+2025-10-05T19:35:31+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T19:35:31+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Consumed 39min 22.072s CPU time.
+2025-10-05T19:35:31+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T20:01:03+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopping YouTube Secondary (Backup) - Slate 720p com imagem e textos...
+2025-10-05T20:01:03+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Deactivated successfully.
+2025-10-05T20:01:03+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T20:01:03+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Consumed 11min 6.719s CPU time.
+2025-10-05T20:01:03+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T20:01:44+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopping YouTube Secondary (Backup) - Slate 720p com imagem e textos...
+2025-10-05T20:01:45+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Deactivated successfully.
+2025-10-05T20:01:45+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T20:01:45+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Consumed 37.057s CPU time.
+2025-10-05T20:01:45+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T20:02:15+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopping YouTube Secondary (Backup) - Slate 720p com imagem e textos...
+2025-10-05T20:02:15+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Deactivated successfully.
+2025-10-05T20:02:15+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T20:02:15+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Consumed 26.758s CPU time.
+2025-10-05T20:02:15+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T20:03:04+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopping YouTube Secondary (Backup) - Slate 720p com imagem e textos...
+2025-10-05T20:03:05+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Deactivated successfully.
+2025-10-05T20:03:05+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T20:03:05+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Consumed 47.337s CPU time.
+2025-10-05T20:03:05+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T20:18:19+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: A process of this unit has been killed by the OOM killer.
+2025-10-05T20:18:19+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Failed with result 'oom-kill'.
+2025-10-05T20:18:19+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Consumed 14min 48.729s CPU time.
+2025-10-05T20:18:23+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Scheduled restart job, restart counter is at 1.
+2025-10-05T20:18:23+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T20:18:23+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Consumed 14min 48.729s CPU time.
+2025-10-05T20:18:23+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T20:21:50+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Main process exited, code=exited, status=137/n/a
+2025-10-05T20:21:50+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Failed with result 'exit-code'.
+2025-10-05T20:21:50+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Consumed 12.536s CPU time.
+2025-10-05T20:21:53+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Scheduled restart job, restart counter is at 2.
+2025-10-05T20:21:53+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T20:21:53+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Consumed 12.536s CPU time.
+2025-10-05T20:21:53+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T21:32:38+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Main process exited, code=exited, status=137/n/a
+2025-10-05T21:32:38+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Failed with result 'exit-code'.
+2025-10-05T21:32:38+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Consumed 1h 8min 32.604s CPU time.
+2025-10-05T21:32:39+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T21:32:39+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Consumed 1h 8min 32.604s CPU time.
+2025-10-05T21:32:39+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T21:32:39+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopping YouTube Secondary (Backup) - Slate 720p com imagem e textos...
+2025-10-05T21:32:39+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Deactivated successfully.
+2025-10-05T21:32:39+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T21:32:39+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T21:55:56+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopping YouTube Secondary (Backup) - Slate 720p com imagem e textos...
+2025-10-05T21:55:56+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Deactivated successfully.
+2025-10-05T21:55:56+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T21:55:56+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Consumed 22min 43.998s CPU time.
+2025-10-05T21:55:56+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T22:05:50+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopping YouTube Secondary (Backup) - Slate 720p com imagem e textos...
+2025-10-05T22:05:50+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Deactivated successfully.
+2025-10-05T22:05:50+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T22:05:50+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Consumed 9min 37.594s CPU time.
+2025-10-05T22:05:50+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T22:06:15+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopping YouTube Secondary (Backup) - Slate 720p com imagem e textos...
+2025-10-05T22:06:15+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Deactivated successfully.
+2025-10-05T22:06:15+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T22:06:15+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Consumed 22.001s CPU time.
+2025-10-05T22:06:15+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T22:26:56+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopping YouTube Secondary (Backup) - Slate 720p com imagem e textos...
+2025-10-05T22:26:56+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Deactivated successfully.
+2025-10-05T22:26:56+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T22:26:56+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Consumed 20min 8.763s CPU time.
+2025-10-05T22:26:56+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T22:29:04+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopping YouTube Secondary (Backup) - Slate 720p com imagem e textos...
+2025-10-05T22:29:05+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Deactivated successfully.
+2025-10-05T22:29:05+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T22:29:05+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Consumed 2min 811ms CPU time.
+2025-10-05T22:29:05+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T22:31:59+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: A process of this unit has been killed by the OOM killer.
+2025-10-05T22:31:59+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Failed with result 'oom-kill'.
+2025-10-05T22:31:59+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Consumed 1min 39.315s CPU time.
+2025-10-05T22:32:00+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T22:32:00+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Consumed 1min 39.315s CPU time.
+2025-10-05T22:32:00+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T22:32:00+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopping YouTube Secondary (Backup) - Slate 720p com imagem e textos...
+2025-10-05T22:32:00+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Deactivated successfully.
+2025-10-05T22:32:00+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T22:32:00+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T22:35:58+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopping YouTube Secondary (Backup) - Slate 720p com imagem e textos...
+2025-10-05T22:35:58+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Deactivated successfully.
+2025-10-05T22:35:58+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T22:35:58+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Consumed 3min 37.914s CPU time.
+2025-10-05T22:35:58+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T22:36:28+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: A process of this unit has been killed by the OOM killer.
+2025-10-05T22:36:28+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Failed with result 'oom-kill'.
+2025-10-05T22:36:28+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Consumed 4.416s CPU time.
+2025-10-05T22:36:30+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T22:36:30+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Consumed 4.416s CPU time.
+2025-10-05T22:36:30+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T22:36:30+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopping YouTube Secondary (Backup) - Slate 720p com imagem e textos...
+2025-10-05T22:36:30+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Deactivated successfully.
+2025-10-05T22:36:30+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T22:36:30+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T22:36:41+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: A process of this unit has been killed by the OOM killer.
+2025-10-05T22:36:41+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Failed with result 'oom-kill'.
+2025-10-05T22:36:41+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Consumed 2.903s CPU time.
+2025-10-05T22:36:44+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Scheduled restart job, restart counter is at 1.
+2025-10-05T22:36:44+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T22:36:44+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Consumed 2.903s CPU time.
+2025-10-05T22:36:44+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T22:36:47+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Main process exited, code=exited, status=137/n/a
+2025-10-05T22:36:47+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Failed with result 'exit-code'.
+2025-10-05T22:36:47+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Consumed 1.293s CPU time.
+2025-10-05T22:36:50+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Scheduled restart job, restart counter is at 2.
+2025-10-05T22:36:50+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T22:36:50+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Consumed 1.293s CPU time.
+2025-10-05T22:36:50+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T22:37:27+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Main process exited, code=exited, status=1/FAILURE
+2025-10-05T22:37:27+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Failed with result 'exit-code'.
+2025-10-05T22:37:27+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Consumed 4.394s CPU time.
+2025-10-05T22:37:30+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T22:37:30+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Consumed 4.394s CPU time.
+2025-10-05T22:37:30+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T22:38:47+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Main process exited, code=exited, status=1/FAILURE
+2025-10-05T22:38:47+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Failed with result 'exit-code'.
+2025-10-05T22:38:47+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Consumed 19.305s CPU time.
+2025-10-05T22:38:48+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T22:38:48+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Consumed 19.305s CPU time.
+2025-10-05T22:38:48+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T22:38:48+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopping YouTube Secondary (Backup) - Slate 720p com imagem e textos...
+2025-10-05T22:38:48+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Deactivated successfully.
+2025-10-05T22:38:48+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T22:38:48+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T23:00:52+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopping YouTube Secondary (Backup) - Slate 720p com imagem e textos...
+2025-10-05T23:00:52+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Deactivated successfully.
+2025-10-05T23:00:52+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T23:00:52+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Consumed 21min 33.001s CPU time.
+2025-10-05T23:00:52+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T23:00:59+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: A process of this unit has been killed by the OOM killer.
+2025-10-05T23:00:59+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Failed with result 'oom-kill'.
+2025-10-05T23:00:59+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Consumed 2.971s CPU time.
+2025-10-05T23:01:02+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Scheduled restart job, restart counter is at 1.
+2025-10-05T23:01:02+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T23:01:02+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Consumed 2.971s CPU time.
+2025-10-05T23:01:02+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T23:01:52+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Main process exited, code=exited, status=1/FAILURE
+2025-10-05T23:01:52+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Failed with result 'exit-code'.
+2025-10-05T23:01:52+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Consumed 4.598s CPU time.
+2025-10-05T23:01:55+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Scheduled restart job, restart counter is at 2.
+2025-10-05T23:01:55+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T23:01:55+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Consumed 4.598s CPU time.
+2025-10-05T23:01:55+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T23:19:05+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: A process of this unit has been killed by the OOM killer.
+2025-10-05T23:19:05+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Failed with result 'oom-kill'.
+2025-10-05T23:19:05+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Consumed 15min 53.963s CPU time.
+2025-10-05T23:19:06+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T23:19:06+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Consumed 15min 53.963s CPU time.
+2025-10-05T23:19:06+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T23:19:06+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopping YouTube Secondary (Backup) - Slate 720p com imagem e textos...
+2025-10-05T23:19:06+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Deactivated successfully.
+2025-10-05T23:19:06+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T23:19:06+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T23:23:45+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopping YouTube Secondary (Backup) - Slate 720p com imagem e textos...
+2025-10-05T23:23:45+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Deactivated successfully.
+2025-10-05T23:23:45+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T23:23:45+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Consumed 4min 13.137s CPU time.
+2025-10-05T23:23:45+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T23:23:52+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: A process of this unit has been killed by the OOM killer.
+2025-10-05T23:23:52+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Failed with result 'oom-kill'.
+2025-10-05T23:23:52+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Consumed 2.423s CPU time.
+2025-10-05T23:23:55+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Scheduled restart job, restart counter is at 1.
+2025-10-05T23:23:55+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T23:23:55+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Consumed 2.423s CPU time.
+2025-10-05T23:23:55+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T23:31:31+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopping YouTube Secondary (Backup) - Slate 720p com imagem e textos...
+2025-10-05T23:31:32+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Deactivated successfully.
+2025-10-05T23:31:32+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T23:31:32+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Consumed 7min 19.413s CPU time.
+-- Boot 72474ead779e40279b4439b9c82a71a3 --
+2025-10-05T23:32:00+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T23:51:30+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopping YouTube Secondary (Backup) - Slate 720p com imagem e textos...
+2025-10-05T23:51:31+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Deactivated successfully.
+2025-10-05T23:51:31+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T23:51:31+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Consumed 18min 45.248s CPU time.
+2025-10-05T23:51:31+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T23:51:41+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: A process of this unit has been killed by the OOM killer.
+2025-10-05T23:51:41+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Failed with result 'oom-kill'.
+2025-10-05T23:51:41+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Consumed 2.494s CPU time.
+2025-10-05T23:51:42+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T23:51:42+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Consumed 2.494s CPU time.
+2025-10-05T23:51:42+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T23:54:19+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopping YouTube Secondary (Backup) - Slate 720p com imagem e textos...
+2025-10-05T23:54:20+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Deactivated successfully.
+2025-10-05T23:54:20+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T23:54:20+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Consumed 2min 8.754s CPU time.
+-- Boot a362766dbadb46eba11a26b6acf35149 --
+2025-10-05T23:57:01+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T23:57:24+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopping YouTube Secondary (Backup) - Slate 720p com imagem e textos...
+2025-10-05T23:57:25+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Deactivated successfully.
+2025-10-05T23:57:25+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T23:57:25+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Consumed 5.465s CPU time.
+2025-10-05T23:57:25+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-06T00:21:24+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopping YouTube Secondary (Backup) - Slate 720p com imagem e textos...
+2025-10-06T00:21:25+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Deactivated successfully.
+2025-10-06T00:21:25+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Stopped YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-06T00:21:25+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: youtube-fallback.service: Consumed 23min 19.614s CPU time.
+2025-10-06T00:21:25+0000 ubuntu-s-1vcpu-512mb-10gb-fra1-01 systemd[1]: Started YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+
+== Ambiente e ficheiros relevantes ==
+--- /etc/youtube-fallback.env ---
+# /etc/youtube-fallback.env (managed by post_deploy.sh)
+# Defaults live in /usr/local/config/youtube-fallback.defaults. Override only what you need here.
+YT_KEY="f4***g4"
+
+# Default parameters for reference:
+#FALLBACK_WIDTH=1280
+#FALLBACK_HEIGHT=720
+#FALLBACK_FPS=30
+#FALLBACK_LIFE_ARGS=""
+#FALLBACK_VBITRATE="3200k"
+#FALLBACK_MAXRATE="3500k"
+#FALLBACK_BUFSIZE="6000k"
+#FALLBACK_ABITRATE="128k"
+#FALLBACK_AR=44100
+#FALLBACK_PRESET="veryfast"
+#FALLBACK_GOP=60
+#FALLBACK_KEYINT_MIN=60
+#FALLBACK_DELAY_SEC=3.0
+#FALLBACK_LOGLEVEL="warning"
+#FALLBACK_FONT="/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+#FALLBACK_SCROLL_TEXT="BEACHCAM | CABO LEDO | ANGOLA"
+#FALLBACK_STATIC_TEXT="VOLTAREMOS DENTRO DE MOMENTOS"
+
+--- /usr/local/config/youtube-fallback.defaults ---
+<ficheiro não encontrado: /usr/local/config/youtube-fallback.defaults>
+
+--- /run/youtube-fallback.progress ---
+frame=1
+fps=0.00
+stream_0_0_q=0.0
+bitrate=N/A
+total_size=408
+out_time_us=0
+out_time_ms=0
+out_time=00:00:00.000000
+dup_frames=0
+drop_frames=0
+speed=   0x
+progress=continue
+frame=11
+fps=0.00
+stream_0_0_q=0.0
+bitrate=   1.0kbits/s
+total_size=408
+out_time_us=3279000
+out_time_ms=3279000
+out_time=00:00:03.279000
+dup_frames=0
+drop_frames=0
+speed=6.33x
+progress=continue
+frame=12
+fps=10.27
+stream_0_0_q=36.0
+bitrate= 663.0kbits/s
+total_size=275562
+out_time_us=3325000
+out_time_ms=3325000
+out_time=00:00:03.325000
+dup_frames=0
+drop_frames=0
+speed=2.84x
+progress=continue
+frame=17
+fps=9.12
+stream_0_0_q=54.0
+bitrate=1049.9kbits/s
+total_size=457752
+out_time_us=3488000
+out_time_ms=3488000
+out_time=00:00:03.488000
+dup_frames=0
+drop_frames=0
+speed=1.87x
+progress=continue
+frame=22
+fps=9.21
+stream_0_0_q=57.0
+bitrate=1195.9kbits/s
+total_size=545615
+out_time_us=3650000
+out_time_ms=3650000
+out_time=00:00:03.650000
+dup_frames=0
+drop_frames=0
+speed=1.53x
+progress=continue
+frame=29
+fps=9.47
+stream_0_0_q=61.0
+bitrate=1234.4kbits/s
+total_size=598989
+out_time_us=3882000
+out_time_ms=3882000
+out_time=00:00:03.882000
+dup_frames=0
+drop_frames=0
+speed=1.27x
+progress=continue
+frame=35
+fps=9.71
+stream_0_0_q=61.0
+bitrate=1282.4kbits/s
+total_size=655796
+out_time_us=4091000
+out_time_ms=4091000
+out_time=00:00:04.091000
+dup_frames=0
+drop_frames=0
+speed=1.13x
+progress=continue
+frame=40
+fps=9.70
+stream_0_0_q=60.0
+bitrate=1369.9kbits/s
+total_size=728419
+out_time_us=4254000
+out_time_ms=4254000
+out_time=00:00:04.254000
+dup_frames=0
+drop_frames=0
+speed=1.03x
+progress=continue
+frame=45
+fps=9.60
+stream_0_0_q=61.0
+bitrate=1452.5kbits/s
+total_size=801762
+out_time_us=4416000
+out_time_ms=4416000
+out_time=00:00:04.416000
+dup_frames=0
+drop_frames=0
+speed=0.943x
+progress=continue
+frame=50
+fps=9.64
+stream_0_0_q=61.0
+bitrate=1492.3kbits/s
+total_size=854172
+out_time_us=4579000
+out_time_ms=4579000
+out_time=00:00:04.579000
+dup_frames=0
+drop_frames=0
+speed=0.883x
+progress=continue
+frame=57
+fps=9.72
+stream_0_0_q=61.0
+bitrate=1551.4kbits/s
+total_size=932960
+out_time_us=4811000
+out_time_ms=4811000
+out_time=00:00:04.811000
+dup_frames=0
+drop_frames=0
+speed=0.82x
+progress=continue
+frame=68
+fps=10.68
+stream_0_0_q=61.0
+bitrate=1603.4kbits/s
+total_size=1043385
+out_time_us=5206000
+out_time_ms=5206000
+out_time=00:00:05.206000
+dup_frames=0
+drop_frames=0
+speed=0.818x
+progress=continue
+frame=77
+fps=11.18
+stream_0_0_q=61.0
+bitrate=1724.2kbits/s
+total_size=1182151
+out_time_us=5485000
+out_time_ms=5485000
+out_time=00:00:05.485000
+dup_frames=0
+drop_frames=0
+speed=0.796x
+progress=continue
+frame=89
+fps=12.01
+stream_0_0_q=61.0
+bitrate=1778.6kbits/s
+total_size=1307033
+out_time_us=5879000
+out_time_ms=5879000
+out_time=00:00:05.879000
+dup_frames=0
+drop_frames=0
+speed=0.793x
+progress=continue
+frame=101
+fps=12.66
+stream_0_0_q=60.0
+bitrate=1832.9kbits/s
+total_size=1442698
+out_time_us=6297000
+out_time_ms=6297000
+out_time=00:00:06.297000
+dup_frames=0
+drop_frames=0
+speed=0.789x
+progress=continue
+frame=113
+fps=13.25
+stream_0_0_q=60.0
+bitrate=1893.2kbits/s
+total_size=1583622
+out_time_us=6692000
+out_time_ms=6692000
+out_time=00:00:06.692000
+dup_frames=0
+drop_frames=0
+speed=0.785x
+progress=continue
+frame=125
+fps=13.83
+stream_0_0_q=60.0
+bitrate=1949.6kbits/s
+total_size=1727105
+out_time_us=7087000
+out_time_ms=7087000
+out_time=00:00:07.087000
+dup_frames=0
+drop_frames=0
+speed=0.784x
+progress=continue
+frame=137
+fps=14.32
+stream_0_0_q=60.0
+bitrate=2021.9kbits/s
+total_size=1890750
+out_time_us=7481000
+out_time_ms=7481000
+out_time=00:00:07.481000
+dup_frames=0
+drop_frames=0
+speed=0.782x
+progress=continue
+frame=149
+fps=14.76
+stream_0_0_q=60.0
+bitrate=2050.5kbits/s
+total_size=2024600
+out_time_us=7899000
+out_time_ms=7899000
+out_time=00:00:07.899000
+dup_frames=0
+drop_frames=0
+speed=0.782x
+progress=continue
+frame=161
+fps=15.15
+stream_0_0_q=60.0
+bitrate=2085.3kbits/s
+total_size=2161940
+out_time_us=8294000
+out_time_ms=8294000
+out_time=00:00:08.294000
+dup_frames=0
+drop_frames=0
+speed=0.78x
+progress=continue
+frame=174
+fps=15.62
+stream_0_0_q=60.0
+bitrate=2120.9kbits/s
+total_size=2309683
+out_time_us=8712000
+out_time_ms=8712000
+out_time=00:00:08.712000
+dup_frames=0
+drop_frames=0
+speed=0.782x
+progress=continue
+frame=188
+fps=16.12
+stream_0_0_q=59.0
+bitrate=2141.6kbits/s
+total_size=2462888
+out_time_us=9200000
+out_time_ms=9200000
+out_time=00:00:09.200000
+dup_frames=0
+drop_frames=0
+speed=0.789x
+progress=continue
+frame=201
+fps=16.47
+stream_0_0_q=59.0
+bitrate=2189.9kbits/s
+total_size=2632835
+out_time_us=9618000
+out_time_ms=9618000
+out_time=00:00:09.618000
+dup_frames=0
+drop_frames=0
+speed=0.788x
+progress=continue
+frame=214
+fps=16.81
+stream_0_0_q=59.0
+bitrate=2203.5kbits/s
+total_size=2770634
+out_time_us=10059000
+out_time_ms=10059000
+out_time=00:00:10.059000
+dup_frames=0
+drop_frames=0
+speed=0.79x
+progress=continue
+frame=228
+fps=17.20
+stream_0_0_q=59.0
+bitrate=2214.1kbits/s
+total_size=2912435
+out_time_us=10523000
+out_time_ms=10523000
+out_time=00:00:10.523000
+dup_frames=0
+drop_frames=0
+speed=0.794x
+progress=continue
+frame=240
+fps=17.42
+stream_0_0_q=58.0
+bitrate=2224.3kbits/s
+total_size=3035584
+out_time_us=10918000
+out_time_ms=10918000
+out_time=00:00:10.918000
+dup_frames=0
+drop_frames=0
+speed=0.792x
+progress=continue
+frame=252
+fps=17.61
+stream_0_0_q=56.0
+bitrate=2249.8kbits/s
+total_size=3181483
+out_time_us=11313000
+out_time_ms=11313000
+out_time=00:00:11.313000
+dup_frames=0
+drop_frames=0
+speed=0.791x
+progress=continue
+frame=265
+fps=17.89
+stream_0_0_q=58.0
+bitrate=2257.9kbits/s
+total_size=3317375
+out_time_us=11754000
+out_time_ms=11754000
+out_time=00:00:11.754000
+dup_frames=0
+drop_frames=0
+speed=0.793x
+progress=continue
+frame=279
+fps=18.20
+stream_0_0_q=58.0
+bitrate=2259.5kbits/s
+total_size=3450802
+out_time_us=12218000
+out_time_ms=12218000
+out_time=00:00:12.218000
+dup_frames=0
+drop_frames=0
+speed=0.797x
+progress=continue
+frame=292
+fps=18.43
+stream_0_0_q=57.0
+bitrate=2257.8kbits/s
+total_size=3572949
+out_time_us=12660000
+out_time_ms=12660000
+out_time=00:00:12.660000
+dup_frames=0
+drop_frames=0
+speed=0.799x
+progress=continue
+frame=305
+fps=18.61
+stream_0_0_q=57.0
+bitrate=2264.8kbits/s
+total_size=3702118
+out_time_us=13077000
+out_time_ms=13077000
+out_time=00:00:13.077000
+dup_frames=0
+drop_frames=0
+speed=0.798x
+progress=continue
+frame=318
+fps=18.81
+stream_0_0_q=56.0
+bitrate=2275.2kbits/s
+total_size=3844877
+out_time_us=13519000
+out_time_ms=13519000
+out_time=00:00:13.519000
+dup_frames=0
+drop_frames=0
+speed= 0.8x
+progress=continue
+frame=332
+fps=19.05
+stream_0_0_q=56.0
+bitrate=2271.1kbits/s
+total_size=3969662
+out_time_us=13983000
+out_time_ms=13983000
+out_time=00:00:13.983000
+dup_frames=0
+drop_frames=0
+speed=0.802x
+progress=continue
+frame=345
+fps=19.21
+stream_0_0_q=55.0
+bitrate=2272.1kbits/s
+total_size=4096580
+out_time_us=14424000
+out_time_ms=14424000
+out_time=00:00:14.424000
+dup_frames=0
+drop_frames=0
+speed=0.803x
+progress=continue
+frame=358
+fps=19.39
+stream_0_0_q=55.0
+bitrate=2266.9kbits/s
+total_size=4212266
+out_time_us=14865000
+out_time_ms=14865000
+out_time=00:00:14.865000
+dup_frames=0
+drop_frames=0
+speed=0.805x
+progress=continue
+frame=371
+fps=19.51
+stream_0_0_q=55.0
+bitrate=2263.2kbits/s
+total_size=4323467
+out_time_us=15283000
+out_time_ms=15283000
+out_time=00:00:15.283000
+dup_frames=0
+drop_frames=0
+speed=0.804x
+progress=continue
+frame=380
+fps=19.46
+stream_0_0_q=55.0
+bitrate=2270.9kbits/s
+total_size=4424051
+out_time_us=15585000
+out_time_ms=15585000
+out_time=00:00:15.585000
+dup_frames=0
+drop_frames=0
+speed=0.798x
+progress=continue
+frame=389
+fps=19.37
+stream_0_0_q=54.0
+bitrate=2269.0kbits/s
+total_size=4505990
+out_time_us=15887000
+out_time_ms=15887000
+out_time=00:00:15.887000
+dup_frames=0
+drop_frames=0
+speed=0.791x
+progress=continue
+frame=403
+fps=19.56
+stream_0_0_q=54.0
+bitrate=2259.5kbits/s
+total_size=4618059
+out_time_us=16351000
+out_time_ms=16351000
+out_time=00:00:16.351000
+dup_frames=0
+drop_frames=0
+speed=0.794x
+progress=continue
+frame=417
+fps=19.71
+stream_0_0_q=53.0
+bitrate=2249.8kbits/s
+total_size=4729009
+out_time_us=16816000
+out_time_ms=16816000
+out_time=00:00:16.816000
+dup_frames=0
+drop_frames=0
+speed=0.795x
+progress=continue
+frame=432
+fps=19.90
+stream_0_0_q=50.0
+bitrate=2247.6kbits/s
+total_size=4868081
+out_time_us=17327000
+out_time_ms=17327000
+out_time=00:00:17.327000
+dup_frames=0
+drop_frames=0
+speed=0.798x
+progress=continue
+frame=447
+fps=20.11
+stream_0_0_q=52.0
+bitrate=2238.6kbits/s
+total_size=4984694
+out_time_us=17814000
+out_time_ms=17814000
+out_time=00:00:17.814000
+dup_frames=0
+drop_frames=0
+speed=0.802x
+progress=continue
+frame=461
+fps=20.27
+stream_0_0_q=51.0
+bitrate=2229.8kbits/s
+total_size=5094835
+out_time_us=18279000
+out_time_ms=18279000
+out_time=00:00:18.279000
+dup_frames=0
+drop_frames=0
+speed=0.804x
+progress=continue
+frame=476
+fps=20.47
+stream_0_0_q=51.0
+bitrate=2212.6kbits/s
+total_size=5196827
+out_time_us=18790000
+out_time_ms=18790000
+out_time=00:00:18.790000
+dup_frames=0
+drop_frames=0
+speed=0.808x
+progress=continue
+frame=489
+fps=20.56
+stream_0_0_q=50.0
+bitrate=2203.7kbits/s
+total_size=5297484
+out_time_us=19231000
+out_time_ms=19231000
+out_time=00:00:19.231000
+dup_frames=0
+drop_frames=0
+speed=0.809x
+progress=continue
+frame=502
+fps=20.67
+stream_0_0_q=50.0
+bitrate=2209.2kbits/s
+total_size=5426016
+out_time_us=19649000
+out_time_ms=19649000
+out_time=00:00:19.649000
+dup_frames=0
+drop_frames=0
+speed=0.809x
+progress=continue
+frame=517
+fps=20.81
+stream_0_0_q=49.0
+bitrate=2197.7kbits/s
+total_size=5538191
+out_time_us=20160000
+out_time_ms=20160000
+out_time=00:00:20.160000
+dup_frames=0
+drop_frames=0
+speed=0.812x
+progress=continue
+frame=532
+fps=20.99
+stream_0_0_q=48.0
+bitrate=2184.1kbits/s
+total_size=5643064
+out_time_us=20670000
+out_time_ms=20670000
+out_time=00:00:20.670000
+dup_frames=0
+drop_frames=0
+speed=0.816x
+progress=continue
+frame=545
+fps=21.06
+stream_0_0_q=48.0
+bitrate=2181.0kbits/s
+total_size=5749216
+out_time_us=21088000
+out_time_ms=21088000
+out_time=00:00:21.088000
+dup_frames=0
+drop_frames=0
+speed=0.815x
+progress=continue
+frame=558
+fps=21.15
+stream_0_0_q=47.0
+bitrate=2190.2kbits/s
+total_size=5894507
+out_time_us=21530000
+out_time_ms=21530000
+out_time=00:00:21.530000
+dup_frames=0
+drop_frames=0
+speed=0.816x
+progress=continue
+frame=572
+fps=21.28
+stream_0_0_q=47.0
+bitrate=2181.3kbits/s
+total_size=5996901
+out_time_us=21994000
+out_time_ms=21994000
+out_time=00:00:21.994000
+dup_frames=0
+drop_frames=0
+speed=0.818x
+progress=continue
+frame=585
+fps=21.34
+stream_0_0_q=46.0
+bitrate=2180.0kbits/s
+total_size=6107152
+out_time_us=22412000
+out_time_ms=22412000
+out_time=00:00:22.412000
+dup_frames=0
+drop_frames=0
+speed=0.818x
+progress=continue
+frame=600
+fps=21.49
+stream_0_0_q=46.0
+bitrate=2171.3kbits/s
+total_size=6221464
+out_time_us=22923000
+out_time_ms=22923000
+out_time=00:00:22.923000
+dup_frames=0
+drop_frames=0
+speed=0.821x
+progress=continue
+frame=612
+fps=21.53
+stream_0_0_q=43.0
+bitrate=2191.7kbits/s
+total_size=6388003
+out_time_us=23317000
+out_time_ms=23317000
+out_time=00:00:23.317000
+dup_frames=0
+drop_frames=0
+speed=0.82x
+progress=continue
+frame=625
+fps=21.58
+stream_0_0_q=45.0
+bitrate=2191.2kbits/s
+total_size=6507627
+out_time_us=23759000
+out_time_ms=23759000
+out_time=00:00:23.759000
+dup_frames=0
+drop_frames=0
+speed=0.82x
+progress=continue
+frame=638
+fps=21.64
+stream_0_0_q=44.0
+bitrate=2191.4kbits/s
+total_size=6628939
+out_time_us=24200000
+out_time_ms=24200000
+out_time=00:00:24.200000
+dup_frames=0
+drop_frames=0
+speed=0.821x
+progress=continue
+frame=652
+fps=21.74
+stream_0_0_q=44.0
+bitrate=2195.2kbits/s
+total_size=6767674
+out_time_us=24664000
+out_time_ms=24664000
+out_time=00:00:24.664000
+dup_frames=0
+drop_frames=0
+speed=0.822x
+progress=continue
+frame=666
+fps=21.83
+stream_0_0_q=44.0
+bitrate=2208.5kbits/s
+total_size=6937062
+out_time_us=25129000
+out_time_ms=25129000
+out_time=00:00:25.129000
+dup_frames=0
+drop_frames=0
+speed=0.824x
+progress=continue
+frame=679
+fps=21.89
+stream_0_0_q=44.0
+bitrate=2242.2kbits/s
+total_size=7160187
+out_time_us=25547000
+out_time_ms=25547000
+out_time=00:00:25.547000
+dup_frames=0
+drop_frames=0
+speed=0.824x
+progress=continue
+frame=692
+fps=21.95
+stream_0_0_q=43.0
+bitrate=2251.6kbits/s
+total_size=7314420
+out_time_us=25988000
+out_time_ms=25988000
+out_time=00:00:25.988000
+dup_frames=0
+drop_frames=0
+speed=0.824x
+progress=continue
+frame=705
+fps=22.01
+stream_0_0_q=43.0
+bitrate=2265.5kbits/s
+total_size=7484278
+out_time_us=26429000
+out_time_ms=26429000
+out_time=00:00:26.429000
+dup_frames=0
+drop_frames=0
+speed=0.825x
+progress=continue
+frame=716
+fps=21.98
+stream_0_0_q=43.0
+bitrate=2275.7kbits/s
+total_size=7617135
+out_time_us=26777000
+out_time_ms=26777000
+out_time=00:00:26.777000
+dup_frames=0
+drop_frames=0
+speed=0.822x
+progress=continue
+frame=728
+fps=22.01
+stream_0_0_q=43.0
+bitrate=2287.4kbits/s
+total_size=7775796
+out_time_us=27195000
+out_time_ms=27195000
+out_time=00:00:27.195000
+dup_frames=0
+drop_frames=0
+speed=0.822x
+progress=continue
+frame=741
+fps=22.05
+stream_0_0_q=43.0
+bitrate=2324.7kbits/s
+total_size=8024099
+out_time_us=27613000
+out_time_ms=27613000
+out_time=00:00:27.613000
+dup_frames=0
+drop_frames=0
+speed=0.822x
+progress=continue
+frame=754
+fps=22.10
+stream_0_0_q=43.0
+bitrate=2335.7kbits/s
+total_size=8190850
+out_time_us=28054000
+out_time_ms=28054000
+out_time=00:00:28.054000
+dup_frames=0
+drop_frames=0
+speed=0.822x
+progress=continue
+frame=765
+fps=22.07
+stream_0_0_q=43.0
+bitrate=2347.3kbits/s
+total_size=8340491
+out_time_us=28426000
+out_time_ms=28426000
+out_time=00:00:28.426000
+dup_frames=0
+drop_frames=0
+speed=0.82x
+progress=continue
+frame=775
+fps=22.02
+stream_0_0_q=43.0
+bitrate=2357.3kbits/s
+total_size=8471711
+out_time_us=28751000
+out_time_ms=28751000
+out_time=00:00:28.751000
+dup_frames=0
+drop_frames=0
+speed=0.817x
+progress=continue
+frame=785
+fps=21.99
+stream_0_0_q=43.0
+bitrate=2368.6kbits/s
+total_size=8615587
+out_time_us=29099000
+out_time_ms=29099000
+out_time=00:00:29.099000
+dup_frames=0
+drop_frames=0
+speed=0.815x
+progress=continue
+frame=796
+fps=21.99
+stream_0_0_q=43.0
+bitrate=2401.2kbits/s
+total_size=8838889
+out_time_us=29448000
+out_time_ms=29448000
+out_time=00:00:29.448000
+dup_frames=0
+drop_frames=0
+speed=0.813x
+progress=continue
+frame=807
+fps=21.96
+stream_0_0_q=43.0
+bitrate=2410.2kbits/s
+total_size=8983692
+out_time_us=29819000
+out_time_ms=29819000
+out_time=00:00:29.819000
+dup_frames=0
+drop_frames=0
+speed=0.812x
+progress=continue
+frame=818
+fps=21.96
+stream_0_0_q=43.0
+bitrate=2420.4kbits/s
+total_size=9134120
+out_time_us=30191000
+out_time_ms=30191000
+out_time=00:00:30.191000
+dup_frames=0
+drop_frames=0
+speed=0.811x
+progress=continue
+frame=827
+fps=21.91
+stream_0_0_q=43.0
+bitrate=2429.1kbits/s
+total_size=9258426
+out_time_us=30492000
+out_time_ms=30492000
+out_time=00:00:30.492000
+dup_frames=0
+drop_frames=0
+speed=0.808x
+progress=continue
+frame=839
+fps=21.91
+stream_0_0_q=42.0
+bitrate=2441.7kbits/s
+total_size=9427163
+out_time_us=30887000
+out_time_ms=30887000
+out_time=00:00:30.887000
+dup_frames=0
+drop_frames=0
+speed=0.807x
+progress=continue
+frame=851
+fps=21.94
+stream_0_0_q=42.0
+bitrate=2454.5kbits/s
+total_size=9597754
+out_time_us=31282000
+out_time_ms=31282000
+out_time=00:00:31.282000
+dup_frames=0
+drop_frames=0
+speed=0.806x
+progress=continue
+frame=863
+fps=21.96
+stream_0_0_q=43.0
+bitrate=2483.5kbits/s
+total_size=9833879
+out_time_us=31677000
+out_time_ms=31677000
+out_time=00:00:31.677000
+dup_frames=0
+drop_frames=0
+speed=0.806x
+progress=continue
+frame=871
+fps=21.86
+stream_0_0_q=43.0
+bitrate=2488.7kbits/s
+total_size=9940858
+out_time_us=31955000
+out_time_ms=31955000
+out_time=00:00:31.955000
+dup_frames=0
+drop_frames=0
+speed=0.802x
+progress=continue
+frame=878
+fps=21.74
+stream_0_0_q=42.0
+bitrate=2494.4kbits/s
+total_size=10036104
+out_time_us=32187000
+out_time_ms=32187000
+out_time=00:00:32.187000
+dup_frames=0
+drop_frames=0
+speed=0.797x
+progress=continue
+frame=889
+fps=21.72
+stream_0_0_q=42.0
+bitrate=2502.4kbits/s
+total_size=10184258
+out_time_us=32559000
+out_time_ms=32559000
+out_time=00:00:32.559000
+dup_frames=0
+drop_frames=0
+speed=0.795x
+progress=continue
+frame=902
+fps=21.77
+stream_0_0_q=42.0
+bitrate=2512.1kbits/s
+total_size=10355242
+out_time_us=32977000
+out_time_ms=32977000
+out_time=00:00:32.977000
+dup_frames=0
+drop_frames=0
+speed=0.796x
+progress=continue
+frame=915
+fps=21.81
+stream_0_0_q=42.0
+bitrate=2539.8kbits/s
+total_size=10609423
+out_time_us=33418000
+out_time_ms=33418000
+out_time=00:00:33.418000
+dup_frames=0
+drop_frames=0
+speed=0.796x
+progress=continue
+frame=928
+fps=21.85
+stream_0_0_q=42.0
+bitrate=2546.1kbits/s
+total_size=10776181
+out_time_us=33859000
+out_time_ms=33859000
+out_time=00:00:33.859000
+dup_frames=0
+drop_frames=0
+speed=0.797x
+progress=continue
+frame=941
+fps=21.89
+stream_0_0_q=42.0
+bitrate=2556.8kbits/s
+total_size=10954921
+out_time_us=34277000
+out_time_ms=34277000
+out_time=00:00:34.277000
+dup_frames=0
+drop_frames=0
+speed=0.797x
+progress=continue
+frame=955
+fps=21.95
+stream_0_0_q=42.0
+bitrate=2562.9kbits/s
+total_size=11137272
+out_time_us=34765000
+out_time_ms=34765000
+out_time=00:00:34.765000
+dup_frames=0
+drop_frames=0
+speed=0.799x
+progress=continue
+frame=969
+fps=22.00
+stream_0_0_q=42.0
+bitrate=2574.5kbits/s
+total_size=11336955
+out_time_us=35229000
+out_time_ms=35229000
+out_time=00:00:35.229000
+dup_frames=0
+drop_frames=0
+speed= 0.8x
+progress=continue
+frame=983
+fps=22.05
+stream_0_0_q=42.0
+bitrate=2596.6kbits/s
+total_size=11585382
+out_time_us=35694000
+out_time_ms=35694000
+out_time=00:00:35.694000
+dup_frames=0
+drop_frames=0
+speed=0.801x
+progress=continue
+frame=997
+fps=22.10
+stream_0_0_q=42.0
+bitrate=2603.2kbits/s
+total_size=11765773
+out_time_us=36158000
+out_time_ms=36158000
+out_time=00:00:36.158000
+dup_frames=0
+drop_frames=0
+speed=0.802x
+progress=continue
+frame=1011
+fps=22.16
+stream_0_0_q=42.0
+bitrate=2609.4kbits/s
+total_size=11945214
+out_time_us=36622000
+out_time_ms=36622000
+out_time=00:00:36.622000
+dup_frames=0
+drop_frames=0
+speed=0.803x
+progress=continue
+frame=1024
+fps=22.20
+stream_0_0_q=42.0
+bitrate=2615.4kbits/s
+total_size=12117003
+out_time_us=37064000
+out_time_ms=37064000
+out_time=00:00:37.064000
+dup_frames=0
+drop_frames=0
+speed=0.803x
+progress=continue
+frame=1037
+fps=22.22
+stream_0_0_q=42.0
+bitrate=2641.1kbits/s
+total_size=12374395
+out_time_us=37482000
+out_time_ms=37482000
+out_time=00:00:37.482000
+dup_frames=0
+drop_frames=0
+speed=0.803x
+progress=continue
+frame=1051
+fps=22.27
+stream_0_0_q=42.0
+bitrate=2647.0kbits/s
+total_size=12555345
+out_time_us=37946000
+out_time_ms=37946000
+out_time=00:00:37.946000
+dup_frames=0
+drop_frames=0
+speed=0.804x
+progress=continue
+frame=1064
+fps=22.31
+stream_0_0_q=42.0
+bitrate=2652.2kbits/s
+total_size=12726296
+out_time_us=38387000
+out_time_ms=38387000
+out_time=00:00:38.387000
+dup_frames=0
+drop_frames=0
+speed=0.805x
+progress=continue
+frame=1079
+fps=22.36
+stream_0_0_q=41.0
+bitrate=2658.6kbits/s
+total_size=12926897
+out_time_us=38898000
+out_time_ms=38898000
+out_time=00:00:38.898000
+dup_frames=0
+drop_frames=0
+speed=0.806x
+progress=continue
+frame=1092
+fps=22.38
+stream_0_0_q=39.0
+bitrate=2683.4kbits/s
+total_size=13187502
+out_time_us=39316000
+out_time_ms=39316000
+out_time=00:00:39.316000
+dup_frames=0
+drop_frames=0
+speed=0.806x
+progress=continue
+frame=1106
+fps=22.42
+stream_0_0_q=41.0
+bitrate=2688.6kbits/s
+total_size=13368968
+out_time_us=39780000
+out_time_ms=39780000
+out_time=00:00:39.780000
+dup_frames=0
+drop_frames=0
+speed=0.807x
+progress=continue
+frame=1118
+fps=22.43
+stream_0_0_q=41.0
+bitrate=2692.1kbits/s
+total_size=13527162
+out_time_us=40198000
+out_time_ms=40198000
+out_time=00:00:40.198000
+dup_frames=0
+drop_frames=0
+speed=0.806x
+progress=continue
+frame=1132
+fps=22.48
+stream_0_0_q=41.0
+bitrate=2698.2kbits/s
+total_size=13714728
+out_time_us=40663000
+out_time_ms=40663000
+out_time=00:00:40.663000
+dup_frames=0
+drop_frames=0
+speed=0.807x
+progress=continue
+frame=1145
+fps=22.50
+stream_0_0_q=41.0
+bitrate=2705.4kbits/s
+total_size=13892713
+out_time_us=41081000
+out_time_ms=41081000
+out_time=00:00:41.081000
+dup_frames=0
+drop_frames=0
+speed=0.807x
+progress=continue
+frame=1159
+fps=22.56
+stream_0_0_q=41.0
+bitrate=2726.6kbits/s
+total_size=14159614
+out_time_us=41545000
+out_time_ms=41545000
+out_time=00:00:41.545000
+dup_frames=0
+drop_frames=0
+speed=0.809x
+progress=continue
+frame=1174
+fps=22.62
+stream_0_0_q=41.0
+bitrate=2730.5kbits/s
+total_size=14354110
+out_time_us=42056000
+out_time_ms=42056000
+out_time=00:00:42.056000
+dup_frames=0
+drop_frames=0
+speed=0.81x
+progress=continue
+frame=1189
+fps=22.67
+stream_0_0_q=41.0
+bitrate=2737.0kbits/s
+total_size=14555463
+out_time_us=42544000
+out_time_ms=42544000
+out_time=00:00:42.544000
+dup_frames=0
+drop_frames=0
+speed=0.811x
+progress=continue
+frame=1204
+fps=22.72
+stream_0_0_q=41.0
+bitrate=2741.5kbits/s
+total_size=14754273
+out_time_us=43054000
+out_time_ms=43054000
+out_time=00:00:43.054000
+dup_frames=0
+drop_frames=0
+speed=0.813x
+progress=continue
+frame=1217
+fps=22.75
+stream_0_0_q=41.0
+bitrate=2761.2kbits/s
+total_size=15012734
+out_time_us=43496000
+out_time_ms=43496000
+out_time=00:00:43.496000
+dup_frames=0
+drop_frames=0
+speed=0.813x
+progress=continue
+frame=1231
+fps=22.80
+stream_0_0_q=41.0
+bitrate=2765.1kbits/s
+total_size=15194130
+out_time_us=43960000
+out_time_ms=43960000
+out_time=00:00:43.960000
+dup_frames=0
+drop_frames=0
+speed=0.814x
+progress=continue
+frame=1245
+fps=22.83
+stream_0_0_q=41.0
+bitrate=2770.1kbits/s
+total_size=15382372
+out_time_us=44424000
+out_time_ms=44424000
+out_time=00:00:44.424000
+dup_frames=0
+drop_frames=0
+speed=0.815x
+progress=continue
+frame=1260
+fps=22.89
+stream_0_0_q=41.0
+bitrate=2774.3kbits/s
+total_size=15574859
+out_time_us=44912000
+out_time_ms=44912000
+out_time=00:00:44.912000
+dup_frames=0
+drop_frames=0
+speed=0.816x
+progress=continue
+frame=1274
+fps=22.94
+stream_0_0_q=41.0
+bitrate=2791.3kbits/s
+total_size=15840485
+out_time_us=45400000
+out_time_ms=45400000
+out_time=00:00:45.400000
+dup_frames=0
+drop_frames=0
+speed=0.817x
+progress=continue
+frame=1289
+fps=22.98
+stream_0_0_q=41.0
+bitrate=2795.1kbits/s
+total_size=16032308
+out_time_us=45887000
+out_time_ms=45887000
+out_time=00:00:45.887000
+dup_frames=0
+drop_frames=0
+speed=0.818x
+progress=continue
+frame=1303
+fps=23.03
+stream_0_0_q=41.0
+bitrate=2798.2kbits/s
+total_size=16212729
+out_time_us=46352000
+out_time_ms=46352000
+out_time=00:00:46.352000
+dup_frames=0
+drop_frames=0
+speed=0.819x
+progress=continue
+frame=1317
+fps=23.06
+stream_0_0_q=41.0
+bitrate=2802.6kbits/s
+total_size=16400616
+out_time_us=46816000
+out_time_ms=46816000
+out_time=00:00:46.816000
+dup_frames=0
+drop_frames=0
+speed=0.82x
+progress=continue
+frame=1332
+fps=23.10
+stream_0_0_q=38.0
+bitrate=2820.9kbits/s
+total_size=16687879
+out_time_us=47327000
+out_time_ms=47327000
+out_time=00:00:47.327000
+dup_frames=0
+drop_frames=0
+speed=0.821x
+progress=continue
+frame=1348
+fps=23.16
+stream_0_0_q=41.0
+bitrate=2823.4kbits/s
+total_size=16891402
+out_time_us=47861000
+out_time_ms=47861000
+out_time=00:00:47.861000
+dup_frames=0
+drop_frames=0
+speed=0.822x
+progress=continue
+frame=1362
+fps=23.20
+stream_0_0_q=41.0
+bitrate=2827.4kbits/s
+total_size=17079123
+out_time_us=48325000
+out_time_ms=48325000
+out_time=00:00:48.325000
+dup_frames=0
+drop_frames=0
+speed=0.823x
+progress=continue
+frame=1376
+fps=23.23
+stream_0_0_q=41.0
+bitrate=2829.9kbits/s
+total_size=17258894
+out_time_us=48790000
+out_time_ms=48790000
+out_time=00:00:48.790000
+dup_frames=0
+drop_frames=0
+speed=0.824x
+progress=continue
+frame=1389
+fps=23.25
+stream_0_0_q=41.0
+bitrate=2833.1kbits/s
+total_size=17434772
+out_time_us=49231000
+out_time_ms=49231000
+out_time=00:00:49.231000
+dup_frames=0
+drop_frames=0
+speed=0.824x
+progress=continue
+frame=1401
+fps=23.24
+stream_0_0_q=41.0
+bitrate=2849.6kbits/s
+total_size=17677031
+out_time_us=49626000
+out_time_ms=49626000
+out_time=00:00:49.626000
+dup_frames=0
+drop_frames=0
+speed=0.823x
+progress=continue
+frame=1411
+fps=23.20
+stream_0_0_q=41.0
+bitrate=2852.3kbits/s
+total_size=17809325
+out_time_us=49951000
+out_time_ms=49951000
+out_time=00:00:49.951000
+dup_frames=0
+drop_frames=0
+speed=0.821x
+progress=continue
+frame=1423
+fps=23.21
+stream_0_0_q=41.0
+bitrate=2854.8kbits/s
+total_size=17965655
+out_time_us=50345000
+out_time_ms=50345000
+out_time=00:00:50.345000
+dup_frames=0
+drop_frames=0
+speed=0.821x
+progress=continue
+frame=1436
+fps=23.22
+stream_0_0_q=41.0
+bitrate=2856.3kbits/s
+total_size=18132576
+out_time_us=50787000
+out_time_ms=50787000
+out_time=00:00:50.787000
+dup_frames=0
+drop_frames=0
+speed=0.821x
+progress=continue
+frame=1450
+fps=23.26
+stream_0_0_q=40.0
+bitrate=2860.0kbits/s
+total_size=18322366
+out_time_us=51251000
+out_time_ms=51251000
+out_time=00:00:51.251000
+dup_frames=0
+drop_frames=0
+speed=0.822x
+progress=continue
+frame=1462
+fps=23.26
+stream_0_0_q=41.0
+bitrate=2873.7kbits/s
+total_size=18552119
+out_time_us=51646000
+out_time_ms=51646000
+out_time=00:00:51.646000
+dup_frames=0
+drop_frames=0
+speed=0.822x
+progress=continue
+frame=1477
+fps=23.31
+stream_0_0_q=41.0
+bitrate=2875.4kbits/s
+total_size=18746619
+out_time_us=52157000
+out_time_ms=52157000
+out_time=00:00:52.157000
+dup_frames=0
+drop_frames=0
+speed=0.823x
+progress=continue
+frame=1492
+fps=23.36
+stream_0_0_q=40.0
+bitrate=2877.8kbits/s
+total_size=18937510
+out_time_us=52644000
+out_time_ms=52644000
+out_time=00:00:52.644000
+dup_frames=0
+drop_frames=0
+speed=0.824x
+progress=continue
+frame=1507
+fps=23.41
+stream_0_0_q=40.0
+bitrate=2879.2kbits/s
+total_size=19130440
+out_time_us=53155000
+out_time_ms=53155000
+out_time=00:00:53.155000
+dup_frames=0
+drop_frames=0
+speed=0.826x
+progress=continue
+frame=1518
+fps=23.39
+stream_0_0_q=41.0
+bitrate=2893.2kbits/s
+total_size=19358355
+out_time_us=53527000
+out_time_ms=53527000
+out_time=00:00:53.527000
+dup_frames=0
+drop_frames=0
+speed=0.825x
+progress=continue
+frame=1532
+fps=23.42
+stream_0_0_q=40.0
+bitrate=2895.0kbits/s
+total_size=19537899
+out_time_us=53991000
+out_time_ms=53991000
+out_time=00:00:53.991000
+dup_frames=0
+drop_frames=0
+speed=0.825x
+progress=continue
+frame=1547
+fps=23.47
+stream_0_0_q=40.0
+bitrate=2897.3kbits/s
+total_size=19730343
+out_time_us=54479000
+out_time_ms=54479000
+out_time=00:00:54.479000
+dup_frames=0
+drop_frames=0
+speed=0.826x
+progress=continue
+frame=1562
+fps=23.51
+stream_0_0_q=40.0
+bitrate=2898.4kbits/s
+total_size=19922773
+out_time_us=54989000
+out_time_ms=54989000
+out_time=00:00:54.989000
+dup_frames=0
+drop_frames=0
+speed=0.828x
+progress=continue
+frame=1576
+fps=23.54
+stream_0_0_q=40.0
+bitrate=2913.6kbits/s
+total_size=20196210
+out_time_us=55454000
+out_time_ms=55454000
+out_time=00:00:55.454000
+dup_frames=0
+drop_frames=0
+speed=0.828x
+progress=continue
+frame=1589
+fps=23.54
+stream_0_0_q=40.0
+bitrate=2914.3kbits/s
+total_size=20362042
+out_time_us=55895000
+out_time_ms=55895000
+out_time=00:00:55.895000
+dup_frames=0
+drop_frames=0
+speed=0.828x
+progress=continue
+frame=1603
+fps=23.58
+stream_0_0_q=40.0
+bitrate=2916.6kbits/s
+total_size=20547104
+out_time_us=56359000
+out_time_ms=56359000
+out_time=00:00:56.359000
+dup_frames=0
+drop_frames=0
+speed=0.829x
+progress=continue
+frame=1617
+fps=23.60
+stream_0_0_q=40.0
+bitrate=2918.8kbits/s
+total_size=20731935
+out_time_us=56824000
+out_time_ms=56824000
+out_time=00:00:56.824000
+dup_frames=0
+drop_frames=0
+speed=0.829x
+progress=continue
+frame=1631
+fps=23.63
+stream_0_0_q=40.0
+bitrate=2921.5kbits/s
+total_size=20920517
+out_time_us=57288000
+out_time_ms=57288000
+out_time=00:00:57.288000
+dup_frames=0
+drop_frames=0
+speed=0.83x
+progress=continue
+frame=1645
+fps=23.66
+stream_0_0_q=40.0
+bitrate=2933.3kbits/s
+total_size=21176151
+out_time_us=57753000
+out_time_ms=57753000
+out_time=00:00:57.753000
+dup_frames=0
+drop_frames=0
+speed=0.831x
+progress=continue
+frame=1659
+fps=23.69
+stream_0_0_q=40.0
+bitrate=2934.4kbits/s
+total_size=21353894
+out_time_us=58217000
+out_time_ms=58217000
+out_time=00:00:58.217000
+dup_frames=0
+drop_frames=0
+speed=0.831x
+progress=continue
+frame=1673
+fps=23.71
+stream_0_0_q=40.0
+bitrate=2936.0kbits/s
+total_size=21536257
+out_time_us=58681000
+out_time_ms=58681000
+out_time=00:00:58.681000
+dup_frames=0
+drop_frames=0
+speed=0.832x
+progress=continue
+frame=1687
+fps=23.74
+stream_0_0_q=40.0
+bitrate=2938.8kbits/s
+total_size=21727254
+out_time_us=59146000
+out_time_ms=59146000
+out_time=00:00:59.146000
+dup_frames=0
+drop_frames=0
+speed=0.832x
+progress=continue
+frame=1701
+fps=23.77
+stream_0_0_q=40.0
+bitrate=2952.3kbits/s
+total_size=21998346
+out_time_us=59610000
+out_time_ms=59610000
+out_time=00:00:59.610000
+dup_frames=0
+drop_frames=0
+speed=0.833x
+progress=continue
+frame=1712
+fps=23.74
+stream_0_0_q=40.0
+bitrate=2953.5kbits/s
+total_size=22144781
+out_time_us=59982000
+out_time_ms=59982000
+out_time=00:00:59.982000
+dup_frames=0
+drop_frames=0
+speed=0.832x
+progress=continue
+frame=1725
+fps=23.75
+stream_0_0_q=40.0
+bitrate=2954.5kbits/s
+total_size=22314772
+out_time_us=60423000
+out_time_ms=60423000
+out_time=00:01:00.423000
+dup_frames=0
+drop_frames=0
+speed=0.832x
+progress=continue
+frame=1739
+fps=23.77
+stream_0_0_q=40.0
+bitrate=2955.6kbits/s
+total_size=22494778
+out_time_us=60887000
+out_time_ms=60887000
+out_time=00:01:00.887000
+dup_frames=0
+drop_frames=0
+speed=0.832x
+progress=continue
+frame=1752
+fps=23.77
+stream_0_0_q=37.0
+bitrate=2968.6kbits/s
+total_size=22757943
+out_time_us=61329000
+out_time_ms=61329000
+out_time=00:01:01.329000
+dup_frames=0
+drop_frames=0
+speed=0.832x
+progress=continue
+frame=1767
+fps=23.81
+stream_0_0_q=40.0
+bitrate=2968.9kbits/s
+total_size=22940611
+out_time_us=61816000
+out_time_ms=61816000
+out_time=00:01:01.816000
+dup_frames=0
+drop_frames=0
+speed=0.833x
+progress=continue
+frame=1781
+fps=23.83
+stream_0_0_q=40.0
+bitrate=2969.1kbits/s
+total_size=23115143
+out_time_us=62281000
+out_time_ms=62281000
+out_time=00:01:02.281000
+dup_frames=0
+drop_frames=0
+speed=0.833x
+progress=continue
+frame=1796
+fps=23.87
+stream_0_0_q=40.0
+bitrate=2968.2kbits/s
+total_size=23296677
+out_time_us=62791000
+out_time_ms=62791000
+out_time=00:01:02.791000
+dup_frames=0
+drop_frames=0
+speed=0.834x
+progress=continue
+frame=1809
+fps=23.87
+stream_0_0_q=40.0
+bitrate=2969.0kbits/s
+total_size=23467538
+out_time_us=63233000
+out_time_ms=63233000
+out_time=00:01:03.233000
+dup_frames=0
+drop_frames=0
+speed=0.834x
+progress=continue
+frame=1824
+fps=23.90
+stream_0_0_q=40.0
+bitrate=2978.0kbits/s
+total_size=23720095
+out_time_us=63720000
+out_time_ms=63720000
+out_time=00:01:03.720000
+dup_frames=0
+drop_frames=0
+speed=0.835x
+progress=continue
+frame=1838
+fps=23.92
+stream_0_0_q=40.0
+bitrate=2976.5kbits/s
+total_size=23880716
+out_time_us=64185000
+out_time_ms=64185000
+out_time=00:01:04.185000
+dup_frames=0
+drop_frames=0
+speed=0.835x
+progress=continue
+frame=1853
+fps=23.95
+stream_0_0_q=40.0
+bitrate=2975.6kbits/s
+total_size=24063181
+out_time_us=64695000
+out_time_ms=64695000
+out_time=00:01:04.695000
+dup_frames=0
+drop_frames=0
+speed=0.836x
+progress=continue
+frame=1869
+fps=23.99
+stream_0_0_q=40.0
+bitrate=2974.6kbits/s
+total_size=24254000
+out_time_us=65229000
+out_time_ms=65229000
+out_time=00:01:05.229000
+dup_frames=0
+drop_frames=0
+speed=0.837x
+progress=continue
+frame=1884
+fps=24.03
+stream_0_0_q=40.0
+bitrate=2984.4kbits/s
+total_size=24515351
+out_time_us=65717000
+out_time_ms=65717000
+out_time=00:01:05.717000
+dup_frames=0
+drop_frames=0
+speed=0.838x
+progress=continue
+frame=1899
+fps=24.06
+stream_0_0_q=40.0
+bitrate=2983.6kbits/s
+total_size=24699456
+out_time_us=66228000
+out_time_ms=66228000
+out_time=00:01:06.228000
+dup_frames=0
+drop_frames=0
+speed=0.839x
+progress=continue
+frame=1914
+fps=24.10
+stream_0_0_q=40.0
+bitrate=2983.7kbits/s
+total_size=24882387
+out_time_us=66716000
+out_time_ms=66716000
+out_time=00:01:06.716000
+dup_frames=0
+drop_frames=0
+speed=0.84x
+progress=continue
+frame=1929
+fps=24.12
+stream_0_0_q=40.0
+bitrate=2985.6kbits/s
+total_size=25088433
+out_time_us=67226000
+out_time_ms=67226000
+out_time=00:01:07.226000
+dup_frames=0
+drop_frames=0
+speed=0.841x
+progress=continue
+frame=1943
+fps=24.14
+stream_0_0_q=40.0
+bitrate=2994.5kbits/s
+total_size=25337678
+out_time_us=67691000
+out_time_ms=67691000
+out_time=00:01:07.691000
+dup_frames=0
+drop_frames=0
+speed=0.841x
+progress=continue
+frame=1954
+fps=24.12
+stream_0_0_q=40.0
+bitrate=2993.8kbits/s
+total_size=25470227
+out_time_us=68062000
+out_time_ms=68062000
+out_time=00:01:08.062000
+dup_frames=0
+drop_frames=0
+speed=0.84x
+progress=continue
+frame=1965
+fps=24.10
+stream_0_0_q=40.0
+bitrate=2995.1kbits/s
+total_size=25612019
+out_time_us=68411000
+out_time_ms=68411000
+out_time=00:01:08.411000
+dup_frames=0
+drop_frames=0
+speed=0.839x
+progress=continue
+frame=1980
+fps=24.14
+stream_0_0_q=40.0
+bitrate=2994.5kbits/s
+total_size=25797601
+out_time_us=68921000
+out_time_ms=68921000
+out_time=00:01:08.921000
+dup_frames=0
+drop_frames=0
+speed=0.84x
+progress=continue
+frame=1995
+fps=24.17
+stream_0_0_q=40.0
+bitrate=3003.8kbits/s
+total_size=26069683
+out_time_us=69432000
+out_time_ms=69432000
+out_time=00:01:09.432000
+dup_frames=0
+drop_frames=0
+speed=0.841x
+progress=continue
+frame=2009
+fps=24.19
+stream_0_0_q=40.0
+bitrate=3002.9kbits/s
+total_size=26237076
+out_time_us=69897000
+out_time_ms=69897000
+out_time=00:01:09.897000
+dup_frames=0
+drop_frames=0
+speed=0.842x
+progress=continue
+frame=2025
+fps=24.23
+stream_0_0_q=40.0
+bitrate=3001.9kbits/s
+total_size=26428711
+out_time_us=70431000
+out_time_ms=70431000
+out_time=00:01:10.431000
+dup_frames=0
+drop_frames=0
+speed=0.843x
+progress=continue
+frame=2040
+fps=24.27
+stream_0_0_q=39.0
+bitrate=3001.8kbits/s
+total_size=26610507
+out_time_us=70918000
+out_time_ms=70918000
+out_time=00:01:10.918000
+dup_frames=0
+drop_frames=0
+speed=0.844x
+progress=continue
+frame=2055
+fps=24.30
+stream_0_0_q=40.0
+bitrate=3010.9kbits/s
+total_size=26883538
+out_time_us=71429000
+out_time_ms=71429000
+out_time=00:01:11.429000
+dup_frames=0
+drop_frames=0
+speed=0.845x
+progress=continue
+frame=2071
+fps=24.34
+stream_0_0_q=39.0
+bitrate=3009.9kbits/s
+total_size=27075142
+out_time_us=71963000
+out_time_ms=71963000
+out_time=00:01:11.963000
+dup_frames=0
+drop_frames=0
+speed=0.846x
+progress=continue
+frame=2086
+fps=24.37
+stream_0_0_q=39.0
+bitrate=3009.8kbits/s
+total_size=27258308
+out_time_us=72451000
+out_time_ms=72451000
+out_time=00:01:12.451000
+dup_frames=0
+drop_frames=0
+speed=0.847x
+progress=continue
+frame=2102
+fps=24.41
+stream_0_0_q=39.0
+bitrate=3009.5kbits/s
+total_size=27456283
+out_time_us=72985000
+out_time_ms=72985000
+out_time=00:01:12.985000
+dup_frames=0
+drop_frames=0
+speed=0.848x
+progress=continue
+frame=2116
+fps=24.43
+stream_0_0_q=39.0
+bitrate=3020.0kbits/s
+total_size=27727209
+out_time_us=73449000
+out_time_ms=73449000
+out_time=00:01:13.449000
+dup_frames=0
+drop_frames=0
+speed=0.848x
+progress=continue
+frame=2131
+fps=24.46
+stream_0_0_q=39.0
+bitrate=3019.3kbits/s
+total_size=27913508
+out_time_us=73960000
+out_time_ms=73960000
+out_time=00:01:13.960000
+dup_frames=0
+drop_frames=0
+speed=0.849x
+progress=continue
+frame=2147
+fps=24.50
+stream_0_0_q=39.0
+bitrate=3019.2kbits/s
+total_size=28113765
+out_time_us=74494000
+out_time_ms=74494000
+out_time=00:01:14.494000
+dup_frames=0
+drop_frames=0
+speed=0.85x
+progress=continue
+frame=2162
+fps=24.52
+stream_0_0_q=39.0
+bitrate=3019.2kbits/s
+total_size=28297934
+out_time_us=74982000
+out_time_ms=74982000
+out_time=00:01:14.982000
+dup_frames=0
+drop_frames=0
+speed=0.85x
+progress=continue
+frame=2177
+fps=24.55
+stream_0_0_q=39.0
+bitrate=3029.0kbits/s
+total_size=28583572
+out_time_us=75493000
+out_time_ms=75493000
+out_time=00:01:15.493000
+dup_frames=0
+drop_frames=0
+speed=0.851x
+progress=continue
+frame=2193
+fps=24.59
+stream_0_0_q=39.0
+bitrate=3028.3kbits/s
+total_size=28778922
+out_time_us=76027000
+out_time_ms=76027000
+out_time=00:01:16.027000
+dup_frames=0
+drop_frames=0
+speed=0.852x
+progress=continue
+frame=2206
+fps=24.58
+stream_0_0_q=39.0
+bitrate=3029.3kbits/s
+total_size=28946799
+out_time_us=76445000
+out_time_ms=76445000
+out_time=00:01:16.445000
+dup_frames=0
+drop_frames=0
+speed=0.852x
+progress=continue
+frame=2221
+fps=24.61
+stream_0_0_q=39.0
+bitrate=3028.1kbits/s
+total_size=29128579
+out_time_us=76956000
+out_time_ms=76956000
+out_time=00:01:16.956000
+dup_frames=0
+drop_frames=0
+speed=0.853x
+progress=continue
+frame=2235
+fps=24.63
+stream_0_0_q=39.0
+bitrate=3037.1kbits/s
+total_size=29391329
+out_time_us=77420000
+out_time_ms=77420000
+out_time=00:01:17.420000
+dup_frames=0
+drop_frames=0
+speed=0.853x
+progress=continue
+frame=2251
+fps=24.66
+stream_0_0_q=39.0
+bitrate=3035.9kbits/s
+total_size=29582768
+out_time_us=77954000
+out_time_ms=77954000
+out_time=00:01:17.954000
+dup_frames=0
+drop_frames=0
+speed=0.854x
+progress=continue
+frame=2266
+fps=24.68
+stream_0_0_q=39.0
+bitrate=3035.0kbits/s
+total_size=29767981
+out_time_us=78465000
+out_time_ms=78465000
+out_time=00:01:18.465000
+dup_frames=0
+drop_frames=0
+speed=0.855x
+progress=continue
+frame=2281
+fps=24.71
+stream_0_0_q=39.0
+bitrate=3034.7kbits/s
+total_size=29949724
+out_time_us=78952000
+out_time_ms=78952000
+out_time=00:01:18.952000
+dup_frames=0
+drop_frames=0
+speed=0.855x
+progress=continue
+frame=2296
+fps=24.73
+stream_0_0_q=39.0
+bitrate=3043.4kbits/s
+total_size=30229754
+out_time_us=79463000
+out_time_ms=79463000
+out_time=00:01:19.463000
+dup_frames=0
+drop_frames=0
+speed=0.856x
+progress=continue
+frame=2310
+fps=24.75
+stream_0_0_q=39.0
+bitrate=3041.4kbits/s
+total_size=30386388
+out_time_us=79928000
+out_time_ms=79928000
+out_time=00:01:19.928000
+dup_frames=0
+drop_frames=0
+speed=0.856x
+progress=continue
+frame=2325
+fps=24.77
+stream_0_0_q=39.0
+bitrate=3041.4kbits/s
+total_size=30571634
+out_time_us=80415000
+out_time_ms=80415000
+out_time=00:01:20.415000
+dup_frames=0
+drop_frames=0
+speed=0.857x
+progress=continue
+frame=2341
+fps=24.80
+stream_0_0_q=39.0
+bitrate=3039.9kbits/s
+total_size=30759486
+out_time_us=80949000
+out_time_ms=80949000
+out_time=00:01:20.949000
+dup_frames=0
+drop_frames=0
+speed=0.858x
+progress=continue
+frame=2352
+fps=24.77
+stream_0_0_q=36.0
+bitrate=3048.7kbits/s
+total_size=30990437
+out_time_us=81321000
+out_time_ms=81321000
+out_time=00:01:21.321000
+dup_frames=0
+drop_frames=0
+speed=0.856x
+progress=continue
+frame=2365
+fps=24.77
+stream_0_0_q=39.0
+bitrate=3046.7kbits/s
+total_size=31138221
+out_time_us=81762000
+out_time_ms=81762000
+out_time=00:01:21.762000
+dup_frames=0
+drop_frames=0
+speed=0.856x
+progress=continue
+frame=2379
+fps=24.78
+stream_0_0_q=39.0
+bitrate=3045.6kbits/s
+total_size=31303884
+out_time_us=82226000
+out_time_ms=82226000
+out_time=00:01:22.226000
+dup_frames=0
+drop_frames=0
+speed=0.856x
+progress=continue
+frame=2391
+fps=24.77
+stream_0_0_q=39.0
+bitrate=3045.1kbits/s
+total_size=31448719
+out_time_us=82621000
+out_time_ms=82621000
+out_time=00:01:22.621000
+dup_frames=0
+drop_frames=0
+speed=0.856x
+progress=continue
+frame=2404
+fps=24.77
+stream_0_0_q=39.0
+bitrate=3044.6kbits/s
+total_size=31610877
+out_time_us=83062000
+out_time_ms=83062000
+out_time=00:01:23.062000
+dup_frames=0
+drop_frames=0
+speed=0.856x
+progress=continue
+frame=2418
+fps=24.79
+stream_0_0_q=39.0
+bitrate=3051.7kbits/s
+total_size=31862142
+out_time_us=83527000
+out_time_ms=83527000
+out_time=00:01:23.527000
+dup_frames=0
+drop_frames=0
+speed=0.856x
+progress=continue
+frame=2432
+fps=24.80
+stream_0_0_q=39.0
+bitrate=3052.1kbits/s
+total_size=32043352
+out_time_us=83991000
+out_time_ms=83991000
+out_time=00:01:23.991000
+dup_frames=0
+drop_frames=0
+speed=0.856x
+progress=continue
+frame=2446
+fps=24.81
+stream_0_0_q=39.0
+bitrate=3051.8kbits/s
+total_size=32217517
+out_time_us=84456000
+out_time_ms=84456000
+out_time=00:01:24.456000
+dup_frames=0
+drop_frames=0
+speed=0.857x
+progress=continue
+frame=2460
+fps=24.83
+stream_0_0_q=39.0
+bitrate=3052.9kbits/s
+total_size=32406433
+out_time_us=84920000
+out_time_ms=84920000
+out_time=00:01:24.920000
+dup_frames=0
+drop_frames=0
+speed=0.857x
+progress=continue
+frame=2473
+fps=24.83
+stream_0_0_q=39.0
+bitrate=3061.5kbits/s
+total_size=32666142
+out_time_us=85361000
+out_time_ms=85361000
+out_time=00:01:25.361000
+dup_frames=0
+drop_frames=0
+speed=0.857x
+progress=continue
+frame=2487
+fps=24.84
+stream_0_0_q=39.0
+bitrate=3061.0kbits/s
+total_size=32839336
+out_time_us=85826000
+out_time_ms=85826000
+out_time=00:01:25.826000
+dup_frames=0
+drop_frames=0
+speed=0.857x
+progress=continue
+frame=2502
+fps=24.86
+stream_0_0_q=39.0
+bitrate=3060.6kbits/s
+total_size=33021324
+out_time_us=86313000
+out_time_ms=86313000
+out_time=00:01:26.313000
+dup_frames=0
+drop_frames=0
+speed=0.858x
+progress=continue
+frame=2515
+fps=24.86
+stream_0_0_q=39.0
+bitrate=3060.2kbits/s
+total_size=33185286
+out_time_us=86754000
+out_time_ms=86754000
+out_time=00:01:26.754000
+dup_frames=0
+drop_frames=0
+speed=0.857x
+progress=continue
+frame=2526
+fps=24.83
+stream_0_0_q=39.0
+bitrate=3059.7kbits/s
+total_size=33321900
+out_time_us=87126000
+out_time_ms=87126000
+out_time=00:01:27.126000
+dup_frames=0
+drop_frames=0
+speed=0.857x
+progress=continue
+frame=2537
+fps=24.80
+stream_0_0_q=39.0
+bitrate=3066.7kbits/s
+total_size=33541360
+out_time_us=87497000
+out_time_ms=87497000
+out_time=00:01:27.497000
+dup_frames=0
+drop_frames=0
+speed=0.855x
+progress=continue
+frame=2552
+fps=24.83
+stream_0_0_q=39.0
+bitrate=3066.3kbits/s
+total_size=33724004
+out_time_us=87985000
+out_time_ms=87985000
+out_time=00:01:27.985000
+dup_frames=0
+drop_frames=0
+speed=0.856x
+progress=continue
+frame=2568
+fps=24.86
+stream_0_0_q=39.0
+bitrate=3065.2kbits/s
+total_size=33916341
+out_time_us=88519000
+out_time_ms=88519000
+out_time=00:01:28.519000
+dup_frames=0
+drop_frames=0
+speed=0.857x
+progress=continue
+frame=2583
+fps=24.88
+stream_0_0_q=39.0
+bitrate=3063.1kbits/s
+total_size=34088043
+out_time_us=89030000
+out_time_ms=89030000
+out_time=00:01:29.030000
+dup_frames=0
+drop_frames=0
+speed=0.857x
+progress=continue
+frame=2598
+fps=24.90
+stream_0_0_q=39.0
+bitrate=3070.1kbits/s
+total_size=34354172
+out_time_us=89518000
+out_time_ms=89518000
+out_time=00:01:29.518000
+dup_frames=0
+drop_frames=0
+speed=0.858x
+progress=continue
+frame=2613
+fps=24.92
+stream_0_0_q=39.0
+bitrate=3068.7kbits/s
+total_size=34534132
+out_time_us=90028000
+out_time_ms=90028000
+out_time=00:01:30.028000
+dup_frames=0
+drop_frames=0
+speed=0.859x
+progress=continue
+frame=2628
+fps=24.95
+stream_0_0_q=39.0
+bitrate=3068.4kbits/s
+total_size=34717089
+out_time_us=90516000
+out_time_ms=90516000
+out_time=00:01:30.516000
+dup_frames=0
+drop_frames=0
+speed=0.859x
+progress=continue
+frame=2643
+fps=24.97
+stream_0_0_q=39.0
+bitrate=3067.0kbits/s
+total_size=34897240
+out_time_us=91027000
+out_time_ms=91027000
+out_time=00:01:31.027000
+dup_frames=0
+drop_frames=0
+speed=0.86x
+progress=continue
+frame=2658
+fps=24.99
+stream_0_0_q=39.0
+bitrate=3073.5kbits/s
+total_size=35168082
+out_time_us=91538000
+out_time_ms=91538000
+out_time=00:01:31.538000
+dup_frames=0
+drop_frames=0
+speed=0.861x
+progress=continue
+frame=2672
+fps=25.00
+stream_0_0_q=39.0
+bitrate=3074.0kbits/s
+total_size=35342444
+out_time_us=91979000
+out_time_ms=91979000
+out_time=00:01:31.979000
+dup_frames=0
+drop_frames=0
+speed=0.86x
+progress=continue
+frame=2687
+fps=25.02
+stream_0_0_q=39.0
+bitrate=3072.6kbits/s
+total_size=35523099
+out_time_us=92490000
+out_time_ms=92490000
+out_time=00:01:32.490000
+dup_frames=0
+drop_frames=0
+speed=0.861x
+progress=continue
+frame=2702
+fps=25.03
+stream_0_0_q=38.0
+bitrate=3072.5kbits/s
+total_size=35709172
+out_time_us=92977000
+out_time_ms=92977000
+out_time=00:01:32.977000
+dup_frames=0
+drop_frames=0
+speed=0.861x
+progress=continue
+frame=2715
+fps=25.03
+stream_0_0_q=39.0
+bitrate=3079.2kbits/s
+total_size=35956716
+out_time_us=93419000
+out_time_ms=93419000
+out_time=00:01:33.419000
+dup_frames=0
+drop_frames=0
+speed=0.861x
+progress=continue
+frame=2730
+fps=25.05
+stream_0_0_q=39.0
+bitrate=3077.6kbits/s
+total_size=36133954
+out_time_us=93929000
+out_time_ms=93929000
+out_time=00:01:33.929000
+dup_frames=0
+drop_frames=0
+speed=0.862x
+progress=continue
+frame=2744
+fps=25.06
+stream_0_0_q=38.0
+bitrate=3077.0kbits/s
+total_size=36306164
+out_time_us=94394000
+out_time_ms=94394000
+out_time=00:01:34.394000
+dup_frames=0
+drop_frames=0
+speed=0.862x
+progress=continue
+frame=2755
+fps=25.04
+stream_0_0_q=38.0
+bitrate=3076.7kbits/s
+total_size=36445516
+out_time_us=94765000
+out_time_ms=94765000
+out_time=00:01:34.765000
+dup_frames=0
+drop_frames=0
+speed=0.861x
+progress=continue
+frame=2769
+fps=25.06
+stream_0_0_q=38.0
+bitrate=3076.0kbits/s
+total_size=36616226
+out_time_us=95230000
+out_time_ms=95230000
+out_time=00:01:35.230000
+dup_frames=0
+drop_frames=0
+speed=0.862x
+progress=continue
+frame=2783
+fps=25.07
+stream_0_0_q=39.0
+bitrate=3082.9kbits/s
+total_size=36877147
+out_time_us=95694000
+out_time_ms=95694000
+out_time=00:01:35.694000
+dup_frames=0
+drop_frames=0
+speed=0.862x
+progress=continue
+frame=2797
+fps=25.08
+stream_0_0_q=38.0
+bitrate=3081.8kbits/s
+total_size=37042858
+out_time_us=96158000
+out_time_ms=96158000
+out_time=00:01:36.158000
+dup_frames=0
+drop_frames=0
+speed=0.862x
+progress=continue
+frame=2811
+fps=25.08
+stream_0_0_q=38.0
+bitrate=3080.4kbits/s
+total_size=37204602
+out_time_us=96623000
+out_time_ms=96623000
+out_time=00:01:36.623000
+dup_frames=0
+drop_frames=0
+speed=0.862x
+progress=continue
+frame=2828
+fps=25.12
+stream_0_0_q=38.0
+bitrate=3078.9kbits/s
+total_size=37401470
+out_time_us=97180000
+out_time_ms=97180000
+out_time=00:01:37.180000
+dup_frames=0
+drop_frames=0
+speed=0.863x
+progress=continue
+frame=2843
+fps=25.14
+stream_0_0_q=38.0
+bitrate=3083.7kbits/s
+total_size=37656395
+out_time_us=97691000
+out_time_ms=97691000
+out_time=00:01:37.691000
+dup_frames=0
+drop_frames=0
+speed=0.864x
+progress=continue
+frame=2860
+fps=25.17
+stream_0_0_q=38.0
+bitrate=3081.7kbits/s
+total_size=37846561
+out_time_us=98248000
+out_time_ms=98248000
+out_time=00:01:38.248000
+dup_frames=0
+drop_frames=0
+speed=0.865x
+progress=continue
+frame=2877
+fps=25.20
+stream_0_0_q=38.0
+bitrate=3078.7kbits/s
+total_size=38033683
+out_time_us=98829000
+out_time_ms=98829000
+out_time=00:01:38.829000
+dup_frames=0
+drop_frames=0
+speed=0.866x
+progress=continue
+frame=2892
+fps=25.22
+stream_0_0_q=35.0
+bitrate=3085.6kbits/s
+total_size=38306549
+out_time_us=99316000
+out_time_ms=99316000
+out_time=00:01:39.316000
+dup_frames=0
+drop_frames=0
+speed=0.866x
+progress=continue
+frame=2908
+fps=25.25
+stream_0_0_q=38.0
+bitrate=3083.3kbits/s
+total_size=38483488
+out_time_us=99850000
+out_time_ms=99850000
+out_time=00:01:39.850000
+dup_frames=0
+drop_frames=0
+speed=0.867x
+progress=continue
+frame=2924
+fps=25.27
+stream_0_0_q=38.0
+bitrate=3083.3kbits/s
+total_size=38688950
+out_time_us=100384000
+out_time_ms=100384000
+out_time=00:01:40.384000
+dup_frames=0
+drop_frames=0
+speed=0.868x
+progress=continue
+frame=2938
+fps=25.29
+stream_0_0_q=38.0
+bitrate=3082.5kbits/s
+total_size=38858970
+out_time_us=100849000
+out_time_ms=100849000
+out_time=00:01:40.849000
+dup_frames=0
+drop_frames=0
+speed=0.868x
+progress=continue
+frame=2953
+fps=25.30
+stream_0_0_q=38.0
+bitrate=3088.6kbits/s
+total_size=39132377
+out_time_us=101360000
+out_time_ms=101360000
+out_time=00:01:41.360000
+dup_frames=0
+drop_frames=0
+speed=0.868x
+progress=continue
+frame=2969
+fps=25.32
+stream_0_0_q=38.0
+bitrate=3087.6kbits/s
+total_size=39326389
+out_time_us=101894000
+out_time_ms=101894000
+out_time=00:01:41.894000
+dup_frames=0
+drop_frames=0
+speed=0.869x
+progress=continue
+frame=2984
+fps=25.34
+stream_0_0_q=38.0
+bitrate=3088.0kbits/s
+total_size=39519090
+out_time_us=102381000
+out_time_ms=102381000
+out_time=00:01:42.381000
+dup_frames=0
+drop_frames=0
+speed=0.869x
+progress=continue
+frame=3001
+fps=25.37
+stream_0_0_q=38.0
+bitrate=3086.5kbits/s
+total_size=39724439
+out_time_us=102962000
+out_time_ms=102962000
+out_time=00:01:42.962000
+dup_frames=0
+drop_frames=0
+speed=0.87x
+progress=continue
+frame=3016
+fps=25.38
+stream_0_0_q=38.0
+bitrate=3094.2kbits/s
+total_size=40011267
+out_time_us=103450000
+out_time_ms=103450000
+out_time=00:01:43.450000
+dup_frames=0
+drop_frames=0
+speed=0.871x
+progress=continue
+frame=3031
+fps=25.40
+stream_0_0_q=38.0
+bitrate=3092.8kbits/s
+total_size=40191212
+out_time_us=103960000
+out_time_ms=103960000
+out_time=00:01:43.960000
+dup_frames=0
+drop_frames=0
+speed=0.871x
+progress=continue
+frame=3045
+fps=25.41
+stream_0_0_q=38.0
+bitrate=3092.0kbits/s
+total_size=40360368
+out_time_us=104425000
+out_time_ms=104425000
+out_time=00:01:44.425000
+dup_frames=0
+drop_frames=0
+speed=0.871x
+progress=continue
+frame=3057
+fps=25.40
+stream_0_0_q=38.0
+bitrate=3091.5kbits/s
+total_size=40506639
+out_time_us=104820000
+out_time_ms=104820000
+out_time=00:01:44.820000
+dup_frames=0
+drop_frames=0
+speed=0.871x
+progress=continue
+frame=3068
+fps=25.38
+stream_0_0_q=38.0
+bitrate=3091.0kbits/s
+total_size=40643476
+out_time_us=105191000
+out_time_ms=105191000
+out_time=00:01:45.191000
+dup_frames=0
+drop_frames=0
+speed=0.87x
+progress=continue
+frame=3082
+fps=25.39
+stream_0_0_q=38.0
+bitrate=3096.4kbits/s
+total_size=40894342
+out_time_us=105655000
+out_time_ms=105655000
+out_time=00:01:45.655000
+dup_frames=0
+drop_frames=0
+speed=0.87x
+progress=continue
+frame=3093
+fps=25.37
+stream_0_0_q=38.0
+bitrate=3095.4kbits/s
+total_size=41024225
+out_time_us=106027000
+out_time_ms=106027000
+out_time=00:01:46.027000
+dup_frames=0
+drop_frames=0
+speed=0.87x
+progress=continue
+frame=3104
+fps=25.36
+stream_0_0_q=38.0
+bitrate=3094.4kbits/s
+total_size=41154101
+out_time_us=106398000
+out_time_ms=106398000
+out_time=00:01:46.398000
+dup_frames=0
+drop_frames=0
+speed=0.869x
+progress=continue
+frame=3119
+fps=25.37
+stream_0_0_q=38.0
+bitrate=3092.3kbits/s
+total_size=41315867
+out_time_us=106886000
+out_time_ms=106886000
+out_time=00:01:46.886000
+dup_frames=0
+drop_frames=0
+speed=0.869x
+progress=continue
+frame=3135
+fps=25.40
+stream_0_0_q=38.0
+bitrate=3098.2kbits/s
+total_size=41592433
+out_time_us=107397000
+out_time_ms=107397000
+out_time=00:01:47.397000
+dup_frames=0
+drop_frames=0
+speed=0.87x
+progress=continue
+frame=3151
+fps=25.42
+stream_0_0_q=38.0
+bitrate=3095.4kbits/s
+total_size=41770172
+out_time_us=107954000
+out_time_ms=107954000
+out_time=00:01:47.954000
+dup_frames=0
+drop_frames=0
+speed=0.871x
+progress=continue
+frame=3166
+fps=25.43
+stream_0_0_q=38.0
+bitrate=3093.7kbits/s
+total_size=41944618
+out_time_us=108465000
+out_time_ms=108465000
+out_time=00:01:48.465000
+dup_frames=0
+drop_frames=0
+speed=0.871x
+progress=continue
+frame=3180
+fps=25.44
+stream_0_0_q=37.0
+bitrate=3092.3kbits/s
+total_size=42105404
+out_time_us=108929000
+out_time_ms=108929000
+out_time=00:01:48.929000
+dup_frames=0
+drop_frames=0
+speed=0.871x
+progress=continue
+frame=3195
+fps=25.45
+stream_0_0_q=38.0
+bitrate=3098.6kbits/s
+total_size=42380228
+out_time_us=109417000
+out_time_ms=109417000
+out_time=00:01:49.417000
+dup_frames=0
+drop_frames=0
+speed=0.872x
+progress=continue
+frame=3211
+fps=25.47
+stream_0_0_q=37.0
+bitrate=3097.5kbits/s
+total_size=42571249
+out_time_us=109951000
+out_time_ms=109951000
+out_time=00:01:49.951000
+dup_frames=0
+drop_frames=0
+speed=0.872x
+progress=continue
+frame=3226
+fps=25.49
+stream_0_0_q=37.0
+bitrate=3096.7kbits/s
+total_size=42758408
+out_time_us=110462000
+out_time_ms=110462000
+out_time=00:01:50.462000
+dup_frames=0
+drop_frames=0
+speed=0.873x
+progress=continue
+frame=3241
+fps=25.51
+stream_0_0_q=37.0
+bitrate=3095.8kbits/s
+total_size=42934397
+out_time_us=110950000
+out_time_ms=110950000
+out_time=00:01:50.950000
+dup_frames=0
+drop_frames=0
+speed=0.873x
+progress=continue
+frame=3254
+fps=25.50
+stream_0_0_q=38.0
+bitrate=3101.4kbits/s
+total_size=43183519
+out_time_us=111391000
+out_time_ms=111391000
+out_time=00:01:51.391000
+dup_frames=0
+drop_frames=0
+speed=0.873x
+progress=continue
+frame=3270
+fps=25.53
+stream_0_0_q=37.0
+bitrate=3100.9kbits/s
+total_size=43384208
+out_time_us=111925000
+out_time_ms=111925000
+out_time=00:01:51.925000
+dup_frames=0
+drop_frames=0
+speed=0.874x
+progress=continue
+frame=3285
+fps=25.54
+stream_0_0_q=37.0
+bitrate=3100.0kbits/s
+total_size=43560206
+out_time_us=112412000
+out_time_ms=112412000
+out_time=00:01:52.412000
+dup_frames=0
+drop_frames=0
+speed=0.874x
+progress=continue
+frame=3301
+fps=25.56
+stream_0_0_q=37.0
+bitrate=3098.7kbits/s
+total_size=43748578
+out_time_us=112946000
+out_time_ms=112946000
+out_time=00:01:52.946000
+dup_frames=0
+drop_frames=0
+speed=0.875x
+progress=continue
+frame=3316
+fps=25.58
+stream_0_0_q=37.0
+bitrate=3104.7kbits/s
+total_size=44031048
+out_time_us=113457000
+out_time_ms=113457000
+out_time=00:01:53.457000
+dup_frames=0
+drop_frames=0
+speed=0.875x
+progress=continue
+frame=3332
+fps=25.60
+stream_0_0_q=37.0
+bitrate=3101.8kbits/s
+total_size=44196878
+out_time_us=113991000
+out_time_ms=113991000
+out_time=00:01:53.991000
+dup_frames=0
+drop_frames=0
+speed=0.876x
+progress=continue
+frame=3347
+fps=25.61
+stream_0_0_q=37.0
+bitrate=3100.6kbits/s
+total_size=44368488
+out_time_us=114479000
+out_time_ms=114479000
+out_time=00:01:54.479000
+dup_frames=0
+drop_frames=0
+speed=0.876x
+progress=continue
+frame=3363
+fps=25.63
+stream_0_0_q=37.0
+bitrate=3098.1kbits/s
+total_size=44539931
+out_time_us=115013000
+out_time_ms=115013000
+out_time=00:01:55.013000
+dup_frames=0
+drop_frames=0
+speed=0.877x
+progress=continue
+frame=3379
+fps=25.66
+stream_0_0_q=37.0
+bitrate=3102.3kbits/s
+total_size=44808322
+out_time_us=115547000
+out_time_ms=115547000
+out_time=00:01:55.547000
+dup_frames=0
+drop_frames=0
+speed=0.877x
+progress=continue
+frame=3395
+fps=25.68
+stream_0_0_q=37.0
+bitrate=3099.7kbits/s
+total_size=44976408
+out_time_us=116081000
+out_time_ms=116081000
+out_time=00:01:56.081000
+dup_frames=0
+drop_frames=0
+speed=0.878x
+progress=continue
+frame=3411
+fps=25.70
+stream_0_0_q=37.0
+bitrate=3097.2kbits/s
+total_size=45146871
+out_time_us=116615000
+out_time_ms=116615000
+out_time=00:01:56.615000
+dup_frames=0
+drop_frames=0
+speed=0.879x
+progress=continue
+frame=3427
+fps=25.72
+stream_0_0_q=37.0
+bitrate=3094.9kbits/s
+total_size=45320558
+out_time_us=117149000
+out_time_ms=117149000
+out_time=00:01:57.149000
+dup_frames=0
+drop_frames=0
+speed=0.879x
+progress=continue
+frame=3443
+fps=25.74
+stream_0_0_q=37.0
+bitrate=3099.7kbits/s
+total_size=45597999
+out_time_us=117683000
+out_time_ms=117683000
+out_time=00:01:57.683000
+dup_frames=0
+drop_frames=0
+speed=0.88x
+progress=continue
+frame=3459
+fps=25.76
+stream_0_0_q=37.0
+bitrate=3097.7kbits/s
+total_size=45774927
+out_time_us=118217000
+out_time_ms=118217000
+out_time=00:01:58.217000
+dup_frames=0
+drop_frames=0
+speed=0.88x
+progress=continue
+frame=3474
+fps=25.78
+stream_0_0_q=36.0
+bitrate=3096.4kbits/s
+total_size=45954013
+out_time_us=118728000
+out_time_ms=118728000
+out_time=00:01:58.728000
+dup_frames=0
+drop_frames=0
+speed=0.881x
+progress=continue
+frame=3490
+fps=25.80
+stream_0_0_q=36.0
+bitrate=3094.5kbits/s
+total_size=46132404
+out_time_us=119262000
+out_time_ms=119262000
+out_time=00:01:59.262000
+dup_frames=0
+drop_frames=0
+speed=0.881x
+progress=continue
+frame=3505
+fps=25.80
+stream_0_0_q=36.0
+bitrate=3099.7kbits/s
+total_size=46398150
+out_time_us=119750000
+out_time_ms=119750000
+out_time=00:01:59.750000
+dup_frames=0
+drop_frames=0
+speed=0.882x
+progress=continue
+
+--- tail -n 200 /root/bwb_services.log ---
+2025-10-05 22:26:56 [youtube_fallback] Serviço iniciado (PID 44087)
+[youtube_fallback] Envio contínuo → rtmps://b.rtmps.youtube.com/live2?backup=1/f4ex-ztrk-vc4h-2pvc-2kg4
+[youtube_fallback] 1280x720@30 | V=3200k/3500k/6000k | A=128k@44100 | Delay=3.0s | GOP=60 | LogLevel=warning
+2025-10-05 22:26:56 [youtube_fallback] Iniciando ffmpeg (loglevel=warning)
+2025-10-05 22:29:04 [youtube_fallback] Recebido SIGTERM, encerrando
+2025-10-05 22:29:04 [youtube_fallback] Serviço terminou (exit 143)
+av_interleaved_write_frame(): Immediate exit requested
+    Last message repeated 1 times
+[flv @ 0x561c384df500] Failed to update header with correct duration.
+[flv @ 0x561c384df500] Failed to update header with correct filesize.
+Error writing trailer of rtmps://b.rtmps.youtube.com/live2?backup=1/f4ex-ztrk-vc4h-2pvc-2kg4: Immediate exit requested
+2025-10-05 22:29:05 [youtube_fallback] Serviço iniciado (PID 44413)
+[youtube_fallback] Envio contínuo → rtmps://b.rtmps.youtube.com/live2?backup=1/f4ex-ztrk-vc4h-2pvc-2kg4
+[youtube_fallback] 1280x720@30 | V=3200k/3500k/6000k | A=128k@44100 | Delay=3.0s | GOP=60 | LogLevel=warning
+2025-10-05 22:29:05 [youtube_fallback] Iniciando ffmpeg (loglevel=warning)
+2025-10-05 22:31:59 [youtube_fallback] Recebido SIGTERM, encerrando
+/usr/local/bin/youtube_fallback.sh: line 1: 44422 Killed                  ffmpeg -progress "$PROGRESS_FILE" -hide_banner -loglevel "${FALLBACK_LOGLEVEL}" -nostats -re -f lavfi -i "life=s=${FALLBACK_WIDTH}x${FALLBACK_HEIGHT}:rate=${FALLBACK_FPS}${FALLBACK_LIFE_ARGS:+:${FALLBACK_LIFE_ARGS}}" -f lavfi -i "anullsrc=channel_layout=stereo:sample_rate=${FALLBACK_AR}" -filter_complex "[0:v]scale=${FALLBACK_WIDTH}:${FALLBACK_HEIGHT}:force_original_aspect_ratio=decrease,pad=${FALLBACK_WIDTH}:${FALLBACK_HEIGHT}:(ow-iw)/2:(oh-ih)/2:color=black,format=yuv420p,setpts=PTS+${FALLBACK_DELAY_SEC}/TB,drawtext=fontfile=${FALLBACK_FONT}:text='${FALLBACK_SCROLL_TEXT}':fontsize=44:fontcolor=white:shadowcolor=black@0.85:shadowx=2:shadowy=2:x=w-mod(t*30*8\,w+text_w):y=H-120,drawtext=fontfile=${FALLBACK_FONT}:text='${FALLBACK_STATIC_TEXT}':fontsize=28:fontcolor=white:shadowcolor=black@0.85:shadowx=2:shadowy=2:x=(w-text_w)/2:y=(h-text_h)/2:enable='lt(mod(t\,1)\,0.5)'[vb];[1:a]asetpts=PTS+${FALLBACK_DELAY_SEC}/TB[ab]" -map "[vb]" -map "[ab]" -c:v libx264 -preset "${FALLBACK_PRESET}" -pix_fmt yuv420p -profile:v high -level 4.1 -b:v "${FALLBACK_VBITRATE}" -maxrate "${FALLBACK_MAXRATE}" -bufsize "${FALLBACK_BUFSIZE}" -g "${FALLBACK_GOP}" -keyint_min "${FALLBACK_KEYINT_MIN}" -sc_threshold 0 -c:a aac -b:a "${FALLBACK_ABITRATE}" -ar "${FALLBACK_AR}" -ac 2 -f flv "${YT_URL_BACKUP}"
+2025-10-05 22:31:59 [youtube_fallback] Serviço terminou (exit 143)
+2025-10-05 22:32:00 [youtube_fallback] Serviço iniciado (PID 44674)
+[youtube_fallback] Envio contínuo → rtmps://b.rtmps.youtube.com/live2?backup=1/f4ex-ztrk-vc4h-2pvc-2kg4
+[youtube_fallback] 1280x720@30 | V=3200k/3500k/6000k | A=128k@44100 | Delay=3.0s | GOP=60 | LogLevel=warning
+2025-10-05 22:32:00 [youtube_fallback] Iniciando ffmpeg (loglevel=warning)
+2025-10-05 22:35:58 [youtube_fallback] Recebido SIGTERM, encerrando
+2025-10-05 22:35:58 [youtube_fallback] Serviço terminou (exit 143)
+av_interleaved_write_frame(): Immediate exit requested
+    Last message repeated 1 times
+[flv @ 0x559f0dbc9500] Failed to update header with correct duration.
+[flv @ 0x559f0dbc9500] Failed to update header with correct filesize.
+Error writing trailer of rtmps://b.rtmps.youtube.com/live2?backup=1/f4ex-ztrk-vc4h-2pvc-2kg4: Immediate exit requested
+2025-10-05 22:35:58 [youtube_fallback] Serviço iniciado (PID 45016)
+[youtube_fallback] Envio contínuo → rtmps://b.rtmps.youtube.com/live2?backup=1/f4ex-ztrk-vc4h-2pvc-2kg4
+[youtube_fallback] 1280x720@30 | V=3200k/3500k/6000k | A=128k@44100 | Delay=3.0s | GOP=60 | LogLevel=warning
+2025-10-05 22:35:58 [youtube_fallback] Iniciando ffmpeg (loglevel=warning)
+2025-10-05 22:36:28 [youtube_fallback] Recebido SIGTERM, encerrando
+/usr/local/bin/youtube_fallback.sh: line 1: 45026 Killed                  ffmpeg -progress "$PROGRESS_FILE" -hide_banner -loglevel "${FALLBACK_LOGLEVEL}" -nostats -re -f lavfi -i "life=s=${FALLBACK_WIDTH}x${FALLBACK_HEIGHT}:rate=${FALLBACK_FPS}${FALLBACK_LIFE_ARGS:+:${FALLBACK_LIFE_ARGS}}" -f lavfi -i "anullsrc=channel_layout=stereo:sample_rate=${FALLBACK_AR}" -filter_complex "[0:v]scale=${FALLBACK_WIDTH}:${FALLBACK_HEIGHT}:force_original_aspect_ratio=decrease,pad=${FALLBACK_WIDTH}:${FALLBACK_HEIGHT}:(ow-iw)/2:(oh-ih)/2:color=black,format=yuv420p,setpts=PTS+${FALLBACK_DELAY_SEC}/TB,drawtext=fontfile=${FALLBACK_FONT}:text='${FALLBACK_SCROLL_TEXT}':fontsize=44:fontcolor=white:shadowcolor=black@0.85:shadowx=2:shadowy=2:x=w-mod(t*30*8\,w+text_w):y=H-120,drawtext=fontfile=${FALLBACK_FONT}:text='${FALLBACK_STATIC_TEXT}':fontsize=28:fontcolor=white:shadowcolor=black@0.85:shadowx=2:shadowy=2:x=(w-text_w)/2:y=(h-text_h)/2:enable='lt(mod(t\,1)\,0.5)'[vb];[1:a]asetpts=PTS+${FALLBACK_DELAY_SEC}/TB[ab]" -map "[vb]" -map "[ab]" -c:v libx264 -preset "${FALLBACK_PRESET}" -pix_fmt yuv420p -profile:v high -level 4.1 -b:v "${FALLBACK_VBITRATE}" -maxrate "${FALLBACK_MAXRATE}" -bufsize "${FALLBACK_BUFSIZE}" -g "${FALLBACK_GOP}" -keyint_min "${FALLBACK_KEYINT_MIN}" -sc_threshold 0 -c:a aac -b:a "${FALLBACK_ABITRATE}" -ar "${FALLBACK_AR}" -ac 2 -f flv "${YT_URL_BACKUP}"
+2025-10-05 22:36:28 [youtube_fallback] Serviço terminou (exit 143)
+2025-10-05 22:36:30 [youtube_fallback] Serviço iniciado (PID 45402)
+[youtube_fallback] Envio contínuo → rtmps://b.rtmps.youtube.com/live2?backup=1/f4ex-ztrk-vc4h-2pvc-2kg4
+[youtube_fallback] 1280x720@30 | V=3200k/3500k/6000k | A=128k@44100 | Delay=3.0s | GOP=60 | LogLevel=warning
+2025-10-05 22:36:30 [youtube_fallback] Iniciando ffmpeg (loglevel=warning)
+2025-10-05 22:36:41 [youtube_fallback] Recebido SIGTERM, encerrando
+/usr/local/bin/youtube_fallback.sh: line 1: 45410 Killed                  ffmpeg -progress "$PROGRESS_FILE" -hide_banner -loglevel "${FALLBACK_LOGLEVEL}" -nostats -re -f lavfi -i "life=s=${FALLBACK_WIDTH}x${FALLBACK_HEIGHT}:rate=${FALLBACK_FPS}${FALLBACK_LIFE_ARGS:+:${FALLBACK_LIFE_ARGS}}" -f lavfi -i "anullsrc=channel_layout=stereo:sample_rate=${FALLBACK_AR}" -filter_complex "[0:v]scale=${FALLBACK_WIDTH}:${FALLBACK_HEIGHT}:force_original_aspect_ratio=decrease,pad=${FALLBACK_WIDTH}:${FALLBACK_HEIGHT}:(ow-iw)/2:(oh-ih)/2:color=black,format=yuv420p,setpts=PTS+${FALLBACK_DELAY_SEC}/TB,drawtext=fontfile=${FALLBACK_FONT}:text='${FALLBACK_SCROLL_TEXT}':fontsize=44:fontcolor=white:shadowcolor=black@0.85:shadowx=2:shadowy=2:x=w-mod(t*30*8\,w+text_w):y=H-120,drawtext=fontfile=${FALLBACK_FONT}:text='${FALLBACK_STATIC_TEXT}':fontsize=28:fontcolor=white:shadowcolor=black@0.85:shadowx=2:shadowy=2:x=(w-text_w)/2:y=(h-text_h)/2:enable='lt(mod(t\,1)\,0.5)'[vb];[1:a]asetpts=PTS+${FALLBACK_DELAY_SEC}/TB[ab]" -map "[vb]" -map "[ab]" -c:v libx264 -preset "${FALLBACK_PRESET}" -pix_fmt yuv420p -profile:v high -level 4.1 -b:v "${FALLBACK_VBITRATE}" -maxrate "${FALLBACK_MAXRATE}" -bufsize "${FALLBACK_BUFSIZE}" -g "${FALLBACK_GOP}" -keyint_min "${FALLBACK_KEYINT_MIN}" -sc_threshold 0 -c:a aac -b:a "${FALLBACK_ABITRATE}" -ar "${FALLBACK_AR}" -ac 2 -f flv "${YT_URL_BACKUP}"
+2025-10-05 22:36:41 [youtube_fallback] Serviço terminou (exit 143)
+2025-10-05 22:36:44 [youtube_fallback] Serviço iniciado (PID 45472)
+[youtube_fallback] Envio contínuo → rtmps://b.rtmps.youtube.com/live2?backup=1/f4ex-ztrk-vc4h-2pvc-2kg4
+[youtube_fallback] 1280x720@30 | V=3200k/3500k/6000k | A=128k@44100 | Delay=3.0s | GOP=60 | LogLevel=warning
+2025-10-05 22:36:44 [youtube_fallback] Iniciando ffmpeg (loglevel=warning)
+/usr/local/bin/youtube_fallback.sh: line 222: 45486 Killed                  ffmpeg -progress "$PROGRESS_FILE" -hide_banner -loglevel "${FALLBACK_LOGLEVEL}" -nostats -re -f lavfi -i "life=s=${FALLBACK_WIDTH}x${FALLBACK_HEIGHT}:rate=${FALLBACK_FPS}${FALLBACK_LIFE_ARGS:+:${FALLBACK_LIFE_ARGS}}" -f lavfi -i "anullsrc=channel_layout=stereo:sample_rate=${FALLBACK_AR}" -filter_complex "[0:v]scale=${FALLBACK_WIDTH}:${FALLBACK_HEIGHT}:force_original_aspect_ratio=decrease,pad=${FALLBACK_WIDTH}:${FALLBACK_HEIGHT}:(ow-iw)/2:(oh-ih)/2:color=black,format=yuv420p,setpts=PTS+${FALLBACK_DELAY_SEC}/TB,drawtext=fontfile=${FALLBACK_FONT}:text='${FALLBACK_SCROLL_TEXT}':fontsize=44:fontcolor=white:shadowcolor=black@0.85:shadowx=2:shadowy=2:x=w-mod(t*30*8\,w+text_w):y=H-120,drawtext=fontfile=${FALLBACK_FONT}:text='${FALLBACK_STATIC_TEXT}':fontsize=28:fontcolor=white:shadowcolor=black@0.85:shadowx=2:shadowy=2:x=(w-text_w)/2:y=(h-text_h)/2:enable='lt(mod(t\,1)\,0.5)'[vb];[1:a]asetpts=PTS+${FALLBACK_DELAY_SEC}/TB[ab]" -map "[vb]" -map "[ab]" -c:v libx264 -preset "${FALLBACK_PRESET}" -pix_fmt yuv420p -profile:v high -level 4.1 -b:v "${FALLBACK_VBITRATE}" -maxrate "${FALLBACK_MAXRATE}" -bufsize "${FALLBACK_BUFSIZE}" -g "${FALLBACK_GOP}" -keyint_min "${FALLBACK_KEYINT_MIN}" -sc_threshold 0 -c:a aac -b:a "${FALLBACK_ABITRATE}" -ar "${FALLBACK_AR}" -ac 2 -f flv "${YT_URL_BACKUP}"
+2025-10-05 22:36:47 [youtube_fallback] ffmpeg terminou por SIGKILL (exit 137)
+2025-10-05 22:36:47 [youtube_fallback] Serviço terminou (exit 137)
+2025-10-05 22:36:50 [youtube_fallback] Serviço iniciado (PID 45584)
+[youtube_fallback] Envio contínuo → rtmps://b.rtmps.youtube.com/live2?backup=1/f4ex-ztrk-vc4h-2pvc-2kg4
+[youtube_fallback] 1280x720@30 | V=3200k/3500k/6000k | A=128k@44100 | Delay=3.0s | GOP=60 | LogLevel=warning
+2025-10-05 22:36:50 [youtube_fallback] Iniciando ffmpeg (loglevel=warning)
+[tls @ 0x55d623cde8c0] Error in the push function.
+av_interleaved_write_frame(): Input/output error
+[flv @ 0x55d623ce2500] Failed to update header with correct duration.
+[flv @ 0x55d623ce2500] Failed to update header with correct filesize.
+Error writing trailer of rtmps://b.rtmps.youtube.com/live2?backup=1/f4ex-ztrk-vc4h-2pvc-2kg4: Input/output error
+[tls @ 0x55d623cde8c0] The specified session has been invalidated for some reason.
+    Last message repeated 1 times
+2025-10-05 22:37:27 [youtube_fallback] ffmpeg terminou (exit 1)
+2025-10-05 22:37:27 [youtube_fallback] Serviço terminou (exit 1)
+2025-10-05 22:37:30 [youtube_fallback] Serviço iniciado (PID 45664)
+[youtube_fallback] Envio contínuo → rtmps://b.rtmps.youtube.com/live2?backup=1/f4ex-ztrk-vc4h-2pvc-2kg4
+[youtube_fallback] 1280x720@30 | V=3200k/3500k/6000k | A=128k@44100 | Delay=3.0s | GOP=60 | LogLevel=warning
+2025-10-05 22:37:30 [youtube_fallback] Iniciando ffmpeg (loglevel=warning)
+[tls @ 0x56429da9b8c0] Error in the push function.
+av_interleaved_write_frame(): Input/output error
+    Last message repeated 1 times
+[flv @ 0x56429da9f500] Failed to update header with correct duration.
+[flv @ 0x56429da9f500] Failed to update header with correct filesize.
+Error writing trailer of rtmps://b.rtmps.youtube.com/live2?backup=1/f4ex-ztrk-vc4h-2pvc-2kg4: Input/output error
+[tls @ 0x56429da9b8c0] The specified session has been invalidated for some reason.
+    Last message repeated 1 times
+2025-10-05 22:38:47 [youtube_fallback] ffmpeg terminou (exit 1)
+2025-10-05 22:38:47 [youtube_fallback] Serviço terminou (exit 1)
+2025-10-05 22:38:48 [youtube_fallback] Serviço iniciado (PID 45715)
+[youtube_fallback] Envio contínuo → rtmps://b.rtmps.youtube.com/live2?backup=1/f4ex-ztrk-vc4h-2pvc-2kg4
+[youtube_fallback] 1280x720@30 | V=3200k/3500k/6000k | A=128k@44100 | Delay=3.0s | GOP=60 | LogLevel=warning
+2025-10-05 22:38:48 [youtube_fallback] Iniciando ffmpeg (loglevel=warning)
+2025-10-05 23:00:52 [youtube_fallback] Recebido SIGTERM, encerrando
+2025-10-05 23:00:52 [youtube_fallback] Serviço terminou (exit 143)
+av_interleaved_write_frame(): Immediate exit requested
+    Last message repeated 1 times
+[flv @ 0x55e0776d0500] Failed to update header with correct duration.
+[flv @ 0x55e0776d0500] Failed to update header with correct filesize.
+Error writing trailer of rtmps://b.rtmps.youtube.com/live2?backup=1/f4ex-ztrk-vc4h-2pvc-2kg4: Immediate exit requested
+2025-10-05 23:00:52 [youtube_fallback] Serviço iniciado (PID 46319)
+[youtube_fallback] Envio contínuo → rtmps://b.rtmps.youtube.com/live2?backup=1/f4ex-ztrk-vc4h-2pvc-2kg4
+[youtube_fallback] 1280x720@30 | V=3200k/3500k/6000k | A=128k@44100 | Delay=3.0s | GOP=60 | LogLevel=warning
+2025-10-05 23:00:52 [youtube_fallback] Iniciando ffmpeg (loglevel=warning)
+/usr/local/bin/youtube_fallback.sh: line 13: 46329 Killed                  ffmpeg -progress "$PROGRESS_FILE" -hide_banner -loglevel "${FALLBACK_LOGLEVEL}" -nostats -re -f lavfi -i "life=s=${FALLBACK_WIDTH}x${FALLBACK_HEIGHT}:rate=${FALLBACK_FPS}${FALLBACK_LIFE_ARGS:+:${FALLBACK_LIFE_ARGS}}" -f lavfi -i "anullsrc=channel_layout=stereo:sample_rate=${FALLBACK_AR}" -filter_complex "[0:v]scale=${FALLBACK_WIDTH}:${FALLBACK_HEIGHT}:force_original_aspect_ratio=decrease,pad=${FALLBACK_WIDTH}:${FALLBACK_HEIGHT}:(ow-iw)/2:(oh-ih)/2:color=black,format=yuv420p,setpts=PTS+${FALLBACK_DELAY_SEC}/TB,drawtext=fontfile=${FALLBACK_FONT}:text='${FALLBACK_SCROLL_TEXT}':fontsize=44:fontcolor=white:shadowcolor=black@0.85:shadowx=2:shadowy=2:x=w-mod(t*30*8\,w+text_w):y=H-120,drawtext=fontfile=${FALLBACK_FONT}:text='${FALLBACK_STATIC_TEXT}':fontsize=28:fontcolor=white:shadowcolor=black@0.85:shadowx=2:shadowy=2:x=(w-text_w)/2:y=(h-text_h)/2:enable='lt(mod(t\,1)\,0.5)'[vb];[1:a]asetpts=PTS+${FALLBACK_DELAY_SEC}/TB[ab]" -map "[vb]" -map "[ab]" -c:v libx264 -preset "${FALLBACK_PRESET}" -pix_fmt yuv420p -profile:v high -level 4.1 -b:v "${FALLBACK_VBITRATE}" -maxrate "${FALLBACK_MAXRATE}" -bufsize "${FALLBACK_BUFSIZE}" -g "${FALLBACK_GOP}" -keyint_min "${FALLBACK_KEYINT_MIN}" -sc_threshold 0 -c:a aac -b:a "${FALLBACK_ABITRATE}" -ar "${FALLBACK_AR}" -ac 2 -f flv "${YT_URL_BACKUP}"
+2025-10-05 23:00:59 [youtube_fallback] Recebido SIGTERM, encerrando
+2025-10-05 23:00:59 [youtube_fallback] Serviço terminou (exit 143)
+2025-10-05 23:01:02 [youtube_fallback] Serviço iniciado (PID 46358)
+[youtube_fallback] Envio contínuo → rtmps://b.rtmps.youtube.com/live2?backup=1/f4ex-ztrk-vc4h-2pvc-2kg4
+[youtube_fallback] 1280x720@30 | V=3200k/3500k/6000k | A=128k@44100 | Delay=3.0s | GOP=60 | LogLevel=warning
+2025-10-05 23:01:02 [youtube_fallback] Iniciando ffmpeg (loglevel=warning)
+[tls @ 0x558cd19e68c0] Error in the push function.
+av_interleaved_write_frame(): Input/output error
+[flv @ 0x558cd19ea500] Failed to update header with correct duration.
+[flv @ 0x558cd19ea500] Failed to update header with correct filesize.
+Error writing trailer of rtmps://b.rtmps.youtube.com/live2?backup=1/f4ex-ztrk-vc4h-2pvc-2kg4: Input/output error
+[tls @ 0x558cd19e68c0] The specified session has been invalidated for some reason.
+    Last message repeated 1 times
+2025-10-05 23:01:52 [youtube_fallback] ffmpeg terminou (exit 1)
+2025-10-05 23:01:52 [youtube_fallback] Serviço terminou (exit 1)
+2025-10-05 23:01:55 [youtube_fallback] Serviço iniciado (PID 46388)
+[youtube_fallback] Envio contínuo → rtmps://b.rtmps.youtube.com/live2?backup=1/f4ex-ztrk-vc4h-2pvc-2kg4
+[youtube_fallback] 1280x720@30 | V=3200k/3500k/6000k | A=128k@44100 | Delay=3.0s | GOP=60 | LogLevel=warning
+2025-10-05 23:01:55 [youtube_fallback] Iniciando ffmpeg (loglevel=warning)
+2025-10-05 23:19:05 [youtube_fallback] Recebido SIGTERM, encerrando
+/usr/local/bin/youtube_fallback.sh: line 1: 46396 Killed                  ffmpeg -progress "$PROGRESS_FILE" -hide_banner -loglevel "${FALLBACK_LOGLEVEL}" -nostats -re -f lavfi -i "life=s=${FALLBACK_WIDTH}x${FALLBACK_HEIGHT}:rate=${FALLBACK_FPS}${FALLBACK_LIFE_ARGS:+:${FALLBACK_LIFE_ARGS}}" -f lavfi -i "anullsrc=channel_layout=stereo:sample_rate=${FALLBACK_AR}" -filter_complex "[0:v]scale=${FALLBACK_WIDTH}:${FALLBACK_HEIGHT}:force_original_aspect_ratio=decrease,pad=${FALLBACK_WIDTH}:${FALLBACK_HEIGHT}:(ow-iw)/2:(oh-ih)/2:color=black,format=yuv420p,setpts=PTS+${FALLBACK_DELAY_SEC}/TB,drawtext=fontfile=${FALLBACK_FONT}:text='${FALLBACK_SCROLL_TEXT}':fontsize=44:fontcolor=white:shadowcolor=black@0.85:shadowx=2:shadowy=2:x=w-mod(t*30*8\,w+text_w):y=H-120,drawtext=fontfile=${FALLBACK_FONT}:text='${FALLBACK_STATIC_TEXT}':fontsize=28:fontcolor=white:shadowcolor=black@0.85:shadowx=2:shadowy=2:x=(w-text_w)/2:y=(h-text_h)/2:enable='lt(mod(t\,1)\,0.5)'[vb];[1:a]asetpts=PTS+${FALLBACK_DELAY_SEC}/TB[ab]" -map "[vb]" -map "[ab]" -c:v libx264 -preset "${FALLBACK_PRESET}" -pix_fmt yuv420p -profile:v high -level 4.1 -b:v "${FALLBACK_VBITRATE}" -maxrate "${FALLBACK_MAXRATE}" -bufsize "${FALLBACK_BUFSIZE}" -g "${FALLBACK_GOP}" -keyint_min "${FALLBACK_KEYINT_MIN}" -sc_threshold 0 -c:a aac -b:a "${FALLBACK_ABITRATE}" -ar "${FALLBACK_AR}" -ac 2 -f flv "${YT_URL_BACKUP}"
+2025-10-05 23:19:05 [youtube_fallback] Serviço terminou (exit 143)
+2025-10-05 23:19:06 [youtube_fallback] Serviço iniciado (PID 47124)
+[youtube_fallback] Envio contínuo → rtmps://b.rtmps.youtube.com/live2?backup=1/f4ex-ztrk-vc4h-2pvc-2kg4
+[youtube_fallback] 1280x720@30 | V=3200k/3500k/6000k | A=128k@44100 | Delay=3.0s | GOP=60 | LogLevel=warning
+2025-10-05 23:19:06 [youtube_fallback] Iniciando ffmpeg (loglevel=warning)
+2025-10-05 23:23:45 [youtube_fallback] Recebido SIGTERM, encerrando
+2025-10-05 23:23:45 [youtube_fallback] Serviço terminou (exit 143)
+av_interleaved_write_frame(): Immediate exit requested
+    Last message repeated 1 times
+[flv @ 0x55d4bc4c7500] Failed to update header with correct duration.
+[flv @ 0x55d4bc4c7500] Failed to update header with correct filesize.
+Error writing trailer of rtmps://b.rtmps.youtube.com/live2?backup=1/f4ex-ztrk-vc4h-2pvc-2kg4: Immediate exit requested
+2025-10-05 23:23:45 [youtube_fallback] Serviço iniciado (PID 47573)
+[youtube_fallback] Envio contínuo → rtmps://b.rtmps.youtube.com/live2?backup=1/f4ex-ztrk-vc4h-2pvc-2kg4
+[youtube_fallback] 1280x720@30 | V=3200k/3500k/6000k | A=128k@44100 | Delay=3.0s | GOP=60 | LogLevel=warning
+2025-10-05 23:23:45 [youtube_fallback] Iniciando ffmpeg (loglevel=warning)
+2025-10-05 23:23:52 [youtube_fallback] Recebido SIGTERM, encerrando
+/usr/local/bin/youtube_fallback.sh: line 1: 47583 Killed                  ffmpeg -progress "$PROGRESS_FILE" -hide_banner -loglevel "${FALLBACK_LOGLEVEL}" -nostats -re -f lavfi -i "life=s=${FALLBACK_WIDTH}x${FALLBACK_HEIGHT}:rate=${FALLBACK_FPS}${FALLBACK_LIFE_ARGS:+:${FALLBACK_LIFE_ARGS}}" -f lavfi -i "anullsrc=channel_layout=stereo:sample_rate=${FALLBACK_AR}" -filter_complex "[0:v]scale=${FALLBACK_WIDTH}:${FALLBACK_HEIGHT}:force_original_aspect_ratio=decrease,pad=${FALLBACK_WIDTH}:${FALLBACK_HEIGHT}:(ow-iw)/2:(oh-ih)/2:color=black,format=yuv420p,setpts=PTS+${FALLBACK_DELAY_SEC}/TB,drawtext=fontfile=${FALLBACK_FONT}:text='${FALLBACK_SCROLL_TEXT}':fontsize=44:fontcolor=white:shadowcolor=black@0.85:shadowx=2:shadowy=2:x=w-mod(t*30*8\,w+text_w):y=H-120,drawtext=fontfile=${FALLBACK_FONT}:text='${FALLBACK_STATIC_TEXT}':fontsize=28:fontcolor=white:shadowcolor=black@0.85:shadowx=2:shadowy=2:x=(w-text_w)/2:y=(h-text_h)/2:enable='lt(mod(t\,1)\,0.5)'[vb];[1:a]asetpts=PTS+${FALLBACK_DELAY_SEC}/TB[ab]" -map "[vb]" -map "[ab]" -c:v libx264 -preset "${FALLBACK_PRESET}" -pix_fmt yuv420p -profile:v high -level 4.1 -b:v "${FALLBACK_VBITRATE}" -maxrate "${FALLBACK_MAXRATE}" -bufsize "${FALLBACK_BUFSIZE}" -g "${FALLBACK_GOP}" -keyint_min "${FALLBACK_KEYINT_MIN}" -sc_threshold 0 -c:a aac -b:a "${FALLBACK_ABITRATE}" -ar "${FALLBACK_AR}" -ac 2 -f flv "${YT_URL_BACKUP}"
+2025-10-05 23:23:52 [youtube_fallback] Serviço terminou (exit 143)
+2025-10-05 23:23:55 [youtube_fallback] Serviço iniciado (PID 47615)
+[youtube_fallback] Envio contínuo → rtmps://b.rtmps.youtube.com/live2?backup=1/f4ex-ztrk-vc4h-2pvc-2kg4
+[youtube_fallback] 1280x720@30 | V=3200k/3500k/6000k | A=128k@44100 | Delay=3.0s | GOP=60 | LogLevel=warning
+2025-10-05 23:23:55 [youtube_fallback] Iniciando ffmpeg (loglevel=warning)
+2025-10-05 23:31:31 [youtube_fallback] Recebido SIGTERM, encerrando
+2025-10-05 23:31:31 [youtube_fallback] Serviço terminou (exit 143)
+av_interleaved_write_frame(): Immediate exit requested
+    Last message repeated 1 times
+[flv @ 0x56050c5cf500] Failed to update header with correct duration.
+[flv @ 0x56050c5cf500] Failed to update header with correct filesize.
+Error writing trailer of rtmps://b.rtmps.youtube.com/live2?backup=1/f4ex-ztrk-vc4h-2pvc-2kg4: Immediate exit requested
+2025-10-05 23:32:00 [youtube_fallback] Serviço iniciado (PID 659)
+[youtube_fallback] Envio contínuo → rtmps://b.rtmps.youtube.com/live2?backup=1/f4ex-ztrk-vc4h-2pvc-2kg4
+[youtube_fallback] 1280x720@30 | V=3200k/3500k/6000k | A=128k@44100 | Delay=3.0s | GOP=60 | LogLevel=warning
+2025-10-05 23:32:00 [youtube_fallback] Iniciando ffmpeg (loglevel=warning)
+2025-10-05 23:51:30 [youtube_fallback] Recebido SIGTERM, encerrando
+2025-10-05 23:51:30 [youtube_fallback] Serviço terminou (exit 143)
+av_interleaved_write_frame(): Immediate exit requested
+    Last message repeated 1 times
+[flv @ 0x556339f89500] Failed to update header with correct duration.
+[flv @ 0x556339f89500] Failed to update header with correct filesize.
+Error writing trailer of rtmps://b.rtmps.youtube.com/live2?backup=1/f4ex-ztrk-vc4h-2pvc-2kg4: Immediate exit requested
+2025-10-05 23:51:31 [youtube_fallback] Serviço iniciado (PID 1344)
+[youtube_fallback] Envio contínuo → rtmps://b.rtmps.youtube.com/live2?backup=1/f4ex-ztrk-vc4h-2pvc-2kg4
+[youtube_fallback] 1280x720@30 | V=3200k/3500k/6000k | A=128k@44100 | Delay=3.0s | GOP=60 | LogLevel=warning
+2025-10-05 23:51:31 [youtube_fallback] Iniciando ffmpeg (loglevel=warning)
+/usr/local/bin/youtube_fallback.sh: line 222:  1353 Killed                  ffmpeg -progress "$PROGRESS_FILE" -hide_banner -loglevel "${FALLBACK_LOGLEVEL}" -nostats -re -f lavfi -i "life=s=${FALLBACK_WIDTH}x${FALLBACK_HEIGHT}:rate=${FALLBACK_FPS}${FALLBACK_LIFE_ARGS:+:${FALLBACK_LIFE_ARGS}}" -f lavfi -i "anullsrc=channel_layout=stereo:sample_rate=${FALLBACK_AR}" -filter_complex "[0:v]scale=${FALLBACK_WIDTH}:${FALLBACK_HEIGHT}:force_original_aspect_ratio=decrease,pad=${FALLBACK_WIDTH}:${FALLBACK_HEIGHT}:(ow-iw)/2:(oh-ih)/2:color=black,format=yuv420p,setpts=PTS+${FALLBACK_DELAY_SEC}/TB,drawtext=fontfile=${FALLBACK_FONT}:text='${FALLBACK_SCROLL_TEXT}':fontsize=44:fontcolor=white:shadowcolor=black@0.85:shadowx=2:shadowy=2:x=w-mod(t*30*8\,w+text_w):y=H-120,drawtext=fontfile=${FALLBACK_FONT}:text='${FALLBACK_STATIC_TEXT}':fontsize=28:fontcolor=white:shadowcolor=black@0.85:shadowx=2:shadowy=2:x=(w-text_w)/2:y=(h-text_h)/2:enable='lt(mod(t\,1)\,0.5)'[vb];[1:a]asetpts=PTS+${FALLBACK_DELAY_SEC}/TB[ab]" -map "[vb]" -map "[ab]" -c:v libx264 -preset "${FALLBACK_PRESET}" -pix_fmt yuv420p -profile:v high -level 4.1 -b:v "${FALLBACK_VBITRATE}" -maxrate "${FALLBACK_MAXRATE}" -bufsize "${FALLBACK_BUFSIZE}" -g "${FALLBACK_GOP}" -keyint_min "${FALLBACK_KEYINT_MIN}" -sc_threshold 0 -c:a aac -b:a "${FALLBACK_ABITRATE}" -ar "${FALLBACK_AR}" -ac 2 -f flv "${YT_URL_BACKUP}"
+ [youtube_fallback] ffmpeg terminou por SIGKILL (exit 137)
+2025-10-05 23:51:41 [youtube_fallback] Recebido SIGTERM, encerrando
+2025-10-05 23:51:41 [youtube_fallback] Serviço terminou (exit 0)
+2025-10-05 23:51:42 [youtube_fallback] Serviço iniciado (PID 1382)
+[youtube_fallback] Envio contínuo → rtmps://b.rtmps.youtube.com/live2?backup=1/f4ex-ztrk-vc4h-2pvc-2kg4
+[youtube_fallback] 1280x720@30 | V=3200k/3500k/6000k | A=128k@44100 | Delay=3.0s | GOP=60 | LogLevel=warning
+2025-10-05 23:51:42 [youtube_fallback] Iniciando ffmpeg (loglevel=warning)
+2025-10-05 23:54:19 [youtube_fallback] Recebido SIGTERM, encerrando
+2025-10-05 23:54:19 [youtube_fallback] Serviço terminou (exit 143)
+av_interleaved_write_frame(): Immediate exit requested
+    Last message repeated 1 times
+[flv @ 0x558f321ec500] Failed to update header with correct duration.
+[flv @ 0x558f321ec500] Failed to update header with correct filesize.
+Error writing trailer of rtmps://b.rtmps.youtube.com/live2?backup=1/f4ex-ztrk-vc4h-2pvc-2kg4: Immediate exit requested
+2025-10-05 23:57:01 [youtube_fallback] Serviço iniciado (PID 659)
+[youtube_fallback] Envio contínuo → rtmps://b.rtmps.youtube.com/live2?backup=1/f4ex-ztrk-vc4h-2pvc-2kg4
+[youtube_fallback] 1280x720@30 | V=3200k/3500k/6000k | A=128k@44100 | Delay=3.0s | GOP=60 | LogLevel=warning
+2025-10-05 23:57:02 [youtube_fallback] Iniciando ffmpeg (loglevel=warning)
+2025-10-05 23:57:25 [youtube_fallback] Recebido SIGTERM, encerrando
+2025-10-05 23:57:25 [youtube_fallback] Serviço terminou (exit 143)
+av_interleaved_write_frame(): Immediate exit requested
+    Last message repeated 1 times
+[flv @ 0x55bdda171500] Failed to update header with correct duration.
+[flv @ 0x55bdda171500] Failed to update header with correct filesize.
+Error writing trailer of rtmps://b.rtmps.youtube.com/live2?backup=1/f4ex-ztrk-vc4h-2pvc-2kg4: Immediate exit requested
+2025-10-05 23:57:25 [youtube_fallback] Serviço iniciado (PID 1039)
+[youtube_fallback] Envio contínuo → rtmps://b.rtmps.youtube.com/live2?backup=1/f4ex-ztrk-vc4h-2pvc-2kg4
+[youtube_fallback] 1280x720@30 | V=3200k/3500k/6000k | A=128k@44100 | Delay=3.0s | GOP=60 | LogLevel=warning
+2025-10-05 23:57:25 [youtube_fallback] Iniciando ffmpeg (loglevel=warning)
+2025-10-06 00:21:24 [youtube_fallback] Recebido SIGTERM, encerrando
+av_interleaved_write_frame(): Immediate exit requested
+2025-10-06 00:21:24 [youtube_fallback] Serviço terminou (exit 143)
+    Last message repeated 1 times
+[flv @ 0x56427212c500] Failed to update header with correct duration.
+[flv @ 0x56427212c500] Failed to update header with correct filesize.
+Error writing trailer of rtmps://b.rtmps.youtube.com/live2?backup=1/f4ex-ztrk-vc4h-2pvc-2kg4: Immediate exit requested
+2025-10-06 00:21:25 [youtube_fallback] Serviço iniciado (PID 1704)
+[youtube_fallback] Envio contínuo → rtmps://b.rtmps.youtube.com/live2?backup=1/f4ex-ztrk-vc4h-2pvc-2kg4
+[youtube_fallback] 1280x720@30 | V=3200k/3500k/6000k | A=128k@44100 | Delay=3.0s | GOP=60 | LogLevel=warning
+2025-10-06 00:21:25 [youtube_fallback] Iniciando ffmpeg (loglevel=warning)
+
+== Repositório de configuração ==
+$ git -C /root/bwb-stream2yt status -sb
+(returncode=128)
+stderr:
+fatal: not a git repository (or any of the parent directories): .git
+
+$ git -C /root/bwb-stream2yt rev-parse HEAD
+(returncode=128)
+stderr:
+fatal: not a git repository (or any of the parent directories): .git
+
+$ git -C /root/bwb-stream2yt log -1 --oneline
+(returncode=128)
+stderr:
+fatal: not a git repository (or any of the parent directories): .git
