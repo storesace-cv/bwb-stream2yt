@@ -24,6 +24,7 @@ Fonte: [`diags/history/diagnostics-antes-restart-20251006-002341Z.txt`](../../di
 ## Conclusões e próximos passos
 1. **Mitigar falta de memória (bloqueador principal)**
    - Aumentar os recursos do droplet (mínimo 2 GiB de RAM) **ou** criar swap persistente de 1–2 GiB (`fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile`), adicionando ` /swapfile swap swap defaults 0 0` a `/etc/fstab` para tornar a alteração permanente.
+   - Se já aumentou a RAM para 1 GiB, confirme com `free -h`/`grep MemTotal /proc/meminfo` que o SO vê efectivamente esse valor e que não existe sobre-alocação por outros serviços (`ps --sort=-%mem -eo pid,cmd,%mem | head`). Caso contrário, a pressão de memória continuará a desencadear o OOM killer mesmo com o dobro da RAM.
    - Reiniciar o `youtube-fallback.service` apenas depois de garantir que a memória adicional está disponível e confirmar que o processo `ffmpeg` já não termina com código 137 (`journalctl -u youtube-fallback --since "2025-10-05 20:00"`).
    - Caso o consumo continue elevado, ajustar o `ffmpeg` para um perfil mais leve (por exemplo, reduzir `-b:v` ou resolução) e acompanhar o impacto em `/run/youtube-fallback.progress`.
 2. **Verificar conectividade DNS/Internet**

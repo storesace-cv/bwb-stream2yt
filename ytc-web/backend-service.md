@@ -32,4 +32,5 @@ Este guia descreve como montar um microserviço HTTP na droplet secundária que 
 - **Actualizações**: quando a especificação do endpoint mudar, sincronize com `status-endpoint.md` e notifique a equipa web.
 - **Fallback**: em caso de indisponibilidade da API, devolva um JSON com `status="unknown"` e mensagem amigável, permitindo que o front-end apresente o aviso secundário.
 - **Execução de scripts**: execute primeiro `./scripts/deploy_to_droplet.sh` (que apenas sincroniza ficheiros) e depois, já na droplet, `bash /root/bwb-stream2yt/scripts/post_deploy.sh`. O script instala `python3-venv` se necessário, aplica firewall e deixa a shell fora do virtualenv ao concluir.
+- **Desligar temporariamente**: para isolar problemas de recursos ou evitar interferências durante investigações, utilize `bash /root/bwb-stream2yt/secondary-droplet/bin/ytc_web_backend_disable_stub.sh`. O stub pára e desactiva as unidades `ytc-web-backend`, `yt-decider-daemon` e `youtube-fallback` sem remover ficheiros ou ambientes virtuais.
 
