@@ -1,0 +1,1 @@
+pasta com os diagnósticos
