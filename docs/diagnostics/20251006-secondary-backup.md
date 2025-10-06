@@ -22,11 +22,15 @@ Fonte: [`diags/history/diagnostics-antes-restart-20251006-002341Z.txt`](../../di
 - Após a falha, o serviço é reiniciado, mas volta a parar mais tarde, deixando o fallback sem orquestração automática.
 
 ## Conclusões e próximos passos
-1. **Mitigar falta de memória**
-   - Aumentar a memória RAM do droplet ou configurar swap (por ex. 1–2 GiB) para evitar que o kernel elimine o processo `ffmpeg` durante picos de uso.
-   - Rever parâmetros de `ffmpeg`/resolução/bitrate caso não seja possível aumentar recursos.
+1. **Mitigar falta de memória (bloqueador principal)**
+   - Aumentar os recursos do droplet (mínimo 2 GiB de RAM) **ou** criar swap persistente de 1–2 GiB (`fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile`), adicionando ` /swapfile swap swap defaults 0 0` a `/etc/fstab` para tornar a alteração permanente.
+   - Se já aumentou a RAM para 1 GiB, confirme com `free -h`/`grep MemTotal /proc/meminfo` que o SO vê efectivamente esse valor e que não existe sobre-alocação por outros serviços (`ps --sort=-%mem -eo pid,cmd,%mem | head`). Caso contrário, a pressão de memória continuará a desencadear o OOM killer mesmo com o dobro da RAM.
+   - Reiniciar o `youtube-fallback.service` apenas depois de garantir que a memória adicional está disponível e confirmar que o processo `ffmpeg` já não termina com código 137 (`journalctl -u youtube-fallback --since "2025-10-05 20:00"`).
+   - Caso o consumo continue elevado, ajustar o `ffmpeg` para um perfil mais leve (por exemplo, reduzir `-b:v` ou resolução) e acompanhar o impacto em `/run/youtube-fallback.progress`.
 2. **Verificar conectividade DNS/Internet**
-   - Garantir que o servidor consegue resolver `oauth2.googleapis.com` de forma estável (verificar `/etc/resolv.conf`, firewall, eventuais problemas de rede temporários).
+   - Validar resolução DNS para `oauth2.googleapis.com` com `dig`/`systemd-resolve`; se falhar, rever os servidores DNS configurados e garantir que a firewall (ou `ufw`) permite saídas TCP/443.
+   - Assim que a conectividade for restabelecida, forçar a renovação das credenciais (`systemctl restart yt-decider-daemon`) e monitorizar `journalctl -u yt-decider-daemon` em busca de novos erros.
 3. **Monitorizar recuperação automática**
-   - Confirmar se, após estabilizar os pontos acima, o `yt-decider-daemon` volta a gerir o fallback e se o stream secundário retoma de forma contínua.
+   - Utilizar `systemctl status youtube-fallback yt-decider-daemon` para confirmar que ambos os serviços permanecem activos durante pelo menos 10–15 minutos após as correcções.
+   - Adicionar alarmes em `prometheus`/`grafana` (ou scripts existentes) para alertar sobre novos eventos do OOM killer e falhas de DNS, evitando regressões futuras.
 
