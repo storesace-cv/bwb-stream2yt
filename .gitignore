@@ -19,6 +19,7 @@ env/
 *.pid
 *.progress
 logs/
+diags/history/
 
 # OS
 .DS_Store
