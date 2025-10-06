@@ -21,6 +21,12 @@ python3 /root/bwb-stream2yt/secondary-droplet/bin/yt_api_probe_once.py
 - Ver `journalctl -u yt-decider-daemon -f -l`
 - Consultar o histórico consolidado em `/root/bwb_services.log` (contém decisões do decider, eventos do fallback e notas do primário).
 
+## Diagnósticos rápidos da URL secundária
+
+- Gere um snapshot completo da droplet secundária com `./diags/run_diagnostics.py`.
+- Os relatórios ficam em `diags/history/diagnostics-<timestamp>.txt` e incluem estado dos serviços, tail de logs, ficheiros de configuração relevantes e versão do repositório.
+- É seguro anexar o ficheiro num ticket porque a `YT_KEY` é mascarada automaticamente.
+
 ## Testes
 
 Use `pytest` para validar rapidamente a lógica do decider antes de qualquer deploy:
