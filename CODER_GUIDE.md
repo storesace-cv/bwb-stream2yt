@@ -25,7 +25,7 @@
    - se ffmpeg crashar, systemd relança (já feito). Ajustar `RestartSec` se necessário.
 
 3. **Atualizador de droplet**:
-   - Criar utilitário que, a partir do branch `my-sty`, faça sync incremental para 104.248.134.44,
+   - Criar utilitário que, a partir do branch `my-sty`, faça sync incremental para 104.248.134.44 (porta 2202),
      **sem** copiar `.env`, `token.json`, `client_secret.json`.
    - Após sync, executa `scripts/post_deploy.sh` no droplet para `daemon-reload` e restarts controlados.
 

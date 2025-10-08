@@ -4,18 +4,19 @@ set -euo pipefail
 
 DEST_USER="${DEST_USER:-root}"
 DEST_IP="${DEST_IP:-104.248.134.44}"
+DEST_PORT="${DEST_PORT:-2202}"
 DEST_DIR="${DEST_DIR:-/root/bwb-stream2yt}"
 
-ssh -o StrictHostKeyChecking=accept-new "${DEST_USER}@${DEST_IP}" "mkdir -p '${DEST_DIR}/secondary-droplet' '${DEST_DIR}/scripts' '${DEST_DIR}/diags'"
+ssh -p "${DEST_PORT}" -o StrictHostKeyChecking=accept-new "${DEST_USER}@${DEST_IP}" "mkdir -p '${DEST_DIR}/secondary-droplet' '${DEST_DIR}/scripts' '${DEST_DIR}/diags'"
 
-rsync -avz --delete \
+rsync -avz --delete -e "ssh -p ${DEST_PORT}" \
   --exclude '*.env' --exclude 'token.json' --exclude 'client_secret.json' \
   "$(dirname "$0")/../secondary-droplet/" "${DEST_USER}@${DEST_IP}:${DEST_DIR}/secondary-droplet/"
-rsync -avz --delete \
+rsync -avz --delete -e "ssh -p ${DEST_PORT}" \
   "$(dirname "$0")/post_deploy.sh" "${DEST_USER}@${DEST_IP}:${DEST_DIR}/scripts/post_deploy.sh"
-rsync -avz --delete \
+rsync -avz --delete -e "ssh -p ${DEST_PORT}" \
   --exclude 'history/' \
   "$(dirname "$0")/../diags/" "${DEST_USER}@${DEST_IP}:${DEST_DIR}/diags/"
 
 echo "[deploy] Sincronização concluída. Execute manualmente:"
-echo "  ssh ${DEST_USER}@${DEST_IP} 'bash ${DEST_DIR}/scripts/post_deploy.sh'"
+echo "  ssh -p ${DEST_PORT} ${DEST_USER}@${DEST_IP} 'bash ${DEST_DIR}/scripts/post_deploy.sh'"
