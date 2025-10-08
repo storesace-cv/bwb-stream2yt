@@ -62,21 +62,31 @@ systemctl enable --now ytc-web-backend.service
 systemctl restart ytc-web-backend.service || true
 
 configure_firewall() {
+    log "Configurando firewall (ufw) para ${FIREWALL_IP}:${BACKEND_PORT}/tcp"
+
     if ! command -v ufw >/dev/null 2>&1; then
-        log "ufw não encontrado; saltando configuração de firewall"
-        return
+        log "ufw não encontrado; instalando pacote"
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update
+        apt-get install -y ufw
     fi
 
-    local status
-    status=$(ufw status | head -n1 || true)
-    if [[ "${status}" == "Status: inactive" ]]; then
-        log "ufw inactivo; nenhuma regra alterada"
-        return
-    fi
+    # garantir que o ufw está activo
+    ufw --force enable >/dev/null 2>&1 || true
 
-    log "Garantindo regra de acesso apenas para ${FIREWALL_IP} na porta ${BACKEND_PORT}"
-    ufw --force delete allow ${BACKEND_PORT}/tcp >/dev/null 2>&1 || true
-    ufw --force allow from "${FIREWALL_IP}" to any port "${BACKEND_PORT}" proto tcp
+    # remover quaisquer regras ALLOW IN pré-existentes para esta porta
+    ufw status numbered \
+        | awk -v port="${BACKEND_PORT}" '$0 ~ (" " port "/tcp") && /ALLOW IN/ {print $1}' \
+        | tr -d "[] " \
+        | sort -rn \
+        | while read -r rule_number; do
+            [[ -z "${rule_number}" ]] && continue
+            ufw --force delete "${rule_number}" >/dev/null 2>&1 || true
+        done
+
+    # adicionar a regra restritiva correcta
+    ufw allow from "${FIREWALL_IP}" to any port "${BACKEND_PORT}" proto tcp
+    ufw reload >/dev/null 2>&1 || true
 }
 
 configure_firewall
