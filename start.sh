@@ -1,19 +1,14 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------
 # Script: start.sh
-# Localização: /Users/jorgepeixinho/Documents/NetxCloud/projectos/bwb/desenvolvimento/bwb-stream2yt/start.sh
 # Objetivo: Ativar o ambiente virtual e entrar no branch my-sty
 # Uso recomendado: source ./start.sh
 # ---------------------------------------------------------
 
-set -e
-set -u
+set -euo pipefail
 
-echo "---------------------------------------------------------"
-echo "[BWB-STREAM2YT] Inicialização do ambiente de desenvolvimento"
-echo "---------------------------------------------------------"
+TARGET_BRANCH="${TARGET_BRANCH:-my-sty}"
 
-# Detectar se este script está a ser 'sourced'
 is_sourced() {
   # Bash
   if [ -n "${BASH_SOURCE:-}" ] && [ "${BASH_SOURCE[0]}" != "$0" ]; then
@@ -26,13 +21,39 @@ is_sourced() {
   return 1
 }
 
-PROJECT_PATH="/Users/jorgepeixinho/Documents/NetxCloud/projectos/bwb/desenvolvimento/bwb-stream2yt"
+resolve_project_path() {
+  local source_path script_dir repo_root
+  source_path="${BASH_SOURCE[0]:-$0}"
+  while [ -h "$source_path" ]; do
+    script_dir=$(cd -P "$(dirname "$source_path")" >/dev/null 2>&1 && pwd)
+    source_path=$(readlink "$source_path")
+    [[ $source_path != /* ]] && source_path="$script_dir/$source_path"
+  done
+  script_dir=$(cd -P "$(dirname "$source_path")" >/dev/null 2>&1 && pwd)
 
-# Entrar na pasta do projeto
-cd "$PROJECT_PATH" || {
+  repo_root=$(cd "$script_dir" && git rev-parse --show-toplevel 2>/dev/null || true)
+  if [ -n "$repo_root" ]; then
+    printf '%s\n' "$repo_root"
+  else
+    printf '%s\n' "$script_dir"
+  fi
+}
+
+PROJECT_PATH=$(resolve_project_path)
+
+if [ ! -d "$PROJECT_PATH" ]; then
   echo "❌ ERRO: Pasta do projeto não encontrada em $PROJECT_PATH"
   ( ! is_sourced ) && exit 1 || return 1
-}
+fi
+
+# Entrar na pasta do projeto
+cd "$PROJECT_PATH"
+
+echo "---------------------------------------------------------"
+echo "[BWB-STREAM2YT] Inicialização do ambiente de desenvolvimento"
+echo "---------------------------------------------------------"
+
+echo "📁 Projeto: $PROJECT_PATH"
 
 # Ativar o venv
 if [ -d ".venv" ]; then
@@ -42,9 +63,14 @@ if [ -d ".venv" ]; then
 else
   echo "⚠️  Ambiente virtual não encontrado. Criar novo? (y/n)"
   read -r create_venv
-  if [[ "$create_venv" =~ ^[Yy]$ ]]; then
+  if [[ "${create_venv:-}" =~ ^[Yy]$ ]]; then
     echo "🔧 A criar novo venv..."
-    /opt/homebrew/bin/python3 -m venv .venv --system-site-packages
+    PYTHON_BIN="$(command -v python3 || command -v python || true)"
+    if [ -z "$PYTHON_BIN" ]; then
+      echo "❌ Python não encontrado no PATH."
+      ( ! is_sourced ) && exit 1 || return 1
+    fi
+    "$PYTHON_BIN" -m venv .venv --system-site-packages
     # shellcheck disable=SC1091
     source .venv/bin/activate
   else
@@ -53,26 +79,34 @@ else
   fi
 fi
 
-# Verificar/mudar de branch
-CURRENT_BRANCH=$(git branch --show-current 2>/dev/null || echo "")
-if [ "$CURRENT_BRANCH" != "my-sty" ]; then
-  echo "🔁 A mudar para o branch my-sty..."
-  git fetch origin my-sty || echo "⚠️ Não foi possível obter informações remotas."
-  git checkout my-sty
+if ! command -v git >/dev/null 2>&1; then
+  echo "⚠️  Git não está disponível. A saltar operações de sincronização."
 else
-  echo "✅ Já se encontra no branch my-sty."
-fi
+  # Verificar/mudar de branch
+  CURRENT_BRANCH=$(git branch --show-current 2>/dev/null || echo "")
+  if [ "$CURRENT_BRANCH" != "$TARGET_BRANCH" ]; then
+    echo "🔁 A mudar para o branch $TARGET_BRANCH..."
+    git fetch origin "$TARGET_BRANCH" >/dev/null 2>&1 || echo "⚠️ Não foi possível obter informações remotas."
+    git checkout "$TARGET_BRANCH"
+  else
+    echo "✅ Já se encontra no branch $TARGET_BRANCH."
+  fi
 
-# Atualizar o repositório
-echo "🔄 A atualizar o código local..."
-git pull origin my-sty || echo "⚠️ Não foi possível atualizar o repositório (pode estar offline)."
+  # Atualizar o repositório
+  echo "🔄 A atualizar o código local..."
+  git pull --ff-only origin "$TARGET_BRANCH" || echo "⚠️ Não foi possível atualizar o repositório (pode estar offline)."
+fi
 
 # Mostrar status do repositório e Python ativo
 echo "📦 Estado do repositório:"
 git status -sb || true
 
-echo "🐍 Python ativo: $(command -v python3 || true)"
-echo "📦 Pip versão: $(pip --version || true)"
+echo "🐍 Python ativo: $(command -v python3 || command -v python || true)"
+if command -v pip >/dev/null 2>&1; then
+  echo "📦 Pip versão: $(pip --version)"
+else
+  echo "⚠️  Pip não disponível."
+fi
 
 echo "---------------------------------------------------------"
 if is_sourced; then
