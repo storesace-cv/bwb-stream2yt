@@ -76,8 +76,8 @@ configure_firewall() {
 
     # remover quaisquer regras ALLOW IN pré-existentes para esta porta
     ufw status numbered \
-        | awk -v port="${BACKEND_PORT}" '/ALLOW IN/ && $0 ~ port"/?tcp"/ {print $1}' \
-        | tr -d "[]" \
+        | awk -v port="${BACKEND_PORT}" '$0 ~ (" " port "/tcp") && /ALLOW IN/ {print $1}' \
+        | tr -d "[] " \
         | sort -rn \
         | while read -r rule_number; do
             [[ -z "${rule_number}" ]] && continue
