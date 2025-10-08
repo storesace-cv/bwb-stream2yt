@@ -1,6 +1,6 @@
 # DEPLOY
 
-## Servidor (Droplet) – 104.248.134.44
+## Servidor (Droplet) – 104.248.134.44 (porta 2202)
 
 Pré-requisitos: Ubuntu, `ffmpeg`, `python3`, `pip`, `systemd`.
 
@@ -10,11 +10,12 @@ Pré-requisitos: Ubuntu, `ffmpeg`, `python3`, `pip`, `systemd`.
 # Ajuste o utilizador (p.ex., root) e o caminho local do projeto:
 export DROPLET_USER=root
 export DROPLET_IP=104.248.134.44
+export DROPLET_PORT=2202
 export SRC=.
 export DEST=/root/bwb-stream2yt
 
-rsync -avz --delete   --exclude '*.env' --exclude 'token.json' --exclude 'client_secret.json'   "$SRC/secondary-droplet/" "$DROPLET_USER@$DROPLET_IP:$DEST/secondary-droplet/"
-rsync -avz --delete "$SRC/scripts/" "$DROPLET_USER@$DROPLET_IP:$DEST/scripts/"
+rsync -avz --delete -e "ssh -p $DROPLET_PORT"   --exclude '*.env' --exclude 'token.json' --exclude 'client_secret.json'   "$SRC/secondary-droplet/" "$DROPLET_USER@$DROPLET_IP:$DEST/secondary-droplet/"
+rsync -avz --delete -e "ssh -p $DROPLET_PORT" "$SRC/scripts/" "$DROPLET_USER@$DROPLET_IP:$DEST/scripts/"
 ```
 
 ### 2) Instalar dependências e serviços
@@ -57,4 +58,4 @@ systemctl restart youtube-fallback
 
 ### 5) Atualizações posteriores
 
-Use `scripts/deploy_to_droplet.sh` para sincronizar ficheiros e, em seguida, conecte via SSH para executar `bash /root/bwb-stream2yt/scripts/post_deploy.sh` manualmente.
+Use `scripts/deploy_to_droplet.sh` para sincronizar ficheiros e, em seguida, conecte via SSH (`ssh -p $DROPLET_PORT $DROPLET_USER@$DROPLET_IP`) para executar `bash /root/bwb-stream2yt/scripts/post_deploy.sh` manualmente.

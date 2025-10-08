@@ -15,15 +15,16 @@ CFG = json.loads((ROOT / "deploy/deploy_config.json").read_text())
 HOST = CFG["droplet_host"]
 USER = CFG["ssh_user"]
 KEY = os.path.expanduser(CFG["ssh_key"])
+PORT = str(CFG.get("ssh_port", 22))
 
 
-def ssh(cmd: list[str]):
-    full = ["ssh", "-i", KEY, f"{USER}@{HOST}"] + cmd
-    return subprocess.run(full, check=True)
+def ssh(cmd: list[str], *, check: bool = True, capture_output: bool = False):
+    full = ["ssh", "-i", KEY, "-p", PORT, f"{USER}@{HOST}"] + cmd
+    return subprocess.run(full, check=check, capture_output=capture_output)
 
 
 def scp(local: str, remote: str):
-    full = ["scp", "-i", KEY, local, f"{USER}@{HOST}:{remote}"]
+    full = ["scp", "-i", KEY, "-P", PORT, local, f"{USER}@{HOST}:{remote}"]
     return subprocess.run(full, check=True)
 
 
@@ -44,16 +45,7 @@ def main():
             continue
 
         if if_missing_only:
-            rc = subprocess.run(
-                [
-                    "ssh",
-                    "-i",
-                    KEY,
-                    f"{USER}@{HOST}",
-                    f"test -f {shlex.quote(rpath)}",
-                ],
-                capture_output=True,
-            )
+            rc = ssh([f"test -f {shlex.quote(rpath)}"], check=False, capture_output=True)
             if rc.returncode == 0:
                 print("[skip exists]", rpath)
                 continue
