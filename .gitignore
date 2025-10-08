@@ -21,6 +21,10 @@ env/
 logs/
 diags/history/
 
+# Test fixtures
+!tests/droplet_logs/
+!tests/droplet_logs/*.log
+
 # OS
 .DS_Store
 

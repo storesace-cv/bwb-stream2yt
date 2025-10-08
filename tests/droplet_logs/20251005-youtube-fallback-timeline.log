@@ -1,0 +1,24 @@
+2025-10-05T20:18:19+0000 systemd[1]: youtube-fallback.service: A process of this unit has been killed by the OOM killer.
+2025-10-05T20:18:19+0000 systemd[1]: youtube-fallback.service: Failed with result 'oom-kill'.
+2025-10-05T20:18:23+0000 systemd[1]: youtube-fallback.service: Scheduled restart job, restart counter is at 1.
+2025-10-05T20:18:23+0000 systemd[1]: Started YouTube Secondary (Backup) - Slate 720p com imagem e textos.
+2025-10-05T20:21:50+0000 systemd[1]: youtube-fallback.service: Main process exited, code=exited, status=137/n/a.
+2025-10-05T20:21:50+0000 python3[40116]: socket.gaierror: [Errno -3] Temporary failure in name resolution.
+2025-10-05T20:21:50+0000 python3[40116]: httplib2.error.ServerNotFoundError: Unable to find the server at oauth2.googleapis.com.
+2025-10-05T20:21:51+0000 systemd[1]: yt-decider-daemon.service: Main process exited, code=exited, status=1/FAILURE.
+2025-10-05T20:22:01+0000 systemd[1]: yt-decider-daemon.service: Scheduled restart job, restart counter is at 1.
+2025-10-05 22:31:59 [youtube_fallback] Recebido SIGTERM, encerrando.
+2025-10-05 22:31:59 [youtube_fallback] Serviço terminou (exit 143).
+2025-10-05T22:31:59+0000 systemd[1]: youtube-fallback.service: A process of this unit has been killed by the OOM killer.
+2025-10-05T22:36:28+0000 systemd[1]: youtube-fallback.service: A process of this unit has been killed by the OOM killer.
+2025-10-05 22:36:28 [youtube_fallback] Serviço terminou (exit 143).
+2025-10-05T22:36:41+0000 systemd[1]: youtube-fallback.service: A process of this unit has been killed by the OOM killer.
+2025-10-05 22:36:41 [youtube_fallback] Serviço terminou (exit 143).
+2025-10-05T23:00:59+0000 systemd[1]: youtube-fallback.service: A process of this unit has been killed by the OOM killer.
+2025-10-05 23:00:59 [youtube_fallback] Serviço terminou (exit 143).
+2025-10-05T23:19:05+0000 systemd[1]: youtube-fallback.service: A process of this unit has been killed by the OOM killer.
+2025-10-05 23:19:05 [youtube_fallback] Serviço terminou (exit 143).
+2025-10-05T23:23:52+0000 systemd[1]: youtube-fallback.service: A process of this unit has been killed by the OOM killer.
+2025-10-05 23:23:52 [youtube_fallback] Serviço terminou (exit 143).
+2025-10-05T23:51:41+0000 systemd[1]: youtube-fallback.service: A process of this unit has been killed by the OOM killer.
+2025-10-05 23:51:41 [youtube_fallback] Serviço terminou (exit 0).
