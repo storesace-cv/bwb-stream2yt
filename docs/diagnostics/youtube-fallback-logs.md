@@ -43,5 +43,6 @@ Erros de autenticação (por exemplo, falhas ao contactar `oauth2.googleapis.com
 1. **Confirmar causa imediata** — procurar no `journalctl` por `exit`/`SIGTERM` e mensagens de erro do `ffmpeg`.
 2. **Verificar recursos** — usar `free -h` e `ps --sort=-%mem` para garantir que há RAM suficiente; o OOM killer termina o serviço quando a memória escasseia.
 3. **Monitorizar após correcções** — depois de aplicar ajustes (ex.: aumentar memória ou corrigir DNS), monitorizar os logs durante 10–15 min para assegurar estabilidade.
+4. **Recolher pacotes de evidências** — quando precisar de partilhar o estado completo do `yt-decider-daemon` (decisões, estado systemd e `bwb_services.log`), execute `bash scripts/yt-decider-debug.sh` e anexe o ficheiro `yt-decider-*.log`. Consulte o [guia detalhado](yt-decider-debug.md) para mais contexto.
 
 Seguindo estes passos, terá evidências concretas para explicar porque é que o envio pela URL secundária foi interrompido e poderá actuar rapidamente na droplet.

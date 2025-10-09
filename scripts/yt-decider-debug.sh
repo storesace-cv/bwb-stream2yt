@@ -23,6 +23,12 @@ info()  { printf "[info] %s\n" "$*"; }
 warn()  { printf "[warn] %s\n" "$*" >&2; }
 sect()  { printf "\n===== %s =====\n" "$*"; }
 
+service_exists() {
+  local svc="${1:-${SERVICE}}"
+  command -v systemctl >/dev/null 2>&1 || return 1
+  systemctl list-units --type=service --all 2>/dev/null | grep -Fq "${svc}"
+}
+
 OUT="$(out_file)"
 SINCE_EPOCH="$(since_utc_epoch)"
 NOW_EPOCH="$(now_utc_epoch)"
@@ -37,7 +43,7 @@ info "Destino: $OUT"
 
   # --- journalctl ---
   sect "journalctl -u ${SERVICE} (últimas 48h, UTC) | filtro ${TAG}"
-  if command -v journalctl >/dev/null 2>&1 && systemctl list-units --type=service --all | grep -q "${SERVICE}"; then
+  if command -v journalctl >/dev/null 2>&1 && service_exists "${SERVICE}"; then
     journalctl -u "${SERVICE}" --since "48 hours ago" --utc --no-pager 2>&1 | grep -E "${TAG}" || echo "(sem linhas a reportar)"
   else
     echo "(serviço ${SERVICE} não encontrado ou journalctl indisponível)"
@@ -45,7 +51,7 @@ info "Destino: $OUT"
 
   # Estado atual do serviço
   sect "systemctl status ${SERVICE} --no-pager (snapshot)"
-  if systemctl list-units --type=service --all | grep -q "${SERVICE}"; then
+  if service_exists "${SERVICE}"; then
     systemctl status "${SERVICE}" --no-pager || true
   else
     echo "(serviço ${SERVICE} não encontrado)"
