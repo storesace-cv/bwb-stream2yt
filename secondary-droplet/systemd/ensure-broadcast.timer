@@ -1,0 +1,10 @@
+[Unit]
+Description=Run ensure-broadcast before daily stream
+
+[Timer]
+OnCalendar=*-*-* 07:55:00
+Persistent=true
+Unit=ensure-broadcast.service
+
+[Install]
+WantedBy=timers.target

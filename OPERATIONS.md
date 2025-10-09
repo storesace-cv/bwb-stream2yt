@@ -16,6 +16,16 @@ python3 /root/bwb-stream2yt/secondary-droplet/bin/yt_api_probe_once.py
 
 - Offline schema for manual API calls: `/root/bwb-stream2yt/docs/youtube-data-api.v3.discovery.json`.
 
+## Ensure broadcast manual
+
+```
+systemctl start ensure-broadcast.service
+systemctl status ensure-broadcast.service --no-pager -l
+journalctl -u ensure-broadcast.service -n 50 -l
+```
+
+- Saída esperada: `Status=0/SUCCESS` com log `[ensure] Transmissão ... com stream ...`.
+
 ## Decider (se usado)
 
 - Ver `journalctl -u yt-decider-daemon -f -l`

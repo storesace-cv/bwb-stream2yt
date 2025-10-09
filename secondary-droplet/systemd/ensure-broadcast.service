@@ -1,0 +1,12 @@
+[Unit]
+Description=Ensure YouTube broadcast is open and bound to stream key
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/root/bwb-stream2yt/secondary-droplet
+ExecStart=/usr/bin/env python3 /root/bwb-stream2yt/secondary-droplet/bin/ensure_broadcast.py
+
+[Install]
+WantedBy=multi-user.target

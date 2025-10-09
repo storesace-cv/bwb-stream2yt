@@ -5,6 +5,38 @@ log() {
     echo "[post_deploy] $*"
 }
 
+ensure_swap() {
+    if swapon --noheadings 2>/dev/null | grep -q '\S'; then
+        log "Swap já configurado; nenhuma ação necessária."
+        return
+    fi
+
+    local swapfile="/swapfile"
+    if [[ ! -f "${swapfile}" ]]; then
+        log "Criando swapfile de 512 MiB em ${swapfile}."
+        if ! fallocate -l 512M "${swapfile}" 2>/dev/null; then
+            log "fallocate indisponível; usando dd para criar swapfile."
+            dd if=/dev/zero of="${swapfile}" bs=1M count=512 status=none
+        fi
+        chmod 600 "${swapfile}"
+        mkswap "${swapfile}" >/dev/null
+    else
+        log "Swapfile existente encontrado; reutilizando ${swapfile}."
+    fi
+
+    if ! swapon "${swapfile}" >/dev/null 2>&1; then
+        log "Falha ao ativar swapfile ${swapfile}."
+        return
+    fi
+
+    if ! grep -q "^${swapfile} " /etc/fstab; then
+        log "Persistindo swapfile em /etc/fstab."
+        printf '%s\n' "${swapfile} none swap sw 0 0" >> /etc/fstab
+    fi
+
+    log "Swapfile ${swapfile} ativo."
+}
+
 ensure_python_venv() {
     local python_bin=${PYTHON_BIN:-python3}
     if "${python_bin}" -m ensurepip --help >/dev/null 2>&1; then
@@ -39,6 +71,9 @@ pip3 install --no-cache-dir -r requirements.txt
 
 install -m 755 -o root -g root bin/youtube_fallback.sh /usr/local/bin/youtube_fallback.sh
 install -m 644 -o root -g root systemd/youtube-fallback.service /etc/systemd/system/youtube-fallback.service
+install -m 755 -o root -g root bin/ensure_broadcast.py /usr/local/bin/ensure_broadcast.py
+install -m 644 -o root -g root systemd/ensure-broadcast.service /etc/systemd/system/ensure-broadcast.service
+install -m 644 -o root -g root systemd/ensure-broadcast.timer /etc/systemd/system/ensure-broadcast.timer
 
 ENV_FILE="/etc/youtube-fallback.env"
 DEFAULTS_FILE="config/youtube-fallback.defaults"
@@ -80,12 +115,15 @@ trap - EXIT
 systemctl daemon-reload
 systemctl enable --now youtube-fallback.service
 systemctl restart youtube-fallback.service || true
+systemctl enable --now ensure-broadcast.timer
 
 log "youtube-fallback atualizado e env sincronizado."
 
 log "Preparando backend do ytc-web via secondary-droplet/bin/ytc_web_backend_setup.sh..."
 ensure_python_venv
 bash bin/ytc_web_backend_setup.sh
+
+ensure_swap
 
 log "Operação concluída."
 
