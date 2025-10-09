@@ -8,6 +8,17 @@ journalctl -fu youtube-fallback -l
 ss -tnp | grep -Ei 'youtube|rtmps|ffmpeg' || pgrep -fa ffmpeg
 ```
 
+## Reset rápido da droplet secundária
+
+Use o script `scripts/reset_secondary_droplet.sh` para libertar caches de memória e reiniciar os serviços principais (fallback, decider e backend da YTC Web). O script deve ser executado como root diretamente na droplet:
+
+```bash
+cd /root/bwb-stream2yt
+sudo ./scripts/reset_secondary_droplet.sh
+```
+
+No final, o script executa `ensure-broadcast.service` para garantir que a transmissão continua agendada.
+
 ## YouTube API (debug rápido)
 
 ```
