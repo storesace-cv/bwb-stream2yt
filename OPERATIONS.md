@@ -41,6 +41,17 @@ journalctl -u ensure-broadcast.service -n 50 -l
 
 - Ver `journalctl -u yt-decider-daemon -f -l`
 - Consultar o histórico consolidado em `/root/bwb_services.log` (contém decisões do decider, eventos do fallback e notas do primário).
+- Para recolher automaticamente as últimas 48h de entradas `[yt_decider]` do `journalctl` e do ficheiro `/root/bwb_services.log`, usa `./scripts/yt-decider-debug.sh`. O script gera um ficheiro `yt-decider-<timestamp>.log` em UTC com:
+  - Snapshot do host (hostname, kernel e data/hora em UTC)
+  - `journalctl -u yt-decider-daemon --since "48 hours ago" --utc` filtrado por `[yt_decider]`
+  - `systemctl status yt-decider-daemon`
+  - Entradas relevantes do `/root/bwb_services.log`
+  
+  Exemplo de execução na droplet (como root):
+  ```bash
+  cd /root/bwb-stream2yt
+  ./scripts/yt-decider-debug.sh
+  ```
 
 ## Diagnósticos rápidos da URL secundária
 
