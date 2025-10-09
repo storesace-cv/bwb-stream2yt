@@ -75,6 +75,10 @@ install -m 755 -o root -g root bin/ensure_broadcast.py /usr/local/bin/ensure_bro
 install -m 644 -o root -g root systemd/ensure-broadcast.service /etc/systemd/system/ensure-broadcast.service
 install -m 644 -o root -g root systemd/ensure-broadcast.timer /etc/systemd/system/ensure-broadcast.timer
 
+log "Instalando utilitários administrativos no /usr/local/bin"
+install -m 755 -o root -g root ../scripts/reset_secondary_droplet.sh /usr/local/bin/reset_secondary_droplet.sh
+install -m 755 -o root -g root ../scripts/yt-decider-debug.sh /usr/local/bin/yt-decider-debug.sh
+
 ENV_FILE="/etc/youtube-fallback.env"
 DEFAULTS_FILE="config/youtube-fallback.defaults"
 
