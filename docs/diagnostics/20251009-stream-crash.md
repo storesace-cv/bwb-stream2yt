@@ -5,6 +5,7 @@
 - O snapshot de recursos coletado às 09:46 UTC mostra ~107 MiB de RAM livre e 335 MiB disponíveis, sem swap configurado, indicando que o host não estava sem memória quando o relatório foi gerado.
 - Não há mensagens do kernel sobre OOM killer ou processos terminados por falta de memória; o `ffmpeg` permanece em execução consumindo ~105 MiB de RAM.
 - O mesmo serviço já havia falhado no dia anterior (08/10) às 07:55 UTC, sugerindo regressão de configuração ou bug recente. O script de deploy agora ativa automaticamente 512 MiB de swap para dar margem adicional.
+- Apesar da falha do `ensure-broadcast.service`, o `yt-decider-daemon` manteve o fallback ligado (não há transições para *off* nos logs `[yt_decider]` dentro da janela). Para futuras regressões, recolher e anexar o `yt-decider-*.log` gerado por `scripts/yt-decider-debug.sh`.
 
 ## Evidências
 - Falha do serviço e mensagem de erro do script Ensure Broadcast: `tests/droplet_logs/time_line_droplet_091025_1100.log` linhas 21041-21045.
@@ -18,3 +19,4 @@
 2. Validar manualmente a execução de `ensure-broadcast.service` após aplicar a correção. ✅ Executar `systemctl start ensure-broadcast.service` e confirmar `Active: inactive (dead)` com `Status=0/SUCCESS`.
 3. (Opcional) Configurar swap leve ou monitoramento adicional, mas não há evidências atuais de exaustão de memória. ✅ `scripts/post_deploy.sh` cria/ativa swapfile de 512 MiB caso ausente.
 4. Avaliar reinícios periódicos apenas se surgirem sintomas de leak; com swap e monitorização atual não é necessário reiniciar serviços a cada 30 minutos.
+5. Caso o fallback volte a comportar-se de forma errática, recolher rapidamente o pacote de evidências com `bash scripts/yt-decider-debug.sh` (ver [guia dedicado](yt-decider-debug.md)) para comparar decisões do daemon com o estado da API.
