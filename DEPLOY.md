@@ -30,9 +30,13 @@ pip3 install -r /root/bwb-stream2yt/secondary-droplet/requirements.txt
 # serviços
 install -m 755 -o root -g root /root/bwb-stream2yt/secondary-droplet/bin/youtube_fallback.sh /usr/local/bin/youtube_fallback.sh
 install -m 644 -o root -g root /root/bwb-stream2yt/secondary-droplet/systemd/youtube-fallback.service /etc/systemd/system/youtube-fallback.service
+install -m 755 -o root -g root /root/bwb-stream2yt/secondary-droplet/bin/ensure_broadcast.py /usr/local/bin/ensure_broadcast.py
+install -m 644 -o root -g root /root/bwb-stream2yt/secondary-droplet/systemd/ensure-broadcast.service /etc/systemd/system/ensure-broadcast.service
+install -m 644 -o root -g root /root/bwb-stream2yt/secondary-droplet/systemd/ensure-broadcast.timer /etc/systemd/system/ensure-broadcast.timer
 
 systemctl daemon-reload
 systemctl enable --now youtube-fallback.service
+systemctl enable --now ensure-broadcast.timer
 ```
 
 ### 3) Segredos no droplet (fora do git)
