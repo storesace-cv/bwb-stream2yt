@@ -106,8 +106,16 @@ install_admin_script() {
     log "Aviso: ${label} não encontrado em ${source_path}; instalação ignorada."
 }
 
-install_admin_script "reset_secondary_droplet.sh" "${REPO_ROOT}/scripts/reset_secondary_droplet.sh" /usr/local/bin/reset_secondary_droplet.sh scripts/reset_secondary_droplet.sh
-install_admin_script "yt-decider-debug.sh" "${REPO_ROOT}/scripts/yt-decider-debug.sh" /usr/local/bin/yt-decider-debug.sh scripts/yt-decider-debug.sh
+install_admin_script \
+    "reset_secondary_droplet.sh" \
+    "${REPO_ROOT}/scripts/reset_secondary_droplet.sh" \
+    /usr/local/bin/reset_secondary_droplet.sh \
+    scripts/reset_secondary_droplet.sh
+install_admin_script \
+    "yt-decider-debug.sh" \
+    "${REPO_ROOT}/scripts/yt-decider-debug.sh" \
+    /usr/local/bin/yt-decider-debug.sh \
+    scripts/yt-decider-debug.sh
 
 ENV_FILE="/etc/youtube-fallback.env"
 DEFAULTS_FILE="config/youtube-fallback.defaults"
