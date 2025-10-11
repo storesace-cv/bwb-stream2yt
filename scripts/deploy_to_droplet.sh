@@ -16,7 +16,7 @@ rsync -avz --delete -e "${SSH_CMD[*]}" \
   --exclude '*.env' --exclude 'token.json' --exclude 'client_secret.json' \
   "$(dirname "$0")/../secondary-droplet/" "${DEST_USER}@${DEST_IP}:${DEST_DIR}/secondary-droplet/"
 rsync -avz --delete -e "${SSH_CMD[*]}" \
-  "$(dirname "$0")/post_deploy.sh" "${DEST_USER}@${DEST_IP}:${DEST_DIR}/scripts/post_deploy.sh"
+  "$(dirname "$0")/../scripts/" "${DEST_USER}@${DEST_IP}:${DEST_DIR}/scripts/"
 rsync -avz --delete -e "${SSH_CMD[*]}" \
   --exclude 'history/' \
   "$(dirname "$0")/../diags/" "${DEST_USER}@${DEST_IP}:${DEST_DIR}/diags/"
