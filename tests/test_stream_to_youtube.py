@@ -29,6 +29,16 @@ class DummyWorker:
         self._running = False
         self.started = threading.Event()
         self.stop_called = threading.Event()
+        self._config = types.SimpleNamespace(
+            heartbeat=types.SimpleNamespace(enabled=False, endpoint=None),
+            bitrate_min_kbps=0,
+            bitrate_max_kbps=0,
+            autotune_interval=0.0,
+            autotune_safety_margin=0.0,
+            day_start_hour=0,
+            day_end_hour=0,
+            tz_offset_hours=0,
+        )
 
     def start(self) -> None:
         self._running = True

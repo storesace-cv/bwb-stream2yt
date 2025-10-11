@@ -1,8 +1,8 @@
 # Operations Checklist
 
 ## Daily sanity
-- `systemctl status yt-decider-daemon youtube-fallback`
-- `journalctl -u yt-decider-daemon -n 60 -l --no-pager`
+- `systemctl status bwb-status-monitor youtube-fallback`
+- `journalctl -u bwb-status-monitor -n 60 -l --no-pager`
 - `tail -n 100 /root/bwb_services.log` (event log para primário, fallback e daemon)
 
 ### Log centralizado (`/root/bwb_services.log`)

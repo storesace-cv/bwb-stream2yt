@@ -11,15 +11,15 @@
 - **secondary-droplet/**:
   - `bin/youtube_fallback.sh`: envia slate 720p 30fps para **backup** (B-endpoint do YouTube).
   - `systemd/youtube-fallback.service`: unit systemd.
-  - `bin/yt_decider_daemon.py`: decide **quando** ligar/desligar o fallback (ligar à API YouTube).
+  - `bin/bwb_status_monitor.py`: serviço HTTP que recebe heartbeats do primário e comanda o fallback.
   - `bin/yt_api_probe_once.py`: utilitário de debug (lista `liveStreams`/health).
   - `tools/regen_token.py`: fluxo OAuth (gerar `token.json` noutro host com browser).
 
 ## Tarefas pedidas
 
-1. **Robustez** do decider:
-   - ignorar o **primeiro "Sem dados"** imediatamente após desligar o backup;
-   - reforçar janela de confirmação (ex.: 2-3 iterações) antes de trocar estado.
+1. **Monitor e heartbeats**:
+   - garantir que o `bwb_status_monitor.py` reage apenas à ausência/presença de heartbeats;
+   - evitar oscilações com thresholds configuráveis via env.
 
 2. **Auto-recuperação** do fallback:
    - se ffmpeg crashar, systemd relança (já feito). Ajustar `RestartSec` se necessário.

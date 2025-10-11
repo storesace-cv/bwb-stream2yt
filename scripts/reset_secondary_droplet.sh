@@ -14,7 +14,7 @@ fi
 
 SERVICES=(
   "youtube-fallback.service"
-  "yt-decider-daemon.service"
+  "bwb-status-monitor.service"
   "ytc-web-backend.service"
 )
 

@@ -26,7 +26,7 @@ cat /var/lib/bwb-status-monitor/status.json
 
 ## Reset rápido da droplet secundária
 
-Use o script `scripts/reset_secondary_droplet.sh` para libertar caches de memória e reiniciar os serviços principais (fallback, decider e backend da YTC Web). O script deve ser executado como root diretamente na droplet:
+Use o script `scripts/reset_secondary_droplet.sh` para libertar caches de memória e reiniciar os serviços principais (fallback, monitor de heartbeats e backend da YTC Web). O script deve ser executado como root diretamente na droplet:
 
 ```bash
 cd /root/bwb-stream2yt
@@ -53,10 +53,11 @@ journalctl -u ensure-broadcast.service -n 50 -l
 
 - Saída esperada: `Status=0/SUCCESS` com log `[ensure] Transmissão ... com stream ...`.
 
-## Decider (se usado)
+## Limpeza de serviços legados
 
-- Ver `journalctl -u yt-decider-daemon -f -l`
-- Consultar o histórico consolidado em `/root/bwb_services.log` (contém decisões do decider, eventos do fallback e notas do primário).
+- Após qualquer deploy, confirme que `yt-decider-daemon.service` e `yt-decider.service` não aparecem em `systemctl list-unit-files`.
+- Se algum ainda existir, execute `systemctl disable --now yt-decider-daemon.service yt-decider.service || true` e remova os binários antigos em `/usr/local/bin/yt_decider_daemon.py`, `/usr/local/bin/yt-decider-daemon.py` e `/usr/local/bin/yt-decider-debug.sh`.
+- Recarregue o systemd com `systemctl daemon-reload` para aplicar a remoção.
 
 ## Diagnósticos rápidos da URL secundária
 
