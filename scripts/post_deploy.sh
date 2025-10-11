@@ -116,11 +116,49 @@ ensure_python_venv() {
     log "python${version} ensurepip validado após instalação."
 }
 
+ensure_secondary_requirements() {
+    local force="${FORCE_REDEPLOY:-}"
+    local requirements_path="${SECONDARY_DIR}/requirements.txt"
+    local current_hash
+    current_hash=$(sha256sum "${requirements_path}" | awk '{print $1}')
+    local previous_hash=""
+    if [[ -f "${REQUIREMENTS_HASH_FILE}" ]]; then
+        previous_hash=$(<"${REQUIREMENTS_HASH_FILE}")
+    fi
+
+    if [[ "${force}" == "1" ]]; then
+        log "FORCE_REDEPLOY=1 detectado; reinstalando dependências do fallback."
+    fi
+
+    if [[ "${current_hash}" != "${previous_hash}" || "${force}" == "1" ]]; then
+        log "Instalando dependências base do fallback (requirements.txt actualizado)."
+        pip3 install --no-cache-dir -r requirements.txt
+        echo "${current_hash}" > "${REQUIREMENTS_HASH_FILE}"
+    else
+        log "Dependências base já instaladas; nenhuma ação necessária."
+    fi
+}
+
 setup_status_monitor() {
     log "Instalando monitor HTTP de status do primário"
 
-    install -m 755 -o root -g root bin/bwb_status_monitor.py /usr/local/bin/bwb_status_monitor.py
-    install -m 644 -o root -g root systemd/bwb-status-monitor.service /etc/systemd/system/bwb-status-monitor.service
+    local restart_required=false
+
+    if ensure_installed_file \
+        bin/bwb_status_monitor.py \
+        /usr/local/bin/bwb_status_monitor.py \
+        755 root root; then
+        restart_required=true
+    fi
+
+    if ensure_installed_file \
+        systemd/bwb-status-monitor.service \
+        /etc/systemd/system/bwb-status-monitor.service \
+        644 root root; then
+        restart_required=true
+    fi
+
+    maybe_systemctl_daemon_reload
 
     local state_dir="/var/lib/bwb-status-monitor"
     install -d -m 755 -o root -g root "${state_dir}"
@@ -136,8 +174,9 @@ setup_status_monitor() {
     fi
 
     local env_file="/etc/bwb-status-monitor.env"
-    if [[ ! -f "${env_file}" ]]; then
-        cat <<'ENVEOF' >"${env_file}"
+    local tmp_env
+    tmp_env=$(mktemp)
+    cat <<'ENVEOF' >"${tmp_env}"
 # /etc/bwb-status-monitor.env — configurações para o monitor HTTP de status.
 # Descomente e ajuste as variáveis conforme necessário.
 #BWB_STATUS_BIND=0.0.0.0
@@ -151,8 +190,10 @@ setup_status_monitor() {
 #BWB_STATUS_SECONDARY_SERVICE=youtube-fallback.service
 #BWB_STATUS_TOKEN=
 ENVEOF
-        chmod 640 "${env_file}"
+    if ensure_installed_file "${tmp_env}" "${env_file}" 640 root root; then
+        restart_required=true
     fi
+    rm -f "${tmp_env}"
 
     if command -v ufw >/dev/null 2>&1; then
         if ufw status 2>/dev/null | grep -qi "status: active"; then
@@ -164,8 +205,25 @@ ENVEOF
         fi
     fi
 
-    systemctl daemon-reload
-    systemctl enable --now bwb-status-monitor.service
+    if ! systemctl_is_enabled bwb-status-monitor.service; then
+        log "Ativando bwb-status-monitor.service para arranque automático."
+        systemctl enable bwb-status-monitor.service
+    else
+        log "bwb-status-monitor.service já está configurado para iniciar no arranque."
+    fi
+
+    if systemctl_is_active bwb-status-monitor.service; then
+        if [[ "${restart_required}" == "true" ]]; then
+            log "Reiniciando bwb-status-monitor.service para aplicar alterações."
+            systemctl restart bwb-status-monitor.service
+        else
+            log "bwb-status-monitor.service já está em execução."
+        fi
+    else
+        log "Iniciando bwb-status-monitor.service."
+        systemctl start bwb-status-monitor.service
+    fi
+
     log "Monitor de status ativo em ${state_dir}"
 }
 
