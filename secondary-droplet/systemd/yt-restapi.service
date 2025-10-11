@@ -9,7 +9,10 @@ EnvironmentFile=/etc/yt-restapi.env
 ExecStart=/usr/bin/python3 /usr/local/bin/bwb_status_monitor.py
 Restart=always
 RestartSec=3
-NoNewPrivileges=true
+# Nota: o monitor controla youtube-fallback via sudo; este serviço necessita
+# de permitir a escalada pontual, caso contrário sudo falha com "no new
+# privileges" e o fallback nunca arranca.
+#NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=full
 ProtectHome=true
