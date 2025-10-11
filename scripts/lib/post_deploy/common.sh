@@ -31,9 +31,13 @@ ensure_installed_file() {
 }
 
 ensure_installed_file_optional() {
-    if ! ensure_installed_file "$@"; then
+    local source=$1
+    if [[ ! -e "${source}" ]]; then
+        log "Opcional ${source##*/} ausente; ignorando instalação."
         return 0
     fi
+
+    ensure_installed_file "$@"
 }
 
 maybe_systemctl_daemon_reload() {
