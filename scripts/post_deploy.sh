@@ -9,6 +9,18 @@ log() {
     echo "[post_deploy] $*"
 }
 
+print_available_scripts() {
+    log "Scripts disponíveis para diagnóstico e recuperação:"
+    log "  reset_secondary_droplet.sh — limpa caches e reinicia serviços críticos (fallback, decider, backend)."
+    log "    Comando: sudo /usr/local/bin/reset_secondary_droplet.sh"
+    log "  yt-decider-debug.sh — recolhe logs do yt-decider das últimas 48h e gera ficheiro de análise."
+    log "    Comando: sudo /usr/local/bin/yt-decider-debug.sh"
+    log "  ensure_broadcast.py — valida se existe live do YouTube pronta e ligada ao stream correto."
+    log "    Comando: sudo /usr/local/bin/ensure_broadcast.py"
+    log "  bwb_status_monitor.py — servidor HTTP que recebe heartbeats do primário; ver --help para opções."
+    log "    Comando: sudo /usr/local/bin/bwb_status_monitor.py --help"
+}
+
 log "Registando saída completa em ${LOG_FILE}"
 
 ensure_swap() {
@@ -207,6 +219,7 @@ bash bin/ytc_web_backend_setup.sh
 ensure_swap
 
 log "Operação concluída."
+print_available_scripts
 
 if command -v deactivate >/dev/null 2>&1; then
     deactivate
