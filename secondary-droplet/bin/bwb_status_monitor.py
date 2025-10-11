@@ -175,6 +175,24 @@ class ServiceManager:
         LOGGER.debug("Executando: %s", " ".join(cmd))
         return subprocess.run(cmd, check=False, capture_output=True, text=True)
 
+    @staticmethod
+    def _systemctl_message(result: subprocess.CompletedProcess[str]) -> str:
+        message = result.stderr.strip() or result.stdout.strip()
+        if not message:
+            message = f"systemctl retornou código {result.returncode}"
+        return message
+
+    def _log_failure(
+        self, action: str, result: subprocess.CompletedProcess[str]
+    ) -> None:
+        message = self._systemctl_message(result)
+        LOGGER.error("Falha ao %s %s: %s", action, self.name, message)
+        if "no new privileges" in message.lower():
+            LOGGER.error(
+                "A conta actual não consegue usar sudo devido a NoNewPrivileges=true; "
+                "revise a unit yt-restapi.service para permitir o fallback."
+            )
+
     def ensure_started(self) -> bool:
         with self._lock:
             status = subprocess.run(
@@ -189,11 +207,7 @@ class ServiceManager:
 
             result = self._run_systemctl("start")
             if result.returncode != 0:
-                LOGGER.error(
-                    "Falha ao iniciar %s: %s",
-                    self.name,
-                    result.stderr.strip() or result.stdout.strip(),
-                )
+                self._log_failure("iniciar", result)
                 return False
 
             LOGGER.info("Serviço %s iniciado", self.name)
@@ -213,11 +227,7 @@ class ServiceManager:
 
             result = self._run_systemctl("stop")
             if result.returncode != 0:
-                LOGGER.error(
-                    "Falha ao parar %s: %s",
-                    self.name,
-                    result.stderr.strip() or result.stdout.strip(),
-                )
+                self._log_failure("parar", result)
                 return False
 
             LOGGER.info("Serviço %s parado", self.name)
