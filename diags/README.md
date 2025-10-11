@@ -48,8 +48,8 @@ cd /root/bwb-stream2yt/diags
 ./run_full_snapshot.sh
 ```
 
-O script cria cinco ficheiros `*.log` datados na pasta `history/` com a saída
-dos comandos executados, além dos relatórios produzidos pelo próprio
+O script cria um único ficheiro `*.log` datado na pasta `history/` com a saída
+de todos os comandos executados, além dos relatórios produzidos pelo próprio
 `run_diagnostics.py` e pelo `status-monitor-debug.sh`.
 
 O script apresenta, no terminal, o número de heartbeats recebidos, o intervalo
@@ -74,10 +74,10 @@ os seguintes blocos de informação:
 ## Personalização
 
 - Use `--services` para acrescentar ou remover unidades `systemd`.
-- Use `--commands` para adicionar comandos extra (em JSON), por exemplo:
-  `./run_diagnostics.py --commands '["curl", "-fsS", "http://127.0.0.1:8081/api/live-status"]'`.
 - Use `--log-path`, `--env-path`, `--defaults-path` ou `--progress-path` caso o
   deployment utilize localizações alternativas.
+- A porta HTTP monitorizada é inferida a partir de `/etc/youtube-fallback.env`,
+  podendo ser sobreposta com `--env-path` se necessário.
 
 ## Automatização futura
 
