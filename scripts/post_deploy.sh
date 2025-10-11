@@ -9,47 +9,108 @@ log() {
     echo "[post_deploy] $*"
 }
 
-remove_legacy_components() {
-    local -a legacy_services=(
-        "yt-decider-daemon.service"
-        "yt-decider.service"
-    )
-
-    for service in "${legacy_services[@]}"; do
-        if systemctl list-unit-files "${service}" >/dev/null 2>&1; then
-            log "Desativando serviço legado ${service}"
-            systemctl disable --now "${service}" >/dev/null 2>&1 || true
-        fi
-    done
-
-    local -a legacy_paths=(
-        "/etc/systemd/system/yt-decider-daemon.service"
-        "/etc/systemd/system/yt-decider.service"
-        "/usr/local/bin/yt_decider_daemon.py"
-        "/usr/local/bin/yt-decider-daemon.py"
-        "/usr/local/bin/yt-decider-debug.sh"
-    )
-
-    for path in "${legacy_paths[@]}"; do
-        if [[ -e "${path}" ]]; then
-            log "Removendo artefacto legado ${path}"
-            rm -f "${path}"
-        fi
-    done
-
-    systemctl daemon-reload
-}
-
 print_available_scripts() {
     log "Scripts disponíveis para diagnóstico e recuperação:"
-    log "  reset_secondary_droplet.sh — limpa caches e reinicia serviços críticos (fallback, monitor, backend)."
+    log "  reset_secondary_droplet.sh — limpa caches e reinicia serviços críticos (fallback, decider, backend)."
     log "    Comando: sudo /usr/local/bin/reset_secondary_droplet.sh"
-    log "  status-monitor-debug.sh — recolhe evidências do monitor HTTP (últimas 48h) e gera ficheiro de análise."
-    log "    Comando: sudo /usr/local/bin/status-monitor-debug.sh"
+    log "  yt-decider-debug.sh — recolhe logs do yt-decider das últimas 48h e gera ficheiro de análise."
+    log "    Comando: sudo /usr/local/bin/yt-decider-debug.sh"
     log "  ensure_broadcast.py — valida se existe live do YouTube pronta e ligada ao stream correto."
     log "    Comando: sudo /usr/local/bin/ensure_broadcast.py"
     log "  bwb_status_monitor.py — servidor HTTP que recebe heartbeats do primário; ver --help para opções."
     log "    Comando: sudo /usr/local/bin/bwb_status_monitor.py --help"
+}
+
+STATE_DIR="/var/lib/bwb-post-deploy"
+mkdir -p "${STATE_DIR}"
+REQUIREMENTS_HASH_FILE="${STATE_DIR}/secondary_requirements.sha256"
+NEED_DAEMON_RELOAD=false
+
+maybe_systemctl_daemon_reload() {
+    if [[ "${NEED_DAEMON_RELOAD}" == "true" ]]; then
+        log "systemd recebeu alterações; executando daemon-reload."
+        systemctl daemon-reload
+        NEED_DAEMON_RELOAD=false
+    fi
+}
+
+ensure_installed_file() {
+    local src="$1"
+    local dest="$2"
+    local mode="$3"
+    local owner="${4:-root}"
+    local group="${5:-root}"
+    local need_install=0
+
+    if [[ ! -e "${dest}" ]]; then
+        need_install=1
+    else
+        if ! cmp -s "${src}" "${dest}"; then
+            need_install=1
+        else
+            local current_mode
+            current_mode=$(stat -c '%a' "${dest}")
+            if (( 8#${current_mode} != 8#${mode} )); then
+                need_install=1
+            else
+                local current_owner
+                local current_group
+                current_owner=$(stat -c '%U' "${dest}")
+                current_group=$(stat -c '%G' "${dest}")
+                if [[ "${current_owner}" != "${owner}" || "${current_group}" != "${group}" ]]; then
+                    need_install=1
+                fi
+            fi
+        fi
+    fi
+
+    if (( need_install )); then
+        install -m "${mode}" -o "${owner}" -g "${group}" "${src}" "${dest}"
+        log "Atualizado ${dest} a partir de ${src}."
+        if [[ "${dest}" == /etc/systemd/system/* ]]; then
+            NEED_DAEMON_RELOAD=true
+        fi
+        return 0
+    fi
+
+    log "${dest} já está actualizado; sem alterações."
+    return 1
+}
+
+systemctl_is_enabled() {
+    systemctl is-enabled "$1" >/dev/null 2>&1
+}
+
+systemctl_is_active() {
+    systemctl is-active "$1" >/dev/null 2>&1
+}
+
+ensure_service_disabled() {
+    local unit="$1"
+    if systemctl_is_enabled "${unit}"; then
+        log "Desativando ${unit} (--now) para manter estado esperado."
+        systemctl disable --now "${unit}"
+    elif systemctl_is_active "${unit}"; then
+        log "${unit} ativo mas não estava desativado; a parar."
+        systemctl stop "${unit}"
+    else
+        log "${unit} já se encontra parado e desativado."
+    fi
+}
+
+ensure_timer_enabled() {
+    local timer="$1"
+    if systemctl_is_enabled "${timer}"; then
+        if systemctl_is_active "${timer}"; then
+            log "${timer} já está ativo e habilitado."
+        else
+            log "${timer} estava habilitado mas parado; a iniciar."
+            systemctl start "${timer}"
+        fi
+    else
+        log "Ativando ${timer} (--now)."
+        systemctl enable --now "${timer}"
+    fi
 }
 
 log "Registando saída completa em ${LOG_FILE}"
@@ -115,11 +176,49 @@ ensure_python_venv() {
     log "python${version} ensurepip validado após instalação."
 }
 
+ensure_secondary_requirements() {
+    local force="${FORCE_REDEPLOY:-}"
+    local requirements_path="${SECONDARY_DIR}/requirements.txt"
+    local current_hash
+    current_hash=$(sha256sum "${requirements_path}" | awk '{print $1}')
+    local previous_hash=""
+    if [[ -f "${REQUIREMENTS_HASH_FILE}" ]]; then
+        previous_hash=$(<"${REQUIREMENTS_HASH_FILE}")
+    fi
+
+    if [[ "${force}" == "1" ]]; then
+        log "FORCE_REDEPLOY=1 detectado; reinstalando dependências do fallback."
+    fi
+
+    if [[ "${current_hash}" != "${previous_hash}" || "${force}" == "1" ]]; then
+        log "Instalando dependências base do fallback (requirements.txt actualizado)."
+        pip3 install --no-cache-dir -r requirements.txt
+        echo "${current_hash}" > "${REQUIREMENTS_HASH_FILE}"
+    else
+        log "Dependências base já instaladas; nenhuma ação necessária."
+    fi
+}
+
 setup_status_monitor() {
     log "Instalando monitor HTTP de status do primário"
 
-    install -m 755 -o root -g root bin/bwb_status_monitor.py /usr/local/bin/bwb_status_monitor.py
-    install -m 644 -o root -g root systemd/bwb-status-monitor.service /etc/systemd/system/bwb-status-monitor.service
+    local restart_required=false
+
+    if ensure_installed_file \
+        bin/bwb_status_monitor.py \
+        /usr/local/bin/bwb_status_monitor.py \
+        755 root root; then
+        restart_required=true
+    fi
+
+    if ensure_installed_file \
+        systemd/bwb-status-monitor.service \
+        /etc/systemd/system/bwb-status-monitor.service \
+        644 root root; then
+        restart_required=true
+    fi
+
+    maybe_systemctl_daemon_reload
 
     local state_dir="/var/lib/bwb-status-monitor"
     install -d -m 755 -o root -g root "${state_dir}"
@@ -135,8 +234,9 @@ setup_status_monitor() {
     fi
 
     local env_file="/etc/bwb-status-monitor.env"
-    if [[ ! -f "${env_file}" ]]; then
-        cat <<'ENVEOF' >"${env_file}"
+    local tmp_env
+    tmp_env=$(mktemp)
+    cat <<'ENVEOF' >"${tmp_env}"
 # /etc/bwb-status-monitor.env — configurações para o monitor HTTP de status.
 # Descomente e ajuste as variáveis conforme necessário.
 #BWB_STATUS_BIND=0.0.0.0
@@ -150,8 +250,10 @@ setup_status_monitor() {
 #BWB_STATUS_SECONDARY_SERVICE=youtube-fallback.service
 #BWB_STATUS_TOKEN=
 ENVEOF
-        chmod 640 "${env_file}"
+    if ensure_installed_file "${tmp_env}" "${env_file}" 640 root root; then
+        restart_required=true
     fi
+    rm -f "${tmp_env}"
 
     if command -v ufw >/dev/null 2>&1; then
         if ufw status 2>/dev/null | grep -qi "status: active"; then
@@ -163,8 +265,25 @@ ENVEOF
         fi
     fi
 
-    systemctl daemon-reload
-    systemctl enable --now bwb-status-monitor.service
+    if ! systemctl_is_enabled bwb-status-monitor.service; then
+        log "Ativando bwb-status-monitor.service para arranque automático."
+        systemctl enable bwb-status-monitor.service
+    else
+        log "bwb-status-monitor.service já está configurado para iniciar no arranque."
+    fi
+
+    if systemctl_is_active bwb-status-monitor.service; then
+        if [[ "${restart_required}" == "true" ]]; then
+            log "Reiniciando bwb-status-monitor.service para aplicar alterações."
+            systemctl restart bwb-status-monitor.service
+        else
+            log "bwb-status-monitor.service já está em execução."
+        fi
+    else
+        log "Iniciando bwb-status-monitor.service."
+        systemctl start bwb-status-monitor.service
+    fi
+
     log "Monitor de status ativo em ${state_dir}"
 }
 
@@ -174,27 +293,57 @@ SECONDARY_DIR="${REPO_DIR}/secondary-droplet"
 
 cd "${SECONDARY_DIR}"
 
-log "Instalando dependências base do fallback"
-pip3 install --no-cache-dir -r requirements.txt
+log "Validando dependências base do fallback"
+ensure_secondary_requirements
 
-install -m 755 -o root -g root bin/youtube_fallback.sh /usr/local/bin/youtube_fallback.sh
-install -m 644 -o root -g root systemd/youtube-fallback.service /etc/systemd/system/youtube-fallback.service
-install -m 755 -o root -g root bin/ensure_broadcast.py /usr/local/bin/ensure_broadcast.py
-install -m 644 -o root -g root systemd/ensure-broadcast.service /etc/systemd/system/ensure-broadcast.service
-install -m 644 -o root -g root systemd/ensure-broadcast.timer /etc/systemd/system/ensure-broadcast.timer
+fallback_changed=false
+if ensure_installed_file \
+    bin/youtube_fallback.sh \
+    /usr/local/bin/youtube_fallback.sh \
+    755 root root; then
+    fallback_changed=true
+fi
+if ensure_installed_file \
+    systemd/youtube-fallback.service \
+    /etc/systemd/system/youtube-fallback.service \
+    644 root root; then
+    fallback_changed=true
+fi
+
+ensure_broadcast_changed=false
+if ensure_installed_file \
+    bin/ensure_broadcast.py \
+    /usr/local/bin/ensure_broadcast.py \
+    755 root root; then
+    ensure_broadcast_changed=true
+fi
+if ensure_installed_file \
+    systemd/ensure-broadcast.service \
+    /etc/systemd/system/ensure-broadcast.service \
+    644 root root; then
+    ensure_broadcast_changed=true
+fi
+if ensure_installed_file \
+    systemd/ensure-broadcast.timer \
+    /etc/systemd/system/ensure-broadcast.timer \
+    644 root root; then
+    ensure_broadcast_changed=true
+fi
+
+maybe_systemctl_daemon_reload
 
 log "Instalando utilitários administrativos no /usr/local/bin"
 
 reset_secondary_source="${SCRIPT_DIR}/reset_secondary_droplet.sh"
 if [[ -f "${reset_secondary_source}" ]]; then
-    install -m 755 -o root -g root "${reset_secondary_source}" /usr/local/bin/reset_secondary_droplet.sh
+    ensure_installed_file "${reset_secondary_source}" /usr/local/bin/reset_secondary_droplet.sh 755 root root
 else
     log "Aviso: reset_secondary_droplet.sh não encontrado em ${reset_secondary_source}; instalação ignorada."
 fi
 
-status_monitor_debug_source="${SCRIPT_DIR}/status-monitor-debug.sh"
-if [[ -f "${status_monitor_debug_source}" ]]; then
-    install -m 755 -o root -g root "${status_monitor_debug_source}" /usr/local/bin/status-monitor-debug.sh
+yt_decider_debug_source="${SCRIPT_DIR}/yt-decider-debug.sh"
+if [[ -f "${yt_decider_debug_source}" ]]; then
+    ensure_installed_file "${yt_decider_debug_source}" /usr/local/bin/yt-decider-debug.sh 755 root root
 else
     log "Aviso: status-monitor-debug.sh não encontrado em ${status_monitor_debug_source}; instalação ignorada."
 fi
@@ -231,15 +380,26 @@ trap 'rm -f "'"${tmp_env}"'"' EXIT
         echo "#${default_line}"
     done < "${DEFAULTS_FILE}"
 } > "${tmp_env}"
-
-install -m 644 -o root -g root "${tmp_env}" "${ENV_FILE}"
+if ensure_installed_file "${tmp_env}" "${ENV_FILE}" 644 root root; then
+    fallback_changed=true
+fi
 rm -f "${tmp_env}"
 trap - EXIT
 
-systemctl daemon-reload
-systemctl stop youtube-fallback.service || true
-systemctl disable youtube-fallback.service || true
-systemctl enable --now ensure-broadcast.timer
+maybe_systemctl_daemon_reload
+
+ensure_service_disabled youtube-fallback.service
+if [[ "${fallback_changed}" == "true" ]]; then
+    log "Conteúdo do youtube-fallback atualizado; próximo arranque refletirá alterações."
+fi
+
+ensure_timer_enabled ensure-broadcast.timer
+if [[ "${ensure_broadcast_changed}" == "true" ]]; then
+    if systemctl_is_active ensure-broadcast.service; then
+        log "Reiniciando ensure-broadcast.service para aplicar novas versões."
+        systemctl restart ensure-broadcast.service
+    fi
+fi
 
 setup_status_monitor
 
