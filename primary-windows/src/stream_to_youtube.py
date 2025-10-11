@@ -43,7 +43,7 @@ ENV_TEMPLATE_CONTENT = """# Configurações para stream_to_youtube.py
 #RTSP_PASSWORD=SenhaFort3
 
 # Parâmetros de saída para o ffmpeg. Utilize para alterar codec, bitrate ou filtros.
-#YT_OUTPUT_ARGS=-vf scale=1920:1080:flags=bicubic,format=yuv420p -r 30 -c:v libx264 -preset veryfast -profile:v high -level 4.2 -b:v 4500k -pix_fmt yuv420p -g 60 -c:a aac -b:a 128k -ar 44100 -f flv
+#YT_OUTPUT_ARGS=-vf scale=1920:1080:flags=bicubic:in_range=pc:out_range=tv,format=yuv420p -r 30 -c:v libx264 -preset veryfast -profile:v high -level 4.2 -b:v 4500k -pix_fmt yuv420p -g 60 -c:a aac -b:a 128k -ar 44100 -f flv
 
 # Ative o ajuste automático de bitrate (requer psutil) para medir a banda de upload.
 #YT_AUTOTUNE=1
@@ -499,7 +499,10 @@ def _normalize_resolution(value: str) -> Optional[str]:
 def _apply_resolution_preset(args: list[str], resolution: str) -> list[str]:
     preset = _RESOLUTION_PRESETS[resolution]
     updated = list(args)
-    filter_value = f"scale={preset.width}:{preset.height}:flags=bicubic,format=yuv420p"
+    filter_value = (
+        f"scale={preset.width}:{preset.height}:"
+        "flags=bicubic:in_range=pc:out_range=tv,format=yuv420p"
+    )
     _set_arg_value(updated, "-vf", filter_value)
     _set_arg_value(updated, "-r", "30")
     _set_arg_value(updated, "-b:v", f"{preset.bitrate_kbps}k")
@@ -699,7 +702,7 @@ def load_config(resolution: Optional[str] = None) -> StreamingConfig:
         os.environ.get("YT_OUTPUT_ARGS", ""),
         [
             "-vf",
-            "scale=1920:1080:flags=bicubic,format=yuv420p",
+            "scale=1920:1080:flags=bicubic:in_range=pc:out_range=tv,format=yuv420p",
             "-r",
             "30",
             "-c:v",
