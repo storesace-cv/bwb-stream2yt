@@ -8,6 +8,22 @@ journalctl -fu youtube-fallback -l
 ss -tnp | grep -Ei 'youtube|rtmps|ffmpeg' || pgrep -fa ffmpeg
 ```
 
+## Monitor de heartbeats do primário
+
+O serviço `bwb-status-monitor.service` recebe relatórios do Windows e aciona o
+fallback quando necessário.
+
+```
+systemctl status bwb-status-monitor --no-pager -l
+journalctl -u bwb-status-monitor -n 50 -l
+tail -n 20 /var/log/bwb_status_monitor.log
+cat /var/lib/bwb-status-monitor/status.json
+```
+
+- O ficheiro `/var/lib/bwb-status-monitor/status.json` mantém apenas os
+  últimos 5 minutos de heartbeats.
+- Logs da instalação: `/var/log/bwb_post_deploy.log`.
+
 ## Reset rápido da droplet secundária
 
 Use o script `scripts/reset_secondary_droplet.sh` para libertar caches de memória e reiniciar os serviços principais (fallback, decider e backend da YTC Web). O script deve ser executado como root diretamente na droplet:
