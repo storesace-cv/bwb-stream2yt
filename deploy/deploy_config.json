@@ -7,11 +7,6 @@
   "post_deploy_notes": "post_deploy.sh reescreve /etc/youtube-fallback.env preservando YT_KEY e restaurando os padrões comentados.",
   "sync_map": [
     {
-      "local": "secondary-droplet/bin/yt_decider_daemon.py",
-      "remote": "/usr/local/bin/yt_decider_daemon.py",
-      "mode": "755"
-    },
-    {
       "local": "secondary-droplet/bin/youtube_fallback.sh",
       "remote": "/usr/local/bin/youtube_fallback.sh",
       "mode": "755"
@@ -32,8 +27,13 @@
       "mode": "644"
     },
     {
-      "local": "secondary-droplet/systemd/yt-decider-daemon.service",
-      "remote": "/etc/systemd/system/yt-decider-daemon.service",
+      "local": "secondary-droplet/bin/bwb_status_monitor.py",
+      "remote": "/usr/local/bin/bwb_status_monitor.py",
+      "mode": "755"
+    },
+    {
+      "local": "secondary-droplet/systemd/bwb-status-monitor.service",
+      "remote": "/etc/systemd/system/bwb-status-monitor.service",
       "mode": "644"
     },
     {
