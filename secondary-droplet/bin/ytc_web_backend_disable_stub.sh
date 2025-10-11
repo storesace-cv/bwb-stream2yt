@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Desliga apenas o backend ytc-web. Não afecta os serviços de fallback (bwb-status-monitor/youtube-fallback).
+# Desliga apenas o backend ytc-web. Não afecta os serviços de fallback (yt-restapi/youtube-fallback).
 set -euo pipefail
 
 log() {

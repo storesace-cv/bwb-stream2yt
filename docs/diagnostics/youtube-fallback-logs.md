@@ -30,10 +30,10 @@ sudo tail -f /run/youtube-fallback.progress
 
 ## 3. Correlacionar com outros serviços
 
-Quando o fallback pára, verifique também o `bwb-status-monitor`, responsável por decidir quando activar/desactivar o envio secundário:
+Quando o fallback pára, verifique também o `yt-restapi`, responsável por decidir quando activar/desactivar o envio secundário:
 
 ```bash
-sudo journalctl -u bwb-status-monitor -n 200
+sudo journalctl -u yt-restapi -n 200
 ```
 
 Ausência prolongada de heartbeats ou erros HTTP no endpoint configurado impedem a retoma automática. A análise detalhada de 6 de Outubro de 2025 (`docs/diagnostics/20251006-secondary-backup.md`) mostra como falhas de rede entre o emissor e o monitor degradavam a automação anterior; as mesmas recomendações de conectividade continuam válidas para o novo monitor.【F:docs/diagnostics/20251006-secondary-backup.md†L1-L61】

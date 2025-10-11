@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import errno
 import json
 import logging
 import os
@@ -46,42 +47,94 @@ class MonitorSettings:
     log_file: Path = Path("/var/log/bwb_status_monitor.log")
     secondary_service: str = "youtube-fallback.service"
     auth_token: Optional[str] = None
+    require_token: bool = False
 
     @classmethod
     def from_env(cls) -> "MonitorSettings":
-        def _int(name: str, default: int) -> int:
-            raw = os.environ.get(name)
+        def _get_env(*names: str) -> Optional[str]:
+            for name in names:
+                value = os.environ.get(name)
+                if value is not None:
+                    return value
+            return None
+
+        def _int(names: tuple[str, ...], default: int) -> int:
+            source = None
+            raw = None
+            for name in names:
+                value = os.environ.get(name)
+                if value is not None:
+                    source = name
+                    raw = value
+                    break
             if raw is None:
                 return default
             try:
                 value = int(raw)
             except (TypeError, ValueError):
                 LOGGER.warning(
-                    "Valor inválido em %s=%r; utilizando %s", name, raw, default
+                    "Valor inválido em %s=%r; utilizando %s",
+                    source,
+                    raw,
+                    default,
                 )
                 return default
             if value <= 0:
                 LOGGER.warning(
-                    "Valor não positivo em %s=%r; utilizando %s", name, raw, default
+                    "Valor não positivo em %s=%r; utilizando %s",
+                    source,
+                    raw,
+                    default,
                 )
                 return default
             return value
 
-        bind = os.environ.get("BWB_STATUS_BIND", "0.0.0.0")
-        port = _int("BWB_STATUS_PORT", 8080)
-        history_seconds = _int("BWB_STATUS_HISTORY_SECONDS", 300)
-        missed_threshold = _int("BWB_STATUS_MISSED_THRESHOLD", 40)
-        recovery_reports = _int("BWB_STATUS_RECOVERY_REPORTS", 2)
-        check_interval = _int("BWB_STATUS_CHECK_INTERVAL", 5)
+        bind = _get_env("YTR_BIND", "BWB_STATUS_BIND") or "0.0.0.0"
+        port = _int(("YTR_PORT", "BWB_STATUS_PORT"), 8080)
+        history_seconds = _int(("YTR_HISTORY_SECONDS", "BWB_STATUS_HISTORY_SECONDS"), 300)
+        missed_threshold = _int(("YTR_MISSED_THRESHOLD", "BWB_STATUS_MISSED_THRESHOLD"), 40)
+        recovery_reports = _int(("YTR_RECOVERY_REPORTS", "BWB_STATUS_RECOVERY_REPORTS"), 2)
+        check_interval = _int(("YTR_CHECK_INTERVAL", "BWB_STATUS_CHECK_INTERVAL"), 5)
 
-        state_path = Path(
-            os.environ.get("BWB_STATUS_STATE_FILE", cls.state_file.as_posix())
+        state_override = _get_env("YTR_STATE_FILE", "BWB_STATUS_STATE_FILE")
+        log_override = _get_env("YTR_LOG_FILE", "BWB_STATUS_LOG_FILE")
+        secondary_override = _get_env("YTR_SECONDARY_SERVICE", "BWB_STATUS_SECONDARY_SERVICE")
+
+        state_path = Path(state_override or cls.state_file.as_posix())
+        log_path = Path(log_override or cls.log_file.as_posix())
+        secondary_service = secondary_override or cls.secondary_service
+        token = _get_env("YTR_TOKEN", "BWB_STATUS_TOKEN")
+
+        def _maybe_bool(name: str) -> Optional[bool]:
+            raw = os.environ.get(name)
+            if raw is None:
+                return None
+            normalized = raw.strip().lower()
+            if normalized in {"1", "true", "yes", "on"}:
+                return True
+            if normalized in {"0", "false", "no", "off"}:
+                return False
+            LOGGER.warning(
+                "Valor inválido em %s=%r; utilizando predefinição", name, raw
+            )
+            return None
+
+        ytr_require = _maybe_bool("YTR_REQUIRE_TOKEN")
+        bwb_require = (
+            _maybe_bool("BWB_STATUS_REQUIRE_TOKEN") if ytr_require is None else None
         )
-        log_path = Path(os.environ.get("BWB_STATUS_LOG_FILE", cls.log_file.as_posix()))
-        secondary_service = os.environ.get(
-            "BWB_STATUS_SECONDARY_SERVICE", cls.secondary_service
+        require_token = (
+            ytr_require
+            if ytr_require is not None
+            else bwb_require if bwb_require is not None else bool(token)
         )
-        token = os.environ.get("BWB_STATUS_TOKEN")
+        if require_token is None:
+            require_token = bool(token)
+
+        if require_token and not token:
+            LOGGER.warning(
+                "Autenticação Bearer exigida, mas nenhuma variável YTR_TOKEN/BWB_STATUS_TOKEN foi definida."
+            )
 
         return cls(
             bind=bind,
@@ -94,6 +147,7 @@ class MonitorSettings:
             log_file=log_path,
             secondary_service=secondary_service,
             auth_token=token if token else None,
+            require_token=require_token,
         )
 
 
@@ -336,13 +390,15 @@ class StatusHTTPRequestHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
     def _authenticate(self) -> bool:
-        token = self.server.monitor.settings.auth_token  # type: ignore[attr-defined]
+        settings = self.server.monitor.settings  # type: ignore[attr-defined]
+        token = settings.auth_token
         if not token:
-            return True
+            return not settings.require_token
         header = self.headers.get("Authorization", "")
         if not header.startswith("Bearer "):
             return False
-        return header.removeprefix("Bearer ") == token
+        candidate = header.removeprefix("Bearer ").strip()
+        return candidate == token
 
     def _send_json(
         self, payload: Dict[str, Any], status: HTTPStatus = HTTPStatus.OK
@@ -365,7 +421,9 @@ class StatusHTTPRequestHandler(BaseHTTPRequestHandler):
             return
 
         if not self._authenticate():
-            self._send_json({"error": "não autorizado"}, status=HTTPStatus.UNAUTHORIZED)
+            self._send_json(
+                {"error": "token ausente ou inválido"}, status=HTTPStatus.FORBIDDEN
+            )
             return
 
         content_length = int(self.headers.get("Content-Length", "0"))
@@ -474,13 +532,36 @@ def run_server(settings: MonitorSettings, args: argparse.Namespace) -> None:
         settings.missed_threshold,
         settings.recovery_reports,
     )
+    if settings.require_token:
+        LOGGER.info("Autenticação Bearer obrigatória para /status")
+    elif settings.auth_token:
+        LOGGER.info("Token Bearer definido; aceitando também requisições sem token")
 
     monitor = StatusMonitor(
         settings=settings, service_manager=ServiceManager(settings.secondary_service)
     )
-    monitor.start()
 
-    httpd = StatusHTTPServer((bind, port), StatusHTTPRequestHandler, monitor)
+    try:
+        httpd = StatusHTTPServer((bind, port), StatusHTTPRequestHandler, monitor)
+    except OSError as exc:
+        if exc.errno == errno.EADDRINUSE:
+            LOGGER.error(
+                "Porta %s já está em uso em %s:%s; verifique se outra instância está ativa.",
+                port,
+                bind,
+                port,
+            )
+            LOGGER.error(
+                "Libere a porta ou ajuste BWB_STATUS_PORT/--port antes de reiniciar o monitor."
+            )
+        else:
+            LOGGER.exception(
+                "Falha ao iniciar servidor HTTP em %s:%s", bind, port
+            )
+        monitor.shutdown()
+        raise SystemExit(1) from exc
+
+    monitor.start()
 
     def _handle_signal(signum, _frame) -> None:
         LOGGER.info("Sinal %s recebido; encerrando.", signum)

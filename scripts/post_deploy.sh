@@ -175,38 +175,48 @@ else
         log "Instalando monitor HTTP de status do primário"
 
         ensure_installed_file "${base_dir}/bin/bwb_status_monitor.py" /usr/local/bin/bwb_status_monitor.py 755
-        ensure_installed_file "${base_dir}/systemd/bwb-status-monitor.service" /etc/systemd/system/bwb-status-monitor.service 644
+        ensure_installed_file "${base_dir}/systemd/yt-restapi.service" /etc/systemd/system/yt-restapi.service 644
+
+        if ! id -u yt-restapi >/dev/null 2>&1; then
+            log "Criando utilizador de sistema yt-restapi"
+            useradd --system --no-create-home --shell /usr/sbin/nologin yt-restapi
+        fi
 
         local state_dir="/var/lib/bwb-status-monitor"
-        install -d -m 755 -o root -g root "${state_dir}"
+        install -d -m 750 -o yt-restapi -g yt-restapi "${state_dir}"
         if [[ ! -f "${state_dir}/status.json" ]]; then
             printf '[]\n' >"${state_dir}/status.json"
-            chown root:root "${state_dir}/status.json"
+            chown yt-restapi:yt-restapi "${state_dir}/status.json"
             chmod 640 "${state_dir}/status.json"
         fi
 
         if [[ ! -f "/var/log/bwb_status_monitor.log" ]]; then
             touch /var/log/bwb_status_monitor.log
+            chown yt-restapi:yt-restapi /var/log/bwb_status_monitor.log
             chmod 640 /var/log/bwb_status_monitor.log
+        else
+            chown yt-restapi:yt-restapi /var/log/bwb_status_monitor.log
         fi
 
-        local env_file="/etc/bwb-status-monitor.env"
+        local env_file="/etc/yt-restapi.env"
         if [[ ! -f "${env_file}" ]]; then
             cat <<'ENVEOF' >"${env_file}"
-# /etc/bwb-status-monitor.env — configurações para o monitor HTTP de status.
-# Descomente e ajuste as variáveis conforme necessário.
-#BWB_STATUS_BIND=0.0.0.0
-#BWB_STATUS_PORT=8080
-#BWB_STATUS_HISTORY_SECONDS=300
-#BWB_STATUS_MISSED_THRESHOLD=40
-#BWB_STATUS_RECOVERY_REPORTS=2
-#BWB_STATUS_CHECK_INTERVAL=5
-#BWB_STATUS_STATE_FILE=/var/lib/bwb-status-monitor/status.json
-#BWB_STATUS_LOG_FILE=/var/log/bwb_status_monitor.log
-#BWB_STATUS_SECONDARY_SERVICE=youtube-fallback.service
-#BWB_STATUS_TOKEN=
+# /etc/yt-restapi.env — configurações para o monitor HTTP de status.
+# Ajuste as variáveis conforme necessário.
+#YTR_BIND=0.0.0.0
+#YTR_PORT=8080
+#YTR_HISTORY_SECONDS=300
+#YTR_MISSED_THRESHOLD=40
+#YTR_RECOVERY_REPORTS=2
+#YTR_CHECK_INTERVAL=5
+#YTR_STATE_FILE=/var/lib/bwb-status-monitor/status.json
+#YTR_LOG_FILE=/var/log/bwb_status_monitor.log
+#YTR_SECONDARY_SERVICE=youtube-fallback.service
+#YTR_TOKEN=
+#YTR_REQUIRE_TOKEN=1
 ENVEOF
             chmod 640 "${env_file}"
+            chown yt-restapi:yt-restapi "${env_file}"
         fi
 
         if command -v ufw >/dev/null 2>&1; then
@@ -224,7 +234,7 @@ ENVEOF
         fi
 
         maybe_systemctl_daemon_reload
-        systemctl enable --now bwb-status-monitor.service
+        systemctl enable --now yt-restapi.service
     }
 fi
 LOG_FILE="/var/log/bwb_post_deploy.log"

@@ -5,7 +5,7 @@
 - O snapshot de recursos coletado às 09:46 UTC mostra ~107 MiB de RAM livre e 335 MiB disponíveis, sem swap configurado, indicando que o host não estava sem memória quando o relatório foi gerado.
 - Não há mensagens do kernel sobre OOM killer ou processos terminados por falta de memória; o `ffmpeg` permanece em execução consumindo ~105 MiB de RAM.
 - O mesmo serviço já havia falhado no dia anterior (08/10) às 07:55 UTC, sugerindo regressão de configuração ou bug recente. O script de deploy agora ativa automaticamente 512 MiB de swap para dar margem adicional.
-- Apesar da falha do `ensure-broadcast.service`, o antigo `yt-decider-daemon` manteve o fallback ligado (não há transições para *off* nos logs `[yt_decider]` dentro da janela). Na arquitectura actual este papel é desempenhado pelo `bwb-status-monitor`; recolha o ficheiro `status-monitor-*.log` via `scripts/status-monitor-debug.sh` para incidentes semelhantes.
+- Apesar da falha do `ensure-broadcast.service`, o antigo `yt-decider-daemon` manteve o fallback ligado (não há transições para *off* nos logs `[yt_decider]` dentro da janela). Na arquitectura actual este papel é desempenhado pelo serviço `yt-restapi` (que executa `bwb_status_monitor.py`); recolha o ficheiro `status-monitor-*.log` via `scripts/status-monitor-debug.sh` para incidentes semelhantes.
 
 ## Evidências
 - Falha do serviço e mensagem de erro do script Ensure Broadcast: `tests/droplet_logs/time_line_droplet_091025_1100.log` linhas 21041-21045.

@@ -31,11 +31,13 @@ def scp(local: str, remote: str):
 LEGACY_SERVICES = (
     "yt-decider-daemon.service",
     "yt-decider.service",
+    "bwb-status-monitor.service",
 )
 
 LEGACY_PATHS = (
     "/etc/systemd/system/yt-decider-daemon.service",
     "/etc/systemd/system/yt-decider.service",
+    "/etc/systemd/system/bwb-status-monitor.service",
     "/usr/local/bin/yt_decider_daemon.py",
     "/usr/local/bin/yt-decider-daemon.py",
     "/usr/local/bin/yt-decider-debug.sh",
@@ -58,6 +60,7 @@ def cleanup_legacy_services(*, dry_run: bool = False):
 
     for path in LEGACY_PATHS:
         ssh(["rm", "-f", path], check=False)
+    ssh(["/bin/sh", "-c", "rm -f /etc/systemd/system/bwb-status-monitor.service*"], check=False)
 
 
 def main():
@@ -92,9 +95,11 @@ def main():
     if not args.dry_run:
         ssh(["systemctl", "daemon-reload"])
         ssh(["systemctl", "enable", "youtube-fallback.service"])
-        ssh(["systemctl", "enable", "--now", "bwb-status-monitor.service"])
+        ssh(["systemctl", "enable", "--now", "yt-restapi.service"])
         ssh(["systemctl", "enable", "--now", "ensure-broadcast.timer"])
-        print("Deployed, cleaned legacy services and ensured monitor/timer services are enabled.")
+        print(
+            "Deployed, cleaned legacy services and ensured yt-restapi/timer services are enabled."
+        )
 
 
 if __name__ == "__main__":

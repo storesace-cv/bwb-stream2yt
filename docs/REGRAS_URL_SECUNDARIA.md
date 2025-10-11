@@ -10,7 +10,7 @@
 
 ## 🔹 1. Objetivo
 A **URL secundária** (backup) assegura a continuidade da transmissão para o YouTube quando a **URL primária** (principal) falha ou está inativa.  
-Opera no *Droplet Linux (DigitalOcean)* e executa um *sinal de contingência* contínuo através do `ffmpeg`, monitorizado pelo serviço HTTP `bwb-status-monitor`.
+Opera no *Droplet Linux (DigitalOcean)* e executa um *sinal de contingência* contínuo através do `ffmpeg`, monitorizado pelo serviço HTTP `yt-restapi` (executa `bwb_status_monitor.py`).
 
 ---
 
@@ -22,7 +22,7 @@ O serviço secundário (`youtube-fallback.service`) **entra em ação automatica
 |----------------|--------------|------|
 | Ausência de heartbeats acima do limiar configurado (`missed_threshold`) | `bwb_status_monitor.py` (monitor HTTP) | Solicita `systemctl start youtube-fallback.service` |
 | Heartbeats consecutivos após falha (`recovery_reports`) | `bwb_status_monitor.py` | Solicita `systemctl stop youtube-fallback.service` |
-| Queda de rede ou interrupção no Droplet | `systemd` (Restart=always) | Relança `bwb-status-monitor.service`; este reavalia e inicia o fallback se necessário |
+| Queda de rede ou interrupção no Droplet | `systemd` (Restart=always) | Relança `yt-restapi.service`; este reavalia e inicia o fallback se necessário |
 | Reboot do servidor | `systemctl enable` | Monitor e fallback voltam com o mesmo mecanismo automático |
 
 ---
@@ -41,7 +41,7 @@ A **URL secundária é interrompida automaticamente** quando:
 
 ## 🔹 4. Regras Operacionais
 
-1. **Nunca desligar manualmente** o `bwb-status-monitor.service` — ele coordena o fallback com base nos heartbeats.
+1. **Nunca desligar manualmente** o `yt-restapi.service` — ele coordena o fallback com base nos heartbeats.
 2. Se o YouTube indicar **“Configure corretamente as transmissões principal e de cópia de segurança”**, verificar primeiro se **apenas uma** URL está ativa.  
 3. O `ffmpeg` do fallback deve manter:
    - Resolução: `1280x720`
@@ -53,8 +53,8 @@ A **URL secundária é interrompida automaticamente** quando:
    - Texto 1 (scroll): `BEACHCAM | CABO LEDO | ANGOLA`
    - Texto 2 (estático): `VOLTAREMOS DENTRO DE MOMENTOS`
 
-4. Ajuste as variáveis do monitor (`/etc/bwb-status-monitor.env`) apenas se necessário: `BWB_STATUS_MISSED_THRESHOLD` (segundos sem heartbeats antes de ligar o fallback) e `BWB_STATUS_RECOVERY_REPORTS` (quantidade de relatórios consecutivos para desligar).
-5. Após qualquer alteração de parâmetros, confirmar via `journalctl -u bwb-status-monitor youtube-fallback` e pelas *Estatísticas para nerds* da stream que o bitrate estabiliza próximo dos **3,2 Mbps**, sem underruns.
+4. Ajuste as variáveis do monitor (`/etc/yt-restapi.env`) apenas se necessário: `YTR_MISSED_THRESHOLD` (segundos sem heartbeats antes de ligar o fallback) e `YTR_RECOVERY_REPORTS` (quantidade de relatórios consecutivos para desligar).
+5. Após qualquer alteração de parâmetros, confirmar via `journalctl -u yt-restapi youtube-fallback` e pelas *Estatísticas para nerds* da stream que o bitrate estabiliza próximo dos **3,2 Mbps**, sem underruns.
 
 ---
 
@@ -64,7 +64,7 @@ Os serviços principais do Droplet:
 
 | Serviço | Descrição | Estado esperado |
 |----------|------------|----------------|
-| `bwb-status-monitor.service` | Recebe heartbeats e controla `youtube-fallback.service` | `active (running)` |
+| `yt-restapi.service` | Recebe heartbeats e controla `youtube-fallback.service` | `active (running)` |
 | `youtube-fallback.service` | Envia o sinal de contingência para o YouTube | `inactive` quando heartbeats estão saudáveis; `active` quando em fallback |
 | `/var/log/bwb_status_monitor.log` | Log do monitor HTTP (entrada por heartbeat e decisões) | Atualizado continuamente |
 
@@ -86,7 +86,8 @@ Os serviços principais do Droplet:
 | `/etc/youtube-fallback.env` | Overrides conscientes (`YT_KEY`, ajustes específicos) — reescrito pelo `post_deploy.sh` preservando a chave |
 | `/usr/local/bin/bwb_status_monitor.py` | Monitor HTTP que recebe heartbeats e aciona/paralisa o fallback |
 | `/etc/systemd/system/youtube-fallback.service` | Unit de arranque e recuperação |
-| `/etc/systemd/system/bwb-status-monitor.service` | Unit do monitor HTTP |
+| `/etc/systemd/system/yt-restapi.service` | Unit do monitor HTTP |
+| `/etc/yt-restapi.env` | Token e parâmetros do monitor HTTP |
 | `/var/lib/bwb-status-monitor/status.json` | Histórico recente de heartbeats rececionados |
 | `/var/log/bwb_status_monitor.log` | Registo dedicado do monitor |
 
@@ -111,7 +112,7 @@ flowchart TD
 
 > ⏱️ O `bwb_status_monitor.py` avalia o limiar de ausência de heartbeats a cada
 > `check_interval` segundos (default: 5 s). A lógica de histerese depende apenas
-> de `missed_threshold` e `recovery_reports` configurados em `/etc/bwb-status-monitor.env`.
+> de `missed_threshold` e `recovery_reports` configurados em `/etc/yt-restapi.env`.
 
 ---
 
@@ -122,8 +123,8 @@ Para reiniciar tudo manualmente (ex.: após manutenção):
 ```bash
 sudo systemctl daemon-reexec
 sudo systemctl daemon-reload
-sudo systemctl restart bwb-status-monitor youtube-fallback
-sudo systemctl status bwb-status-monitor youtube-fallback --no-pager
+sudo systemctl restart yt-restapi youtube-fallback
+sudo systemctl status yt-restapi youtube-fallback --no-pager
 ```
 
 ---
@@ -140,10 +141,10 @@ sudo systemctl status bwb-status-monitor youtube-fallback --no-pager
 
 ```bash
 # Estado geral
-systemctl status bwb-status-monitor youtube-fallback --no-pager
+systemctl status yt-restapi youtube-fallback --no-pager
 
 # Logs recentes
-journalctl -u bwb-status-monitor -n 40 -l --no-pager
+journalctl -u yt-restapi -n 40 -l --no-pager
 journalctl -u youtube-fallback -n 40 -l --no-pager
 
 # Log centralizado

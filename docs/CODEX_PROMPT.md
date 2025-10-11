@@ -1,6 +1,6 @@
 You are maintaining **BWB Stream2YT**, a two-part system:
 - `primary-windows/` runs on Windows and streams the real camera feed to **YouTube Primary**.
-- `secondary-droplet/` runs on Ubuntu and streams a slate to **YouTube Backup**, controlado pelo `bwb-status-monitor` via heartbeats enviados pelo primário.
+- `secondary-droplet/` runs on Ubuntu and streams a slate to **YouTube Backup**, controlado pelo serviço `yt-restapi` (executa `bwb_status_monitor.py`) via heartbeats enviados pelo primário.
 
 Your tasks:
 1. Keep modules **separated** by platform.

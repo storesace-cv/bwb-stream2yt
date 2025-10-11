@@ -18,7 +18,7 @@ bwb-stream2yt/
 │  ├─ requirements.txt
 │  ├─ systemd/
 │  │  ├─ youtube-fallback.service
-│  │  └─ bwb-status-monitor.service
+│  │  └─ yt-restapi.service
 │  └─ tools/
 │     └─ regen_token.py
 │

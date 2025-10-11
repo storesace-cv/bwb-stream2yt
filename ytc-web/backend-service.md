@@ -23,7 +23,7 @@ Este guia descreve como montar um microserviço HTTP na droplet secundária que 
    - O `post_deploy.sh` executa `systemctl daemon-reload`, `enable --now` e `restart` garantindo idempotência.
 
 4. **Firewall e segurança**
-   - O script de setup aplica regra `ufw` limitando o acesso HTTP à porta 8081 apenas ao IP `94.46.15.210`. Ajuste a variável `YTC_WEB_ALLOWED_IP` (ex.: `YTC_WEB_ALLOWED_IP=1.2.3.4 bash post_deploy.sh`) antes de executar o `post_deploy.sh` se precisar mudar.
+   - O script de setup requer que defina `YTC_WEB_ALLOWED_IP` com o endereço autorizado a consultar o backend (ex.: `export YTC_WEB_ALLOWED_IP=1.2.3.4`). Sem esse valor o `post_deploy.sh` termina com erro, evitando aplicar regras de firewall incorrectas por engano.
    - Mantenha os tokens OAuth fora do repositório e com permissões restritas (`chmod 600`).
 
 ## Operação e manutenção
@@ -32,5 +32,5 @@ Este guia descreve como montar um microserviço HTTP na droplet secundária que 
 - **Actualizações**: quando a especificação do endpoint mudar, sincronize com `status-endpoint.md` e notifique a equipa web.
 - **Fallback**: em caso de indisponibilidade da API, devolva um JSON com `status="unknown"` e mensagem amigável, permitindo que o front-end apresente o aviso secundário.
 - **Execução de scripts**: execute primeiro `./scripts/deploy_to_droplet.sh` (que apenas sincroniza ficheiros) e depois, já na droplet, `bash /root/bwb-stream2yt/scripts/post_deploy.sh`. O script instala `python3-venv` se necessário, aplica firewall e deixa a shell fora do virtualenv ao concluir.
-- **Desligar temporariamente o backend**: para isolar problemas de recursos ou evitar interferências durante investigações, utilize `bash /root/bwb-stream2yt/secondary-droplet/bin/ytc_web_backend_disable_stub.sh`. O stub actua **apenas** sobre `ytc-web-backend.service`, deixando `bwb-status-monitor` e `youtube-fallback` activos para que a emissão secundária continue operacional.
+- **Desligar temporariamente o backend**: para isolar problemas de recursos ou evitar interferências durante investigações, utilize `bash /root/bwb-stream2yt/secondary-droplet/bin/ytc_web_backend_disable_stub.sh`. O stub actua **apenas** sobre `ytc-web-backend.service`, deixando `yt-restapi` e `youtube-fallback` activos para que a emissão secundária continue operacional.
 

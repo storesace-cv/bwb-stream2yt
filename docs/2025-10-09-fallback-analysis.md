@@ -1,6 +1,6 @@
 # 2025-10-09 — YouTube fallback em conflito com ingest primário
 
-> **Nota histórica:** este incidente ocorreu antes da migração para o monitor HTTP (`bwb-status-monitor`). As referências abaixo descrevem o comportamento legado do `yt-decider-daemon`, já removido do código.
+> **Nota histórica:** este incidente ocorreu antes da migração para o monitor HTTP actualmente chamado `yt-restapi` (serviço que executa `bwb_status_monitor.py`). As referências abaixo descrevem o comportamento legado do `yt-decider-daemon`, já removido do código.
 
 ## Resumo do alerta
 A consola do YouTube reportou, entre as 15:09 e as 15:10 (hora de Luanda), que as ingestões "Principal" e "Cópia de segurança" recebiam vídeo com resoluções e framerates diferentes, em simultâneo. Esse alerta só ocorre quando ambas as URLs estão a receber dados e os perfis de codificação não coincidem.

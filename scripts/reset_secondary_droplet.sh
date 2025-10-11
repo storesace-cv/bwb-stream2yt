@@ -14,7 +14,7 @@ fi
 
 SERVICES=(
   "youtube-fallback.service"
-  "bwb-status-monitor.service"
+  "yt-restapi.service"
   "ytc-web-backend.service"
 )
 

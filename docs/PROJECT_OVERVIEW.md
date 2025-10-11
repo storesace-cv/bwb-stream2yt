@@ -9,7 +9,7 @@ This repository contains **two logical modules**:
 
 2) **Secondary (Droplet/Linux)** — `secondary-droplet/`
    - Always-ready **backup/“slate”** stream to **YouTube Backup** (rtmps://b.rtmps.youtube.com/live2?backup=1/<KEY>).
-   - `bwb-status-monitor` recebe heartbeats do primário (HTTP) e liga/desliga o fallback com thresholds configuráveis.
+   - `yt-restapi` (executando `bwb_status_monitor.py`) recebe heartbeats do primário (HTTP) e liga/desliga o fallback com thresholds configuráveis.
    - Managed via `systemd` units.
 
 
