@@ -45,11 +45,8 @@ class DummyServiceManager:
 @pytest.fixture()
 def monitor(tmp_path: Path) -> StatusMonitor:
     settings = MonitorSettings(
-        history_seconds=60,
         missed_threshold=2,
-        recovery_reports=2,
         check_interval=1,
-        state_file=tmp_path / "status.json",
         log_file=tmp_path / "monitor.log",
     )
     return StatusMonitor(settings=settings, service_manager=DummyServiceManager())
@@ -78,7 +75,7 @@ def test_triggers_fallback_after_threshold(monitor: StatusMonitor) -> None:
     assert monitor.fallback_active is True
 
 
-def test_stops_fallback_after_recovery(monitor: StatusMonitor) -> None:
+def test_stops_fallback_after_single_heartbeat(monitor: StatusMonitor) -> None:
     monitor._last_timestamp = utc_now() - dt.timedelta(seconds=5)  # noqa: SLF001
     service = monitor._service_manager  # type: ignore[attr-defined]  # noqa: SLF001
     monitor._evaluate_threshold()  # noqa: SLF001
@@ -87,16 +84,8 @@ def test_stops_fallback_after_recovery(monitor: StatusMonitor) -> None:
     assert service.start_calls == 1
 
     monitor.record_status(make_entry())
-    # ainda não atingiu os 2 relatórios necessários
-    assert monitor.fallback_active is True
-    assert service.stop_calls == 0
-
-    monitor.record_status(make_entry())
     assert monitor.fallback_active is False
     assert service.stop_calls == 1
-
-    history = monitor.snapshot()["history"]
-    assert len(history) == 2
 
 
 def test_run_server_handles_address_in_use(tmp_path: Path, monkeypatch, caplog):
@@ -105,11 +94,8 @@ def test_run_server_handles_address_in_use(tmp_path: Path, monkeypatch, caplog):
     settings = MonitorSettings(
         bind="127.0.0.1",
         port=8080,
-        history_seconds=60,
         missed_threshold=2,
-        recovery_reports=2,
         check_interval=1,
-        state_file=tmp_path / "status.json",
         log_file=tmp_path / "monitor.log",
     )
 
@@ -144,11 +130,8 @@ def test_monitor_settings_accepts_ytr_env(monkeypatch):
 
 def test_post_requires_bearer_token(tmp_path: Path):
     settings = MonitorSettings(
-        history_seconds=60,
         missed_threshold=2,
-        recovery_reports=2,
         check_interval=1,
-        state_file=tmp_path / "status.json",
         log_file=tmp_path / "monitor.log",
         auth_token="topsecret",
         require_token=True,
@@ -187,6 +170,7 @@ def test_post_requires_bearer_token(tmp_path: Path):
         payload = json.loads(response.read().decode("utf-8"))
         assert response.status == 200
         assert payload["ok"] is True
+        assert "seconds_since_last_heartbeat" in payload
         conn.close()
     finally:
         server.shutdown()
