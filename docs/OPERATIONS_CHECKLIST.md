@@ -2,6 +2,7 @@
 
 ## Daily sanity
 - `systemctl status yt-restapi youtube-fallback`
+- `systemctl show -p NoNewPrivileges yt-restapi.service` deve indicar `NoNewPrivileges=no`
 - `journalctl -u yt-restapi -n 60 -l --no-pager`
 - `tail -n 100 /root/bwb_services.log` (event log para primário, fallback e daemon)
 
