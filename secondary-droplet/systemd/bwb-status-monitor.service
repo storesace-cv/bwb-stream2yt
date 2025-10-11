@@ -1,0 +1,14 @@
+[Unit]
+Description=BWB HTTP status monitor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/bwb-status-monitor.env
+ExecStart=/usr/local/bin/bwb_status_monitor.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
