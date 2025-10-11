@@ -471,6 +471,43 @@ def _default_input_args() -> list[str]:
     return list(_DEFAULT_INPUT_ARGS)
 
 
+@dataclass(frozen=True)
+class ResolutionPreset:
+    width: int
+    height: int
+    bitrate_kbps: int
+    maxrate_kbps: int
+    bufsize_kbps: int
+
+
+_RESOLUTION_PRESETS: dict[str, ResolutionPreset] = {
+    "360p": ResolutionPreset(width=640, height=360, bitrate_kbps=1000, maxrate_kbps=1500, bufsize_kbps=3000),
+    "720p": ResolutionPreset(width=1280, height=720, bitrate_kbps=3500, maxrate_kbps=4500, bufsize_kbps=9000),
+    "1080p": ResolutionPreset(width=1920, height=1080, bitrate_kbps=5000, maxrate_kbps=6000, bufsize_kbps=12000),
+}
+
+_DEFAULT_RESOLUTION = "1080p"
+
+
+def _normalize_resolution(value: str) -> Optional[str]:
+    normalized = value.strip().lower()
+    if normalized in _RESOLUTION_PRESETS:
+        return normalized
+    return None
+
+
+def _apply_resolution_preset(args: list[str], resolution: str) -> list[str]:
+    preset = _RESOLUTION_PRESETS[resolution]
+    updated = list(args)
+    filter_value = f"scale={preset.width}:{preset.height}:flags=bicubic,format=yuv420p"
+    _set_arg_value(updated, "-vf", filter_value)
+    _set_arg_value(updated, "-r", "30")
+    _set_arg_value(updated, "-b:v", f"{preset.bitrate_kbps}k")
+    _set_arg_value(updated, "-maxrate", f"{preset.maxrate_kbps}k")
+    _set_arg_value(updated, "-bufsize", f"{preset.bufsize_kbps}k")
+    return updated
+
+
 def _split_args(value: str, default: list[str]) -> list[str]:
     value = value.strip()
     if not value:
@@ -632,6 +669,7 @@ class StreamingConfig:
     yt_url: Optional[str]
     input_args: list[str]
     output_args: list[str]
+    resolution: str
     ffmpeg: str
     day_start_hour: int
     day_end_hour: int
@@ -643,7 +681,7 @@ class StreamingConfig:
     autotune_safety_margin: float
 
 
-def load_config() -> StreamingConfig:
+def load_config(resolution: Optional[str] = None) -> StreamingConfig:
     _ensure_env_file()
     _load_env_files()
 
@@ -700,6 +738,34 @@ def load_config() -> StreamingConfig:
         ],
     )
 
+    resolved_resolution: Optional[str] = None
+    if resolution is not None:
+        normalized_resolution = _normalize_resolution(resolution)
+        if normalized_resolution is None:
+            log_event(
+                "primary",
+                f"Resolução inválida solicitada ({resolution}); aplicando {_DEFAULT_RESOLUTION}.",
+            )
+        else:
+            resolved_resolution = normalized_resolution
+
+    if resolved_resolution is None:
+        env_resolution = os.environ.get("YT_RESOLUTION")
+        if env_resolution:
+            normalized_env = _normalize_resolution(env_resolution)
+            if normalized_env is None:
+                log_event(
+                    "primary",
+                    f"Valor inválido em YT_RESOLUTION ({env_resolution}); aplicando {_DEFAULT_RESOLUTION}.",
+                )
+            else:
+                resolved_resolution = normalized_env
+
+    if resolved_resolution is None:
+        resolved_resolution = _DEFAULT_RESOLUTION
+
+    output_args = _apply_resolution_preset(output_args, resolved_resolution)
+
     default_bitrate = _parse_bitrate_from_args(output_args, "-b:v") or 5000
     default_maxrate = _parse_bitrate_from_args(output_args, "-maxrate") or max(default_bitrate, 6000)
 
@@ -718,6 +784,7 @@ def load_config() -> StreamingConfig:
         yt_url=_resolve_yt_url(),
         input_args=input_args,
         output_args=output_args,
+        resolution=resolved_resolution,
         ffmpeg=os.environ.get("FFMPEG", r"C:\bwb\ffmpeg\bin\ffmpeg.exe"),
         day_start_hour=int(os.environ.get("YT_DAY_START_HOUR", "8")),
         day_end_hour=int(os.environ.get("YT_DAY_END_HOUR", "19")),
@@ -1036,7 +1103,7 @@ def run_forever(
         _clear_stop_request()
 
 
-def _start_streaming_instance() -> int:
+def _start_streaming_instance(resolution: Optional[str] = None) -> int:
     try:
         _claim_pid_file()
     except RuntimeError as exc:
@@ -1052,13 +1119,15 @@ def _start_streaming_instance() -> int:
 
     try:
         _ensure_signal_handlers()
-        config = load_config()
+        config = load_config(resolution=resolution)
         if not config.yt_url:
             message = "Credenciais YT_URL/YT_KEY ausentes; streaming worker finalizado."
             print(f"[primary] {message}", file=sys.stderr)
             log_event("primary", message)
             return 2
 
+        log_event("primary", f"Resolução selecionada: {config.resolution}")
+        print(f"[primary] Resolução selecionada: {config.resolution}")
         log_event("primary", f"Iniciando worker (PID {os.getpid()})")
         run_forever(config=config)
         log_event("primary", "Worker finalizado")
@@ -1122,11 +1191,6 @@ def main() -> None:
 
     raw_args = sys.argv[1:]
     normalized_args = [arg.lower() for arg in raw_args]
-    if len(normalized_args) > 1:
-        message = "Utilize no máximo uma flag (/start ou /stop)."
-        print(f"[primary] {message}", file=sys.stderr)
-        log_event("primary", message)
-        sys.exit(1)
 
     command = normalized_args[0] if normalized_args else "/start"
     if command not in {"/start", "/stop"}:
@@ -1135,11 +1199,34 @@ def main() -> None:
         log_event("primary", message)
         sys.exit(1)
 
+    resolution_arg: Optional[str] = None
+
     if command == "/stop":
+        if len(normalized_args) > 1:
+            message = "A flag /stop não aceita parâmetros adicionais."
+            print(f"[primary] {message}", file=sys.stderr)
+            log_event("primary", message)
+            sys.exit(1)
         exit_code = _stop_streaming_instance()
         sys.exit(exit_code)
 
-    exit_code = _start_streaming_instance()
+    if len(normalized_args) > 2:
+        message = "Utilize no máximo um parâmetro para /start (360p, 720p ou 1080p)."
+        print(f"[primary] {message}", file=sys.stderr)
+        log_event("primary", message)
+        sys.exit(1)
+
+    if len(normalized_args) == 2:
+        resolution_candidate = normalized_args[1]
+        normalized_resolution = _normalize_resolution(resolution_candidate)
+        if normalized_resolution is None:
+            message = f"Resolução desconhecida: {raw_args[1]}"
+            print(f"[primary] {message}", file=sys.stderr)
+            log_event("primary", message)
+            sys.exit(1)
+        resolution_arg = normalized_resolution
+
+    exit_code = _start_streaming_instance(resolution=resolution_arg)
     sys.exit(exit_code)
 
 
