@@ -30,13 +30,25 @@ pip3 install -r /root/bwb-stream2yt/secondary-droplet/requirements.txt
 # serviços
 install -m 755 -o root -g root /root/bwb-stream2yt/secondary-droplet/bin/youtube_fallback.sh /usr/local/bin/youtube_fallback.sh
 install -m 644 -o root -g root /root/bwb-stream2yt/secondary-droplet/systemd/youtube-fallback.service /etc/systemd/system/youtube-fallback.service
+install -m 755 -o root -g root /root/bwb-stream2yt/secondary-droplet/bin/bwb_status_monitor.py /usr/local/bin/bwb_status_monitor.py
+install -m 644 -o root -g root /root/bwb-stream2yt/secondary-droplet/systemd/bwb-status-monitor.service /etc/systemd/system/bwb-status-monitor.service
 install -m 755 -o root -g root /root/bwb-stream2yt/secondary-droplet/bin/ensure_broadcast.py /usr/local/bin/ensure_broadcast.py
 install -m 644 -o root -g root /root/bwb-stream2yt/secondary-droplet/systemd/ensure-broadcast.service /etc/systemd/system/ensure-broadcast.service
 install -m 644 -o root -g root /root/bwb-stream2yt/secondary-droplet/systemd/ensure-broadcast.timer /etc/systemd/system/ensure-broadcast.timer
 
 systemctl daemon-reload
-systemctl enable --now youtube-fallback.service
+systemctl enable youtube-fallback.service
+systemctl enable --now bwb-status-monitor.service
 systemctl enable --now ensure-broadcast.timer
+
+# limpeza de serviços antigos
+systemctl disable --now yt-decider-daemon.service yt-decider.service || true
+rm -f /etc/systemd/system/yt-decider-daemon.service \
+      /etc/systemd/system/yt-decider.service \
+      /usr/local/bin/yt_decider_daemon.py \
+      /usr/local/bin/yt-decider-daemon.py \
+      /usr/local/bin/yt-decider-debug.sh
+systemctl daemon-reload
 ```
 
 ### 3) Segredos no droplet (fora do git)
@@ -53,13 +65,6 @@ systemctl restart youtube-fallback
 # (gerar localmente e copiar) => /root/token.json  (chmod 600)
 ```
 
-### 4) Decider (opcional se usar)
+### 4) Atualizações posteriores
 
-```
-# colocar token.json e client_secret.json em /root/
-# editar yt_decider_daemon.py se necessário e criar unit service própria
-```
-
-### 5) Atualizações posteriores
-
-Use `scripts/deploy_to_droplet.sh` para sincronizar ficheiros e, em seguida, conecte via SSH (`ssh -p $DROPLET_PORT $DROPLET_USER@$DROPLET_IP`) para executar `bash /root/bwb-stream2yt/scripts/post_deploy.sh` manualmente.
+Use `scripts/deploy_to_droplet.sh` para sincronizar ficheiros e, em seguida, conecte via SSH (`ssh -p $DROPLET_PORT $DROPLET_USER@$DROPLET_IP`) para executar `bash /root/bwb-stream2yt/scripts/post_deploy.sh` manualmente. O `post_deploy.sh` repete a limpeza acima, garantindo que nenhuma versão antiga do decider permanece instalada.

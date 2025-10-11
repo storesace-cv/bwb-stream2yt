@@ -9,9 +9,7 @@ This repository contains **two logical modules**:
 
 2) **Secondary (Droplet/Linux)** — `secondary-droplet/`
    - Always-ready **backup/“slate”** stream to **YouTube Backup** (rtmps://b.rtmps.youtube.com/live2?backup=1/<KEY>).
-   - `yt-decider-daemon` decides when to **start/stop** backup based on YouTube Live API health:
-     - Starts if **noData/inactive** or **health=bad** while primary is absent.
-     - Stops during daytime when the primary is good.
+   - `bwb-status-monitor` recebe heartbeats do primário (HTTP) e liga/desliga o fallback com thresholds configuráveis.
    - Managed via `systemd` units.
 
 
@@ -19,7 +17,7 @@ This repository contains **two logical modules**:
 
 - Token: `/root/token.json` (Google OAuth — YouTube API)
 - Offline discovery doc: `/root/bwb-stream2yt/docs/youtube-data-api.v3.discovery.json` (YouTube Data API schema for local tooling/troubleshooting)
-- Decider: `/usr/local/bin/yt_decider_daemon.py`
+- Monitor HTTP: `/usr/local/bin/bwb_status_monitor.py`
 - Fallback sender: `/usr/local/bin/youtube_fallback.sh`
 - Fallback defaults: `/usr/local/config/youtube-fallback.defaults`
 - Fallback env overrides: `/etc/youtube-fallback.env`

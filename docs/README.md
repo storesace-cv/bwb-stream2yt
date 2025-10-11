@@ -23,8 +23,9 @@ Two-module setup:
 2. Install units & scripts from `secondary-droplet/` and run:
   ```bash
   sudo systemctl daemon-reload
-  sudo systemctl enable --now youtube-fallback.service
-  sudo systemctl enable --now yt-decider-daemon.service
+  sudo systemctl enable youtube-fallback.service
+  sudo systemctl enable --now bwb-status-monitor.service
+  sudo systemctl enable --now ensure-broadcast.timer
   ```
 
 ### Deploy tool
@@ -41,14 +42,14 @@ primary-windows/
 secondary-droplet/
   bin/
     youtube_fallback.sh
-    yt_decider_daemon.py
+    bwb_status_monitor.py
     yt_api_probe_once.py
   config/
     youtube-fallback.defaults
     youtube-fallback.env.example
   systemd/
     youtube-fallback.service
-    yt-decider-daemon.service
+    bwb-status-monitor.service
   tools/
     regen_token.py
 
