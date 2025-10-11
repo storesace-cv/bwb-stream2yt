@@ -15,7 +15,7 @@ log() {
 }
 
 if [[ -z "${FIREWALL_IP}" ]]; then
-    log "Variável YTC_WEB_ALLOWED_IP ausente; defina o IP autorizado antes de prosseguir (ex.: export YTC_WEB_ALLOWED_IP=1.2.3.4)"
+    log "Variável YTC_WEB_ALLOWED_IP ausente; defina um IP ou '0.0.0.0/0' para aceitar qualquer origem."
     exit 1
 fi
 
@@ -89,8 +89,15 @@ configure_firewall() {
             ufw --force delete "${rule_number}" >/dev/null 2>&1 || true
         done
 
-    # adicionar a regra restritiva correcta
-    ufw allow from "${FIREWALL_IP}" to any port "${BACKEND_PORT}" proto tcp
+    # Verifica se deve abrir a porta a qualquer origem
+    if [[ "${FIREWALL_IP}" == "0.0.0.0/0" || "${FIREWALL_IP}" == "any" || "${FIREWALL_IP}" == "*" ]]; then
+        log "Configurando firewall para aceitar conexões de qualquer origem (modo global)."
+        ufw allow "${BACKEND_PORT}"/tcp
+        log "Firewall configurada no modo global (IP dinâmico detectado)"
+    else
+        log "Configurando firewall restrita a ${FIREWALL_IP}:${BACKEND_PORT}/tcp"
+        ufw allow from "${FIREWALL_IP}" to any port "${BACKEND_PORT}" proto tcp
+    fi
     ufw reload >/dev/null 2>&1 || true
 }
 
