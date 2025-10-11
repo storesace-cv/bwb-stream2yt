@@ -29,7 +29,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 DEFAULT_ENDPOINT = "http://127.0.0.1:8080/status"
 DEFAULT_SERVICE = "youtube-fallback.service"
-DEFAULT_DURATION = 120
+DEFAULT_DURATION = 60
 DEFAULT_TIMEOUT = 5
 DEFAULT_MISSED_THRESHOLD = 40
 
@@ -192,7 +192,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "--duration",
         type=int,
         default=DEFAULT_DURATION,
-        help="Janela de observação em segundos (default: 120).",
+        help="Janela de observação em segundos (default: 60).",
     )
     parser.add_argument(
         "--timeout",
