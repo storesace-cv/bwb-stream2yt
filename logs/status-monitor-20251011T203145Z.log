@@ -1,0 +1,452 @@
+
+===== Contexto do host (UTC) =====
+host: ubuntu-s-1vcpu-1gb-10gb-fra1-01
+uname: Linux ubuntu-s-1vcpu-1gb-10gb-fra1-01 5.15.0-157-generic #167-Ubuntu SMP Wed Sep 17 21:35:53 UTC 2025 x86_64 x86_64 x86_64 GNU/Linux
+janela: 48 hours (desde 2025-10-13 20:31:45 Z até 2025-10-11 20:31:45 Z)
+endpoint_alvo: http://127.0.0.1:8080/status
+
+===== /etc/yt-restapi.env (com token oculto) =====
+# /etc/yt-restapi.env — configurações para o monitor HTTP de status.
+# Ajuste as variáveis conforme necessário.
+#YTR_BIND=0.0.0.0
+#YTR_PORT=8080
+#YTR_HISTORY_SECONDS=300
+#YTR_MISSED_THRESHOLD=40
+#YTR_RECOVERY_REPORTS=2
+#YTR_CHECK_INTERVAL=5
+#YTR_STATE_FILE=/var/lib/bwb-status-monitor/status.json
+#YTR_LOG_FILE=/var/log/bwb_status_monitor.log
+#YTR_SECONDARY_SERVICE=youtube-fallback.service
+#YTR_TOKEN=<redacted>
+#YTR_REQUIRE_TOKEN=1
+
+===== journalctl -u yt-restapi.service (48 hours, UTC) =====
+(serviço yt-restapi.service não encontrado ou journalctl indisponível)
+
+===== systemctl status yt-restapi.service --no-pager =====
+(serviço yt-restapi.service não encontrado)
+
+===== /var/log/bwb_status_monitor.log (48 hours) =====
+(não foi possível extrair por timestamp; fallback: tail -n 400)
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:23:36,775 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:23:41,775 [WARNING] Sem heartbeats há 3433 segundos; solicitando fallback.
+2025-10-11 20:23:41,792 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:23:41,792 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:23:46,793 [WARNING] Sem heartbeats há 3438 segundos; solicitando fallback.
+2025-10-11 20:23:46,813 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:23:46,813 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:23:51,814 [WARNING] Sem heartbeats há 3443 segundos; solicitando fallback.
+2025-10-11 20:23:51,831 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:23:51,832 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:23:56,832 [WARNING] Sem heartbeats há 3448 segundos; solicitando fallback.
+2025-10-11 20:23:56,854 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:23:56,855 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:24:01,855 [WARNING] Sem heartbeats há 3453 segundos; solicitando fallback.
+2025-10-11 20:24:01,878 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:24:01,879 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:24:06,879 [WARNING] Sem heartbeats há 3458 segundos; solicitando fallback.
+2025-10-11 20:24:06,898 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:24:06,898 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:24:11,899 [WARNING] Sem heartbeats há 3463 segundos; solicitando fallback.
+2025-10-11 20:24:11,916 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:24:11,916 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:24:16,917 [WARNING] Sem heartbeats há 3468 segundos; solicitando fallback.
+2025-10-11 20:24:16,934 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:24:16,934 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:24:21,935 [WARNING] Sem heartbeats há 3473 segundos; solicitando fallback.
+2025-10-11 20:24:21,956 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:24:21,957 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:24:26,958 [WARNING] Sem heartbeats há 3478 segundos; solicitando fallback.
+2025-10-11 20:24:26,976 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:24:26,977 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:24:31,977 [WARNING] Sem heartbeats há 3483 segundos; solicitando fallback.
+2025-10-11 20:24:31,994 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:24:31,995 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:24:36,995 [WARNING] Sem heartbeats há 3488 segundos; solicitando fallback.
+2025-10-11 20:24:37,012 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:24:37,013 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:24:42,013 [WARNING] Sem heartbeats há 3493 segundos; solicitando fallback.
+2025-10-11 20:24:42,036 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:24:42,037 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:24:47,037 [WARNING] Sem heartbeats há 3498 segundos; solicitando fallback.
+2025-10-11 20:24:47,055 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:24:47,056 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:24:52,056 [WARNING] Sem heartbeats há 3503 segundos; solicitando fallback.
+2025-10-11 20:24:52,073 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:24:52,073 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:24:57,074 [WARNING] Sem heartbeats há 3508 segundos; solicitando fallback.
+2025-10-11 20:24:57,096 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:24:57,096 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:25:02,096 [WARNING] Sem heartbeats há 3513 segundos; solicitando fallback.
+2025-10-11 20:25:02,122 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:25:02,123 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:25:07,123 [WARNING] Sem heartbeats há 3518 segundos; solicitando fallback.
+2025-10-11 20:25:07,146 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:25:07,146 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:25:12,147 [WARNING] Sem heartbeats há 3523 segundos; solicitando fallback.
+2025-10-11 20:25:12,166 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:25:12,166 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:25:17,167 [WARNING] Sem heartbeats há 3528 segundos; solicitando fallback.
+2025-10-11 20:25:17,183 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:25:17,184 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:25:22,184 [WARNING] Sem heartbeats há 3533 segundos; solicitando fallback.
+2025-10-11 20:25:22,206 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:25:22,206 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:25:27,207 [WARNING] Sem heartbeats há 3538 segundos; solicitando fallback.
+2025-10-11 20:25:27,225 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:25:27,226 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:25:32,226 [WARNING] Sem heartbeats há 3543 segundos; solicitando fallback.
+2025-10-11 20:25:32,248 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:25:32,249 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:25:37,250 [WARNING] Sem heartbeats há 3548 segundos; solicitando fallback.
+2025-10-11 20:25:37,271 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:25:37,272 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:25:42,272 [WARNING] Sem heartbeats há 3553 segundos; solicitando fallback.
+2025-10-11 20:25:42,294 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:25:42,295 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:25:47,296 [WARNING] Sem heartbeats há 3558 segundos; solicitando fallback.
+2025-10-11 20:25:47,312 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:25:47,312 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:25:52,313 [WARNING] Sem heartbeats há 3563 segundos; solicitando fallback.
+2025-10-11 20:25:52,332 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:25:52,332 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:25:57,333 [WARNING] Sem heartbeats há 3568 segundos; solicitando fallback.
+2025-10-11 20:25:57,356 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:25:57,356 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:26:02,356 [WARNING] Sem heartbeats há 3574 segundos; solicitando fallback.
+2025-10-11 20:26:02,373 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:26:02,374 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:26:07,374 [WARNING] Sem heartbeats há 3579 segundos; solicitando fallback.
+2025-10-11 20:26:07,390 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:26:07,391 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:26:12,391 [WARNING] Sem heartbeats há 3584 segundos; solicitando fallback.
+2025-10-11 20:26:12,409 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:26:12,409 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:26:16,216 [INFO] 127.0.0.1 - "GET /status HTTP/1.1" 200 -
+2025-10-11 20:26:17,410 [WARNING] Sem heartbeats há 3589 segundos; solicitando fallback.
+2025-10-11 20:26:17,428 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:26:17,429 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:26:22,429 [WARNING] Sem heartbeats há 3594 segundos; solicitando fallback.
+2025-10-11 20:26:22,452 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:26:22,453 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:26:27,453 [WARNING] Sem heartbeats há 3599 segundos; solicitando fallback.
+2025-10-11 20:26:27,472 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:26:27,472 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:26:32,473 [WARNING] Sem heartbeats há 3604 segundos; solicitando fallback.
+2025-10-11 20:26:32,490 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:26:32,490 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:26:37,491 [WARNING] Sem heartbeats há 3609 segundos; solicitando fallback.
+2025-10-11 20:26:37,513 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:26:37,514 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:26:42,514 [WARNING] Sem heartbeats há 3614 segundos; solicitando fallback.
+2025-10-11 20:26:42,531 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:26:42,532 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:26:47,532 [WARNING] Sem heartbeats há 3619 segundos; solicitando fallback.
+2025-10-11 20:26:47,551 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:26:47,551 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:26:52,552 [WARNING] Sem heartbeats há 3624 segundos; solicitando fallback.
+2025-10-11 20:26:52,569 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:26:52,570 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:26:57,570 [WARNING] Sem heartbeats há 3629 segundos; solicitando fallback.
+2025-10-11 20:26:57,588 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:26:57,588 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:27:02,589 [WARNING] Sem heartbeats há 3634 segundos; solicitando fallback.
+2025-10-11 20:27:02,611 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:27:02,612 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:27:07,613 [WARNING] Sem heartbeats há 3639 segundos; solicitando fallback.
+2025-10-11 20:27:07,638 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:27:07,639 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:27:12,640 [WARNING] Sem heartbeats há 3644 segundos; solicitando fallback.
+2025-10-11 20:27:12,666 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:27:12,666 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:27:16,274 [INFO] 127.0.0.1 - "GET /status HTTP/1.1" 200 -
+2025-10-11 20:27:17,667 [WARNING] Sem heartbeats há 3649 segundos; solicitando fallback.
+2025-10-11 20:27:17,689 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:27:17,690 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:27:22,690 [WARNING] Sem heartbeats há 3654 segundos; solicitando fallback.
+2025-10-11 20:27:22,708 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:27:22,708 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:27:27,709 [WARNING] Sem heartbeats há 3659 segundos; solicitando fallback.
+2025-10-11 20:27:27,726 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:27:27,726 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:27:32,727 [WARNING] Sem heartbeats há 3664 segundos; solicitando fallback.
+2025-10-11 20:27:32,744 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:27:32,744 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:27:37,745 [WARNING] Sem heartbeats há 3669 segundos; solicitando fallback.
+2025-10-11 20:27:37,764 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:27:37,764 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:27:42,765 [WARNING] Sem heartbeats há 3674 segundos; solicitando fallback.
+2025-10-11 20:27:42,783 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:27:42,783 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:27:47,784 [WARNING] Sem heartbeats há 3679 segundos; solicitando fallback.
+2025-10-11 20:27:47,800 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:27:47,800 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:27:52,801 [WARNING] Sem heartbeats há 3684 segundos; solicitando fallback.
+2025-10-11 20:27:52,817 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:27:52,818 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:27:57,818 [WARNING] Sem heartbeats há 3689 segundos; solicitando fallback.
+2025-10-11 20:27:57,836 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:27:57,837 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:28:02,837 [WARNING] Sem heartbeats há 3694 segundos; solicitando fallback.
+2025-10-11 20:28:02,855 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:28:02,856 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:28:07,856 [WARNING] Sem heartbeats há 3699 segundos; solicitando fallback.
+2025-10-11 20:28:07,873 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:28:07,874 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:28:12,874 [WARNING] Sem heartbeats há 3704 segundos; solicitando fallback.
+2025-10-11 20:28:12,892 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:28:12,893 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:28:17,893 [WARNING] Sem heartbeats há 3709 segundos; solicitando fallback.
+2025-10-11 20:28:17,910 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:28:17,911 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:28:22,911 [WARNING] Sem heartbeats há 3714 segundos; solicitando fallback.
+2025-10-11 20:28:22,930 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:28:22,931 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:28:27,931 [WARNING] Sem heartbeats há 3719 segundos; solicitando fallback.
+2025-10-11 20:28:27,949 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:28:27,950 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:28:32,950 [WARNING] Sem heartbeats há 3724 segundos; solicitando fallback.
+2025-10-11 20:28:32,966 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:28:32,966 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:28:37,967 [WARNING] Sem heartbeats há 3729 segundos; solicitando fallback.
+2025-10-11 20:28:37,986 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:28:37,987 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:28:42,987 [WARNING] Sem heartbeats há 3734 segundos; solicitando fallback.
+2025-10-11 20:28:43,004 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:28:43,005 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:28:48,005 [WARNING] Sem heartbeats há 3739 segundos; solicitando fallback.
+2025-10-11 20:28:48,026 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:28:48,026 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:28:53,027 [WARNING] Sem heartbeats há 3744 segundos; solicitando fallback.
+2025-10-11 20:28:53,044 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:28:53,045 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:28:58,045 [WARNING] Sem heartbeats há 3749 segundos; solicitando fallback.
+2025-10-11 20:28:58,062 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:28:58,063 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:29:03,063 [WARNING] Sem heartbeats há 3754 segundos; solicitando fallback.
+2025-10-11 20:29:03,081 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:29:03,082 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:29:08,082 [WARNING] Sem heartbeats há 3759 segundos; solicitando fallback.
+2025-10-11 20:29:08,098 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:29:08,098 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:29:13,099 [WARNING] Sem heartbeats há 3764 segundos; solicitando fallback.
+2025-10-11 20:29:13,117 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:29:13,118 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:29:18,118 [WARNING] Sem heartbeats há 3769 segundos; solicitando fallback.
+2025-10-11 20:29:18,135 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:29:18,135 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:29:23,136 [WARNING] Sem heartbeats há 3774 segundos; solicitando fallback.
+2025-10-11 20:29:23,156 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:29:23,157 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:29:28,157 [WARNING] Sem heartbeats há 3779 segundos; solicitando fallback.
+2025-10-11 20:29:28,180 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:29:28,180 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:29:33,180 [WARNING] Sem heartbeats há 3784 segundos; solicitando fallback.
+2025-10-11 20:29:33,200 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:29:33,200 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:29:38,201 [WARNING] Sem heartbeats há 3789 segundos; solicitando fallback.
+2025-10-11 20:29:38,217 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:29:38,217 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:29:43,218 [WARNING] Sem heartbeats há 3794 segundos; solicitando fallback.
+2025-10-11 20:29:43,236 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:29:43,237 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:29:48,237 [WARNING] Sem heartbeats há 3799 segundos; solicitando fallback.
+2025-10-11 20:29:48,254 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:29:48,255 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:29:53,255 [WARNING] Sem heartbeats há 3804 segundos; solicitando fallback.
+2025-10-11 20:29:53,274 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:29:53,275 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:29:58,276 [WARNING] Sem heartbeats há 3809 segundos; solicitando fallback.
+2025-10-11 20:29:58,292 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:29:58,292 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:30:03,295 [WARNING] Sem heartbeats há 3814 segundos; solicitando fallback.
+2025-10-11 20:30:03,319 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:30:03,319 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:30:08,319 [WARNING] Sem heartbeats há 3819 segundos; solicitando fallback.
+2025-10-11 20:30:08,338 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:30:08,338 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:30:13,339 [WARNING] Sem heartbeats há 3824 segundos; solicitando fallback.
+2025-10-11 20:30:13,356 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:30:13,357 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:30:18,358 [WARNING] Sem heartbeats há 3830 segundos; solicitando fallback.
+2025-10-11 20:30:18,376 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:30:18,377 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:30:23,377 [WARNING] Sem heartbeats há 3835 segundos; solicitando fallback.
+2025-10-11 20:30:23,393 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:30:23,394 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:30:28,394 [WARNING] Sem heartbeats há 3840 segundos; solicitando fallback.
+2025-10-11 20:30:28,412 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:30:28,413 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:30:33,414 [WARNING] Sem heartbeats há 3845 segundos; solicitando fallback.
+2025-10-11 20:30:33,435 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:30:33,436 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:30:38,436 [WARNING] Sem heartbeats há 3850 segundos; solicitando fallback.
+2025-10-11 20:30:38,455 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:30:38,456 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:30:43,456 [WARNING] Sem heartbeats há 3855 segundos; solicitando fallback.
+2025-10-11 20:30:43,474 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:30:43,475 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:30:48,476 [WARNING] Sem heartbeats há 3860 segundos; solicitando fallback.
+2025-10-11 20:30:48,493 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:30:48,493 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:30:53,494 [WARNING] Sem heartbeats há 3865 segundos; solicitando fallback.
+2025-10-11 20:30:53,513 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:30:53,513 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:30:58,514 [WARNING] Sem heartbeats há 3870 segundos; solicitando fallback.
+2025-10-11 20:30:58,533 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:30:58,534 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:31:03,535 [WARNING] Sem heartbeats há 3875 segundos; solicitando fallback.
+2025-10-11 20:31:03,552 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:31:03,552 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:31:08,553 [WARNING] Sem heartbeats há 3880 segundos; solicitando fallback.
+2025-10-11 20:31:08,570 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:31:08,571 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:31:13,572 [WARNING] Sem heartbeats há 3885 segundos; solicitando fallback.
+2025-10-11 20:31:13,590 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:31:13,591 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:31:18,591 [WARNING] Sem heartbeats há 3890 segundos; solicitando fallback.
+2025-10-11 20:31:18,608 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:31:18,609 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:31:23,609 [WARNING] Sem heartbeats há 3895 segundos; solicitando fallback.
+2025-10-11 20:31:23,626 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:31:23,626 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:31:28,626 [WARNING] Sem heartbeats há 3900 segundos; solicitando fallback.
+2025-10-11 20:31:28,644 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:31:28,644 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:31:33,645 [WARNING] Sem heartbeats há 3905 segundos; solicitando fallback.
+2025-10-11 20:31:33,664 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:31:33,665 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:31:38,665 [WARNING] Sem heartbeats há 3910 segundos; solicitando fallback.
+2025-10-11 20:31:38,682 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:31:38,682 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:31:43,683 [WARNING] Sem heartbeats há 3915 segundos; solicitando fallback.
+2025-10-11 20:31:43,702 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:31:43,702 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:31:48,703 [WARNING] Sem heartbeats há 3920 segundos; solicitando fallback.
+2025-10-11 20:31:48,744 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:31:48,747 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 20:31:53,747 [WARNING] Sem heartbeats há 3925 segundos; solicitando fallback.
+2025-10-11 20:31:53,784 [ERROR] Falha ao iniciar youtube-fallback.service: Failed to start youtube-fallback.service: Interactive authentication required.
+See system logs and 'systemctl status youtube-fallback.service' for details.
+2025-10-11 20:31:53,784 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+
+===== /var/lib/bwb-status-monitor/status.json =====
+[
+  {
+    "timestamp": "2025-10-11T18:08:26.609834+00:00",
+    "machine_id": "TEST-MAC",
+    "remote_addr": "213.22.83.49",
+    "payload": {
+      "machine_id": "TEST-MAC",
+      "status": "ok"
+    }
+  }
+]
+===== Consulta HTTP ao endpoint de status =====
+HTTP/1.1 501 Unsupported method ('HEAD')
+Server: BWBStatusMonitor/1.0 Python/3.10.12
+Date: Sat, 11 Oct 2025 20:31:58 GMT
+Connection: close
+Content-Type: text/html;charset=utf-8
+Content-Length: 497
+
+{"last_timestamp": null, "fallback_active": false, "seconds_since_last_heartbeat": 3929.680939, "missed_threshold": 40}
