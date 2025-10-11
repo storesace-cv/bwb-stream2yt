@@ -30,19 +30,19 @@ sudo tail -f /run/youtube-fallback.progress
 
 ## 3. Correlacionar com outros serviços
 
-Quando o fallback pára, verifique também o `yt-decider-daemon`, responsável por decidir quando activar/desactivar o envio secundário:
+Quando o fallback pára, verifique também o `bwb-status-monitor`, responsável por decidir quando activar/desactivar o envio secundário:
 
 ```bash
-sudo journalctl -u yt-decider-daemon -n 200
+sudo journalctl -u bwb-status-monitor -n 200
 ```
 
-Erros de autenticação (por exemplo, falhas ao contactar `oauth2.googleapis.com`) podem impedir a retoma automática. A análise detalhada de 6 de Outubro de 2025 (`docs/diagnostics/20251006-secondary-backup.md`) mostra como uma combinação de OOM killer e problemas DNS causou paragens recorrentes.【F:docs/diagnostics/20251006-secondary-backup.md†L1-L61】
+Ausência prolongada de heartbeats ou erros HTTP no endpoint configurado impedem a retoma automática. A análise detalhada de 6 de Outubro de 2025 (`docs/diagnostics/20251006-secondary-backup.md`) mostra como falhas de rede entre o emissor e o monitor degradavam a automação anterior; as mesmas recomendações de conectividade continuam válidas para o novo monitor.【F:docs/diagnostics/20251006-secondary-backup.md†L1-L61】
 
 ## 4. Próximos passos sugeridos
 
 1. **Confirmar causa imediata** — procurar no `journalctl` por `exit`/`SIGTERM` e mensagens de erro do `ffmpeg`.
 2. **Verificar recursos** — usar `free -h` e `ps --sort=-%mem` para garantir que há RAM suficiente; o OOM killer termina o serviço quando a memória escasseia.
 3. **Monitorizar após correcções** — depois de aplicar ajustes (ex.: aumentar memória ou corrigir DNS), monitorizar os logs durante 10–15 min para assegurar estabilidade.
-4. **Recolher pacotes de evidências** — quando precisar de partilhar o estado completo do `yt-decider-daemon` (decisões, estado systemd e `bwb_services.log`), execute `bash scripts/yt-decider-debug.sh` e anexe o ficheiro `yt-decider-*.log`. Consulte o [guia detalhado](yt-decider-debug.md) para mais contexto.
+4. **Recolher pacotes de evidências** — quando precisar de partilhar o estado completo do monitor (heartbeats recebidos, decisões e estado systemd), execute `bash scripts/status-monitor-debug.sh` e anexe o ficheiro `status-monitor-*.log`. Consulte o [guia detalhado](status-monitor-debug.md) para mais contexto.
 
 Seguindo estes passos, terá evidências concretas para explicar porque é que o envio pela URL secundária foi interrompido e poderá actuar rapidamente na droplet.
