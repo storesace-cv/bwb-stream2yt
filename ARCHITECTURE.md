@@ -8,17 +8,17 @@ bwb-stream2yt/
 │     ├─ stream_to_youtube.py
 │     └─ .env.example
 │
-├─ secondary-droplet/      # Fallback + Decider (Droplet Ubuntu)
+├─ secondary-droplet/      # Fallback + monitor HTTP (Droplet Ubuntu)
 │  ├─ bin/
 │  │  ├─ youtube_fallback.sh
-│  │  ├─ yt_decider_daemon.py
+│  │  ├─ bwb_status_monitor.py
 │  │  └─ yt_api_probe_once.py
 │  ├─ config/
 │  │  └─ youtube-fallback.env.example
 │  ├─ requirements.txt
 │  ├─ systemd/
 │  │  ├─ youtube-fallback.service
-│  │  └─ yt-decider-daemon.service
+│  │  └─ bwb-status-monitor.service
 │  └─ tools/
 │     └─ regen_token.py
 │

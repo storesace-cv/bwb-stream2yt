@@ -57,9 +57,10 @@ def main():
     # Reload systemd after potential unit updates
     if not args.dry_run:
         ssh(["systemctl", "daemon-reload"])
-        ssh(["systemctl", "enable", "--now", "yt-decider-daemon.service"])
-        ssh(["systemctl", "enable", "--now", "youtube-fallback.service"])
-        print("Deployed and ensured services are enabled+running.")
+        ssh(["systemctl", "enable", "youtube-fallback.service"])
+        ssh(["systemctl", "enable", "--now", "bwb-status-monitor.service"])
+        ssh(["systemctl", "enable", "--now", "ensure-broadcast.timer"])
+        print("Deployed and ensured monitor/timer services are enabled.")
 
 
 if __name__ == "__main__":

@@ -15,7 +15,7 @@ from typing import List, Mapping, Optional, Sequence, Tuple
 
 DEFAULT_SERVICES: Tuple[str, ...] = (
     "ytc-web-backend.service",
-    "yt-decider-daemon.service",
+    "bwb-status-monitor.service",
     "youtube-fallback.service",
 )
 
