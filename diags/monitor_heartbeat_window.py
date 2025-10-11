@@ -27,6 +27,17 @@ from dataclasses import dataclass
 from statistics import mean
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+ERROR_KEYWORDS = (
+    "error",
+    "failed",
+    "traceback",
+    "permission denied",
+    "oserror",
+    "importerror",
+    "filenotfounderror",
+    "denied",
+)
+
 DEFAULT_ENDPOINT = "http://127.0.0.1:8080/status"
 DEFAULT_SERVICE = "youtube-fallback.service"
 DEFAULT_DURATION = 60
@@ -162,10 +173,79 @@ def is_service_active(systemctl_output: str, systemctl_rc: Optional[int]) -> boo
     return normalized in {"active", "activating", "reloading"}
 
 
+def collect_service_diagnosis(service: str) -> Optional[str]:
+    show_args = [
+        "systemctl",
+        "show",
+        service,
+        "-pActiveState",
+        "-pSubState",
+        "-pResult",
+        "-pExecMainStatus",
+        "-pExecMainPID",
+    ]
+    show_result = subprocess.run(
+        show_args,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    details: Dict[str, str] = {}
+    for line in show_result.stdout.splitlines():
+        if "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        details[key.strip()] = value.strip()
+
+    journal_result = subprocess.run(
+        [
+            "journalctl",
+            "-u",
+            service,
+            "-n",
+            "20",
+            "-o",
+            "short-iso",
+            "--no-pager",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    error_line: Optional[str] = None
+    for line in reversed(journal_result.stdout.splitlines()):
+        lower = line.lower()
+        if any(keyword in lower for keyword in ERROR_KEYWORDS):
+            error_line = line
+            break
+
+    bits: List[str] = []
+    active_state = details.get("ActiveState")
+    sub_state = details.get("SubState")
+    if active_state:
+        state_desc = f"ActiveState={active_state}"
+        if sub_state:
+            state_desc += f" ({sub_state})"
+        bits.append(state_desc)
+    result = details.get("Result")
+    if result:
+        bits.append(f"Result={result}")
+    exec_status = details.get("ExecMainStatus")
+    if exec_status:
+        bits.append(f"ExecMainStatus={exec_status}")
+    if error_line:
+        bits.append(f"Última entrada com erro: {error_line}")
+
+    if not bits:
+        return None
+    return "; ".join(bits)
+
+
 def final_verdict(
     monitor_flag: bool,
     service_active: bool,
     expect_active: bool,
+    inactive_reason: Optional[str] = None,
 ) -> str:
     """Generate the final verdict message favouring the heartbeat rule."""
     if monitor_flag == expect_active:
@@ -190,10 +270,13 @@ def final_verdict(
                 "ausência de heartbeats, mas continua a apontar para o "
                 "primário mesmo com o serviço activo."
             )
-        return (
+        base = (
             "❌ Monitor deveria ter activado a URL secundária após ausência de "
             "heartbeats, mas nem monitor nem serviço estão a emitir."
         )
+        if inactive_reason:
+            return f"{base} Motivo reportado: {inactive_reason}."
+        return base
 
     if service_active:
         return (
@@ -325,7 +408,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             % systemctl_rc
         )
 
-    verdict = final_verdict(fallback_flag, service_active, expect_active)
+    inactive_reason = None
+    if expect_active and not service_active:
+        inactive_reason = collect_service_diagnosis(args.service)
+
+    verdict = final_verdict(
+        fallback_flag,
+        service_active,
+        expect_active,
+        inactive_reason=inactive_reason,
+    )
     print(verdict)
 
     if total:

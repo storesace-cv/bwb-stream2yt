@@ -13,25 +13,33 @@ HISTORY_DIR="${SCRIPT_DIR}/history"
 mkdir -p "${HISTORY_DIR}"
 
 TIMESTAMP="$(date -u +"%Y%m%dT%H%M%SZ")"
+MASTER_LOG="${HISTORY_DIR}/${TIMESTAMP}-full-snapshot.log"
+touch "${MASTER_LOG}"
+
+echo "# full_snapshot_log: ${MASTER_LOG}" | tee -a "${MASTER_LOG}"
+echo "# started_at_utc: $(date -u +"%Y-%m-%dT%H:%M:%SZ")" | tee -a "${MASTER_LOG}"
+echo | tee -a "${MASTER_LOG}"
 
 run_in_dir_and_log() {
   local label="$1"
   local workdir="$2"
   shift 2
-  local logfile="${HISTORY_DIR}/${TIMESTAMP}-${label}.log"
+  local logfile="${MASTER_LOG}"
   echo "[info] A executar ${label} (log: ${logfile})"
   (
     set -euo pipefail
     cd "${workdir}"
     {
+      echo "===== ${label} ====="
       echo "# timestamp_utc: $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
       echo "# working_dir: ${workdir}"
       printf '# comando:'
       printf ' %q' "$@"
       printf '\n\n'
       "$@"
+      echo
     } 2>&1
-  ) | tee "${logfile}"
+  ) | tee -a "${logfile}"
   local exit_code=${PIPESTATUS[0]}
   if [[ ${exit_code} -ne 0 ]]; then
     echo "[erro] ${label} terminou com código ${exit_code}. Consulte ${logfile}." >&2
@@ -46,4 +54,4 @@ run_in_dir_and_log "monitor-heartbeat-before" "${SCRIPT_DIR}" ./monitor_heartbea
 run_in_dir_and_log "diagnostics" "${SCRIPT_DIR}" ./run_diagnostics.py
 run_in_dir_and_log "monitor-heartbeat-after" "${SCRIPT_DIR}" ./monitor_heartbeat_window.py
 
-echo "[info] Sequência de diagnósticos concluída. Logs disponíveis em ${HISTORY_DIR}."
+echo "[info] Sequência de diagnósticos concluída. Log consolidado: ${MASTER_LOG}."
