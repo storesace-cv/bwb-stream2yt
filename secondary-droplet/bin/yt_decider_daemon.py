@@ -191,7 +191,7 @@ def main():
         action = "KEEP"
         detail = state["note"] or ""
 
-        primary_ok = stream_status == "active" and health in ("good", "ok")
+        primary_ok = stream_status == "active" and health in ("good", "ok", "warning")
         primary_bad = stream_status in (
             "inactive",
             "?",
