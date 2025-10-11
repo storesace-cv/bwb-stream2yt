@@ -144,6 +144,29 @@ ensure_python_venv() {
     log "python${version} ensurepip validado após instalação."
 }
 
+ensure_secondary_requirements() {
+    local force="${FORCE_REDEPLOY:-}"
+    local requirements_path="${SECONDARY_DIR}/requirements.txt"
+    local current_hash
+    current_hash=$(sha256sum "${requirements_path}" | awk '{print $1}')
+    local previous_hash=""
+    if [[ -f "${REQUIREMENTS_HASH_FILE}" ]]; then
+        previous_hash=$(<"${REQUIREMENTS_HASH_FILE}")
+    fi
+
+    if [[ "${force}" == "1" ]]; then
+        log "FORCE_REDEPLOY=1 detectado; reinstalando dependências do fallback."
+    fi
+
+    if [[ "${current_hash}" != "${previous_hash}" || "${force}" == "1" ]]; then
+        log "Instalando dependências base do fallback (requirements.txt actualizado)."
+        pip3 install --no-cache-dir -r requirements.txt
+        echo "${current_hash}" > "${REQUIREMENTS_HASH_FILE}"
+    else
+        log "Dependências base já instaladas; nenhuma ação necessária."
+    fi
+}
+
 setup_status_monitor() {
     log "Instalando monitor HTTP de status do primário"
 
@@ -164,8 +187,9 @@ setup_status_monitor() {
     fi
 
     local env_file="/etc/bwb-status-monitor.env"
-    if [[ ! -f "${env_file}" ]]; then
-        cat <<'ENVEOF' >"${env_file}"
+    local tmp_env
+    tmp_env=$(mktemp)
+    cat <<'ENVEOF' >"${tmp_env}"
 # /etc/bwb-status-monitor.env — configurações para o monitor HTTP de status.
 # Descomente e ajuste as variáveis conforme necessário.
 #BWB_STATUS_BIND=0.0.0.0
@@ -179,8 +203,10 @@ setup_status_monitor() {
 #BWB_STATUS_SECONDARY_SERVICE=youtube-fallback.service
 #BWB_STATUS_TOKEN=
 ENVEOF
-        chmod 640 "${env_file}"
+    if ensure_installed_file "${tmp_env}" "${env_file}" 640 root root; then
+        restart_required=true
     fi
+    rm -f "${tmp_env}"
 
     if command -v ufw >/dev/null 2>&1; then
         if ufw status 2>/dev/null | grep -qi "status: active"; then
