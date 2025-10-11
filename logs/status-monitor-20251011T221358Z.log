@@ -1,0 +1,452 @@
+
+===== Contexto do host (UTC) =====
+host: ubuntu-s-1vcpu-1gb-10gb-fra1-01
+uname: Linux ubuntu-s-1vcpu-1gb-10gb-fra1-01 5.15.0-157-generic #167-Ubuntu SMP Wed Sep 17 21:35:53 UTC 2025 x86_64 x86_64 x86_64 GNU/Linux
+janela: 48 hours (desde 2025-10-13 22:13:58 Z até 2025-10-11 22:13:58 Z)
+endpoint_alvo: http://127.0.0.1:8080/status
+
+===== /etc/yt-restapi.env (com token oculto) =====
+# /etc/yt-restapi.env — configurações para o monitor HTTP de status.
+# Ajuste as variáveis conforme necessário.
+#YTR_BIND=0.0.0.0
+#YTR_PORT=8080
+#YTR_HISTORY_SECONDS=300
+#YTR_MISSED_THRESHOLD=40
+#YTR_RECOVERY_REPORTS=2
+#YTR_CHECK_INTERVAL=5
+#YTR_STATE_FILE=/var/lib/bwb-status-monitor/status.json
+#YTR_LOG_FILE=/var/log/bwb_status_monitor.log
+#YTR_SECONDARY_SERVICE=youtube-fallback.service
+#YTR_TOKEN=<redacted>
+#YTR_REQUIRE_TOKEN=1
+
+===== journalctl -u yt-restapi.service (48 hours, UTC) =====
+(serviço yt-restapi.service não encontrado ou journalctl indisponível)
+
+===== systemctl status yt-restapi.service --no-pager =====
+(serviço yt-restapi.service não encontrado)
+
+===== /var/log/bwb_status_monitor.log (48 hours) =====
+(não foi possível extrair por timestamp; fallback: tail -n 400)
+2025-10-11 22:06:04,711 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:06:04,712 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:06:09,712 [WARNING] Sem heartbeats há 4732 segundos; solicitando fallback.
+2025-10-11 22:06:09,718 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:06:09,719 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:06:14,719 [WARNING] Sem heartbeats há 4737 segundos; solicitando fallback.
+2025-10-11 22:06:14,725 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:06:14,726 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:06:19,726 [WARNING] Sem heartbeats há 4742 segundos; solicitando fallback.
+2025-10-11 22:06:19,732 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:06:19,733 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:06:24,733 [WARNING] Sem heartbeats há 4747 segundos; solicitando fallback.
+2025-10-11 22:06:24,739 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:06:24,740 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:06:29,740 [WARNING] Sem heartbeats há 4752 segundos; solicitando fallback.
+2025-10-11 22:06:29,746 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:06:29,746 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:06:34,747 [WARNING] Sem heartbeats há 4757 segundos; solicitando fallback.
+2025-10-11 22:06:34,753 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:06:34,754 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:06:39,754 [WARNING] Sem heartbeats há 4762 segundos; solicitando fallback.
+2025-10-11 22:06:39,762 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:06:39,762 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:06:44,763 [WARNING] Sem heartbeats há 4767 segundos; solicitando fallback.
+2025-10-11 22:06:44,769 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:06:44,769 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:06:49,770 [WARNING] Sem heartbeats há 4772 segundos; solicitando fallback.
+2025-10-11 22:06:49,776 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:06:49,777 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:06:54,777 [WARNING] Sem heartbeats há 4777 segundos; solicitando fallback.
+2025-10-11 22:06:54,783 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:06:54,783 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:06:59,784 [WARNING] Sem heartbeats há 4782 segundos; solicitando fallback.
+2025-10-11 22:06:59,791 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:06:59,791 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:07:04,792 [WARNING] Sem heartbeats há 4787 segundos; solicitando fallback.
+2025-10-11 22:07:04,798 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:07:04,798 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:07:09,799 [WARNING] Sem heartbeats há 4792 segundos; solicitando fallback.
+2025-10-11 22:07:09,805 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:07:09,805 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:07:14,806 [WARNING] Sem heartbeats há 4797 segundos; solicitando fallback.
+2025-10-11 22:07:14,812 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:07:14,812 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:07:19,813 [WARNING] Sem heartbeats há 4802 segundos; solicitando fallback.
+2025-10-11 22:07:19,818 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:07:19,818 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:07:24,819 [WARNING] Sem heartbeats há 4807 segundos; solicitando fallback.
+2025-10-11 22:07:24,825 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:07:24,826 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:07:29,826 [WARNING] Sem heartbeats há 4812 segundos; solicitando fallback.
+2025-10-11 22:07:29,832 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:07:29,833 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:07:34,833 [WARNING] Sem heartbeats há 4817 segundos; solicitando fallback.
+2025-10-11 22:07:34,838 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:07:34,839 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:07:39,839 [WARNING] Sem heartbeats há 4822 segundos; solicitando fallback.
+2025-10-11 22:07:39,845 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:07:39,846 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:07:44,846 [WARNING] Sem heartbeats há 4827 segundos; solicitando fallback.
+2025-10-11 22:07:44,852 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:07:44,853 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:07:49,853 [WARNING] Sem heartbeats há 4832 segundos; solicitando fallback.
+2025-10-11 22:07:49,859 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:07:49,860 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:07:54,861 [WARNING] Sem heartbeats há 4837 segundos; solicitando fallback.
+2025-10-11 22:07:54,867 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:07:54,867 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:07:59,868 [WARNING] Sem heartbeats há 4842 segundos; solicitando fallback.
+2025-10-11 22:07:59,874 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:07:59,875 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:08:04,876 [WARNING] Sem heartbeats há 4847 segundos; solicitando fallback.
+2025-10-11 22:08:04,882 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:08:04,882 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:08:09,883 [WARNING] Sem heartbeats há 4852 segundos; solicitando fallback.
+2025-10-11 22:08:09,889 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:08:09,889 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:08:14,890 [WARNING] Sem heartbeats há 4857 segundos; solicitando fallback.
+2025-10-11 22:08:14,896 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:08:14,896 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:08:19,897 [WARNING] Sem heartbeats há 4862 segundos; solicitando fallback.
+2025-10-11 22:08:19,902 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:08:19,903 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:08:24,903 [WARNING] Sem heartbeats há 4867 segundos; solicitando fallback.
+2025-10-11 22:08:24,909 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:08:24,909 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:08:29,910 [WARNING] Sem heartbeats há 4872 segundos; solicitando fallback.
+2025-10-11 22:08:29,916 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:08:29,916 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:08:34,916 [WARNING] Sem heartbeats há 4877 segundos; solicitando fallback.
+2025-10-11 22:08:34,922 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:08:34,923 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:08:39,923 [WARNING] Sem heartbeats há 4882 segundos; solicitando fallback.
+2025-10-11 22:08:39,929 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:08:39,929 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:08:44,930 [WARNING] Sem heartbeats há 4887 segundos; solicitando fallback.
+2025-10-11 22:08:44,937 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:08:44,937 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:08:49,938 [WARNING] Sem heartbeats há 4892 segundos; solicitando fallback.
+2025-10-11 22:08:49,945 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:08:49,946 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:08:54,947 [WARNING] Sem heartbeats há 4897 segundos; solicitando fallback.
+2025-10-11 22:08:54,953 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:08:54,953 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:08:59,954 [WARNING] Sem heartbeats há 4902 segundos; solicitando fallback.
+2025-10-11 22:08:59,960 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:08:59,960 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:09:04,961 [WARNING] Sem heartbeats há 4907 segundos; solicitando fallback.
+2025-10-11 22:09:04,967 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:09:04,967 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:09:09,968 [WARNING] Sem heartbeats há 4912 segundos; solicitando fallback.
+2025-10-11 22:09:09,973 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:09:09,974 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:09:14,975 [WARNING] Sem heartbeats há 4917 segundos; solicitando fallback.
+2025-10-11 22:09:14,981 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:09:14,981 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:09:19,982 [WARNING] Sem heartbeats há 4922 segundos; solicitando fallback.
+2025-10-11 22:09:19,988 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:09:19,988 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:09:24,989 [WARNING] Sem heartbeats há 4927 segundos; solicitando fallback.
+2025-10-11 22:09:24,996 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:09:24,997 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:09:29,997 [WARNING] Sem heartbeats há 4932 segundos; solicitando fallback.
+2025-10-11 22:09:30,003 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:09:30,004 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:09:35,005 [WARNING] Sem heartbeats há 4937 segundos; solicitando fallback.
+2025-10-11 22:09:35,011 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:09:35,012 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:09:40,013 [WARNING] Sem heartbeats há 4942 segundos; solicitando fallback.
+2025-10-11 22:09:40,020 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:09:40,020 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:09:45,021 [WARNING] Sem heartbeats há 4947 segundos; solicitando fallback.
+2025-10-11 22:09:45,027 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:09:45,028 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:09:50,028 [WARNING] Sem heartbeats há 4952 segundos; solicitando fallback.
+2025-10-11 22:09:50,036 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:09:50,037 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:09:55,037 [WARNING] Sem heartbeats há 4957 segundos; solicitando fallback.
+2025-10-11 22:09:55,043 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:09:55,043 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:10:00,044 [WARNING] Sem heartbeats há 4962 segundos; solicitando fallback.
+2025-10-11 22:10:00,052 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:10:00,056 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:10:05,057 [WARNING] Sem heartbeats há 4967 segundos; solicitando fallback.
+2025-10-11 22:10:05,063 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:10:05,064 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:10:10,065 [WARNING] Sem heartbeats há 4972 segundos; solicitando fallback.
+2025-10-11 22:10:10,071 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:10:10,072 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:10:15,072 [WARNING] Sem heartbeats há 4977 segundos; solicitando fallback.
+2025-10-11 22:10:15,078 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:10:15,079 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:10:20,080 [WARNING] Sem heartbeats há 4982 segundos; solicitando fallback.
+2025-10-11 22:10:20,087 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:10:20,088 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:10:25,089 [WARNING] Sem heartbeats há 4987 segundos; solicitando fallback.
+2025-10-11 22:10:25,095 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:10:25,095 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:10:30,096 [WARNING] Sem heartbeats há 4992 segundos; solicitando fallback.
+2025-10-11 22:10:30,106 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:10:30,107 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:10:35,108 [WARNING] Sem heartbeats há 4997 segundos; solicitando fallback.
+2025-10-11 22:10:35,115 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:10:35,116 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:10:40,116 [WARNING] Sem heartbeats há 5002 segundos; solicitando fallback.
+2025-10-11 22:10:40,123 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:10:40,123 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:10:45,124 [WARNING] Sem heartbeats há 5007 segundos; solicitando fallback.
+2025-10-11 22:10:45,131 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:10:45,132 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:10:50,132 [WARNING] Sem heartbeats há 5012 segundos; solicitando fallback.
+2025-10-11 22:10:50,138 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:10:50,138 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:10:51,446 [INFO] 127.0.0.1 - "GET /status HTTP/1.1" 200 -
+2025-10-11 22:10:55,139 [WARNING] Sem heartbeats há 5017 segundos; solicitando fallback.
+2025-10-11 22:10:55,145 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:10:55,145 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:11:00,146 [WARNING] Sem heartbeats há 5022 segundos; solicitando fallback.
+2025-10-11 22:11:00,155 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:11:00,156 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:11:05,156 [WARNING] Sem heartbeats há 5027 segundos; solicitando fallback.
+2025-10-11 22:11:05,163 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:11:05,164 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:11:10,164 [WARNING] Sem heartbeats há 5032 segundos; solicitando fallback.
+2025-10-11 22:11:10,170 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:11:10,170 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:11:15,171 [WARNING] Sem heartbeats há 5037 segundos; solicitando fallback.
+2025-10-11 22:11:15,177 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:11:15,178 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:11:20,178 [WARNING] Sem heartbeats há 5042 segundos; solicitando fallback.
+2025-10-11 22:11:20,185 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:11:20,186 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:11:25,187 [WARNING] Sem heartbeats há 5047 segundos; solicitando fallback.
+2025-10-11 22:11:25,192 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:11:25,192 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:11:30,193 [WARNING] Sem heartbeats há 5052 segundos; solicitando fallback.
+2025-10-11 22:11:30,200 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:11:30,201 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:11:35,201 [WARNING] Sem heartbeats há 5057 segundos; solicitando fallback.
+2025-10-11 22:11:35,207 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:11:35,208 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:11:40,208 [WARNING] Sem heartbeats há 5062 segundos; solicitando fallback.
+2025-10-11 22:11:40,214 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:11:40,214 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:11:45,215 [WARNING] Sem heartbeats há 5067 segundos; solicitando fallback.
+2025-10-11 22:11:45,221 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:11:45,221 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:11:50,222 [WARNING] Sem heartbeats há 5072 segundos; solicitando fallback.
+2025-10-11 22:11:50,227 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:11:50,228 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:11:51,502 [INFO] 127.0.0.1 - "GET /status HTTP/1.1" 200 -
+2025-10-11 22:11:55,228 [WARNING] Sem heartbeats há 5077 segundos; solicitando fallback.
+2025-10-11 22:11:55,235 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:11:55,235 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:12:00,236 [WARNING] Sem heartbeats há 5082 segundos; solicitando fallback.
+2025-10-11 22:12:00,245 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:12:00,246 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:12:05,247 [WARNING] Sem heartbeats há 5087 segundos; solicitando fallback.
+2025-10-11 22:12:05,253 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:12:05,254 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:12:10,255 [WARNING] Sem heartbeats há 5092 segundos; solicitando fallback.
+2025-10-11 22:12:10,261 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:12:10,262 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:12:15,262 [WARNING] Sem heartbeats há 5097 segundos; solicitando fallback.
+2025-10-11 22:12:15,268 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:12:15,268 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:12:20,269 [WARNING] Sem heartbeats há 5102 segundos; solicitando fallback.
+2025-10-11 22:12:20,275 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:12:20,275 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:12:25,276 [WARNING] Sem heartbeats há 5107 segundos; solicitando fallback.
+2025-10-11 22:12:25,282 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:12:25,282 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:12:30,283 [WARNING] Sem heartbeats há 5112 segundos; solicitando fallback.
+2025-10-11 22:12:30,290 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:12:30,291 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:12:35,291 [WARNING] Sem heartbeats há 5117 segundos; solicitando fallback.
+2025-10-11 22:12:35,298 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:12:35,298 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:12:40,299 [WARNING] Sem heartbeats há 5122 segundos; solicitando fallback.
+2025-10-11 22:12:40,306 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:12:40,307 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:12:45,308 [WARNING] Sem heartbeats há 5127 segundos; solicitando fallback.
+2025-10-11 22:12:45,313 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:12:45,314 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:12:50,335 [WARNING] Sem heartbeats há 5132 segundos; solicitando fallback.
+2025-10-11 22:12:50,343 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:12:50,343 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:12:55,344 [WARNING] Sem heartbeats há 5137 segundos; solicitando fallback.
+2025-10-11 22:12:55,350 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:12:55,350 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:13:00,351 [WARNING] Sem heartbeats há 5142 segundos; solicitando fallback.
+2025-10-11 22:13:00,359 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:13:00,360 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:13:05,361 [WARNING] Sem heartbeats há 5147 segundos; solicitando fallback.
+2025-10-11 22:13:05,367 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:13:05,367 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:13:10,368 [WARNING] Sem heartbeats há 5152 segundos; solicitando fallback.
+2025-10-11 22:13:10,373 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:13:10,374 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:13:15,374 [WARNING] Sem heartbeats há 5157 segundos; solicitando fallback.
+2025-10-11 22:13:15,380 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:13:15,380 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:13:20,381 [WARNING] Sem heartbeats há 5162 segundos; solicitando fallback.
+2025-10-11 22:13:20,387 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:13:20,387 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:13:25,388 [WARNING] Sem heartbeats há 5167 segundos; solicitando fallback.
+2025-10-11 22:13:25,394 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:13:25,394 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:13:30,395 [WARNING] Sem heartbeats há 5172 segundos; solicitando fallback.
+2025-10-11 22:13:30,403 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:13:30,404 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:13:35,404 [WARNING] Sem heartbeats há 5177 segundos; solicitando fallback.
+2025-10-11 22:13:35,410 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:13:35,410 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:13:40,411 [WARNING] Sem heartbeats há 5182 segundos; solicitando fallback.
+2025-10-11 22:13:40,417 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:13:40,417 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:13:45,417 [WARNING] Sem heartbeats há 5187 segundos; solicitando fallback.
+2025-10-11 22:13:45,424 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:13:45,425 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:13:50,425 [WARNING] Sem heartbeats há 5192 segundos; solicitando fallback.
+2025-10-11 22:13:50,433 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:13:50,433 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:13:55,433 [WARNING] Sem heartbeats há 5197 segundos; solicitando fallback.
+2025-10-11 22:13:55,440 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:13:55,441 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:13:58,175 [INFO] 127.0.0.1 - code 501, message Unsupported method ('HEAD')
+2025-10-11 22:13:58,176 [INFO] 127.0.0.1 - "HEAD /status HTTP/1.1" 501 -
+2025-10-11 22:13:58,184 [INFO] 127.0.0.1 - "GET /status HTTP/1.1" 200 -
+2025-10-11 22:14:00,441 [WARNING] Sem heartbeats há 5202 segundos; solicitando fallback.
+2025-10-11 22:14:00,452 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:14:00,453 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:14:05,456 [WARNING] Sem heartbeats há 5207 segundos; solicitando fallback.
+2025-10-11 22:14:05,463 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:14:05,463 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:14:10,464 [WARNING] Sem heartbeats há 5212 segundos; solicitando fallback.
+2025-10-11 22:14:10,471 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:14:10,471 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+2025-10-11 22:14:15,472 [WARNING] Sem heartbeats há 5217 segundos; solicitando fallback.
+2025-10-11 22:14:15,479 [ERROR] Falha ao iniciar youtube-fallback.service: sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+2025-10-11 22:14:15,480 [WARNING] Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir.
+
+===== /var/lib/bwb-status-monitor/status.json =====
+[
+  {
+    "timestamp": "2025-10-11T18:08:26.609834+00:00",
+    "machine_id": "TEST-MAC",
+    "remote_addr": "213.22.83.49",
+    "payload": {
+      "machine_id": "TEST-MAC",
+      "status": "ok"
+    }
+  }
+]
+===== Consulta HTTP ao endpoint de status =====
+HTTP/1.1 501 Unsupported method ('HEAD')
+Server: BWBStatusMonitor/1.0 Python/3.10.12
+Date: Sat, 11 Oct 2025 22:14:15 GMT
+Connection: close
+Content-Type: text/html;charset=utf-8
+Content-Length: 497
+
+{"last_timestamp": null, "fallback_active": false, "seconds_since_last_heartbeat": 5217.977229, "missed_threshold": 40}
