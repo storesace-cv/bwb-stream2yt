@@ -11,10 +11,10 @@ log() {
 
 print_available_scripts() {
     log "Scripts disponíveis para diagnóstico e recuperação:"
-    log "  reset_secondary_droplet.sh — limpa caches e reinicia serviços críticos (fallback, decider, backend)."
+    log "  reset_secondary_droplet.sh — limpa caches e reinicia serviços críticos (fallback, monitor, backend)."
     log "    Comando: sudo /usr/local/bin/reset_secondary_droplet.sh"
-    log "  yt-decider-debug.sh — recolhe logs do yt-decider das últimas 48h e gera ficheiro de análise."
-    log "    Comando: sudo /usr/local/bin/yt-decider-debug.sh"
+    log "  status-monitor-debug.sh — recolhe evidências do monitor HTTP (últimas 48h) e gera ficheiro de análise."
+    log "    Comando: sudo /usr/local/bin/status-monitor-debug.sh"
     log "  ensure_broadcast.py — valida se existe live do YouTube pronta e ligada ao stream correto."
     log "    Comando: sudo /usr/local/bin/ensure_broadcast.py"
     log "  bwb_status_monitor.py — servidor HTTP que recebe heartbeats do primário; ver --help para opções."
@@ -159,11 +159,11 @@ else
     log "Aviso: reset_secondary_droplet.sh não encontrado em ${reset_secondary_source}; instalação ignorada."
 fi
 
-yt_decider_debug_source="${SCRIPT_DIR}/yt-decider-debug.sh"
-if [[ -f "${yt_decider_debug_source}" ]]; then
-    install -m 755 -o root -g root "${yt_decider_debug_source}" /usr/local/bin/yt-decider-debug.sh
+status_monitor_debug_source="${SCRIPT_DIR}/status-monitor-debug.sh"
+if [[ -f "${status_monitor_debug_source}" ]]; then
+    install -m 755 -o root -g root "${status_monitor_debug_source}" /usr/local/bin/status-monitor-debug.sh
 else
-    log "Aviso: yt-decider-debug.sh não encontrado em ${yt_decider_debug_source}; instalação ignorada."
+    log "Aviso: status-monitor-debug.sh não encontrado em ${status_monitor_debug_source}; instalação ignorada."
 fi
 
 ENV_FILE="/etc/youtube-fallback.env"

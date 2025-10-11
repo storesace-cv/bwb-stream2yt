@@ -55,7 +55,7 @@ journalctl -u ensure-broadcast.service -n 50 -l
 
 ## Decider (se usado)
 
-- Ver `journalctl -u yt-decider-daemon -f -l`
+- Ver `journalctl -u bwb-status-monitor -f -l`
 - Consultar o histórico consolidado em `/root/bwb_services.log` (contém decisões do decider, eventos do fallback e notas do primário).
 
 ## Diagnósticos rápidos da URL secundária
