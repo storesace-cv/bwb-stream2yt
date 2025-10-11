@@ -1,6 +1,8 @@
 import datetime as dt
+import errno
 import importlib.util
 import sys
+from types import SimpleNamespace
 from pathlib import Path
 
 import pytest
@@ -17,6 +19,7 @@ MonitorSettings = status_monitor.MonitorSettings
 StatusEntry = status_monitor.StatusEntry
 StatusMonitor = status_monitor.StatusMonitor
 utc_now = status_monitor.utc_now
+run_server = status_monitor.run_server
 
 
 class DummyServiceManager:
@@ -91,3 +94,32 @@ def test_stops_fallback_after_recovery(monitor: StatusMonitor) -> None:
 
     history = monitor.snapshot()["history"]
     assert len(history) == 2
+
+
+def test_run_server_handles_address_in_use(tmp_path: Path, monkeypatch, caplog):
+    caplog.set_level("ERROR")
+
+    settings = MonitorSettings(
+        bind="127.0.0.1",
+        port=8080,
+        history_seconds=60,
+        missed_threshold=2,
+        recovery_reports=2,
+        check_interval=1,
+        state_file=tmp_path / "status.json",
+        log_file=tmp_path / "monitor.log",
+    )
+
+    args = SimpleNamespace(bind="127.0.0.1", port=9090, graceful_timeout=10)
+
+    class FailingServer:
+        def __init__(self, *_args, **_kwargs):  # noqa: D401 - simple stub
+            raise OSError(errno.EADDRINUSE, "Address already in use")
+
+    monkeypatch.setattr(status_monitor, "StatusHTTPServer", FailingServer)
+
+    with pytest.raises(SystemExit) as excinfo:
+        run_server(settings, args)
+
+    assert excinfo.value.code == 1
+    assert any("já está em uso" in message for message in caplog.messages)
