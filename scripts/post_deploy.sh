@@ -64,7 +64,11 @@ ensure_python_venv() {
     log "python${version} ensurepip validado após instalação."
 }
 
-cd /root/bwb-stream2yt/secondary-droplet
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+SECONDARY_DIR="${REPO_DIR}/secondary-droplet"
+
+cd "${SECONDARY_DIR}"
 
 log "Instalando dependências base do fallback"
 pip3 install --no-cache-dir -r requirements.txt
@@ -76,8 +80,20 @@ install -m 644 -o root -g root systemd/ensure-broadcast.service /etc/systemd/sys
 install -m 644 -o root -g root systemd/ensure-broadcast.timer /etc/systemd/system/ensure-broadcast.timer
 
 log "Instalando utilitários administrativos no /usr/local/bin"
-install -m 755 -o root -g root ../scripts/reset_secondary_droplet.sh /usr/local/bin/reset_secondary_droplet.sh
-install -m 755 -o root -g root ../scripts/yt-decider-debug.sh /usr/local/bin/yt-decider-debug.sh
+
+reset_secondary_source="${SCRIPT_DIR}/reset_secondary_droplet.sh"
+if [[ -f "${reset_secondary_source}" ]]; then
+    install -m 755 -o root -g root "${reset_secondary_source}" /usr/local/bin/reset_secondary_droplet.sh
+else
+    log "Aviso: reset_secondary_droplet.sh não encontrado em ${reset_secondary_source}; instalação ignorada."
+fi
+
+yt_decider_debug_source="${SCRIPT_DIR}/yt-decider-debug.sh"
+if [[ -f "${yt_decider_debug_source}" ]]; then
+    install -m 755 -o root -g root "${yt_decider_debug_source}" /usr/local/bin/yt-decider-debug.sh
+else
+    log "Aviso: yt-decider-debug.sh não encontrado em ${yt_decider_debug_source}; instalação ignorada."
+fi
 
 ENV_FILE="/etc/youtube-fallback.env"
 DEFAULTS_FILE="config/youtube-fallback.defaults"
