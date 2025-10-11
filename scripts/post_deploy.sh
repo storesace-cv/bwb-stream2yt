@@ -65,7 +65,8 @@ ensure_python_venv() {
 }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SECONDARY_DIR="${SCRIPT_DIR}/../secondary-droplet"
+REPO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+SECONDARY_DIR="${REPO_DIR}/secondary-droplet"
 
 cd "${SECONDARY_DIR}"
 
@@ -80,26 +81,19 @@ install -m 644 -o root -g root systemd/ensure-broadcast.timer /etc/systemd/syste
 
 log "Instalando utilitários administrativos no /usr/local/bin"
 
-maybe_install_admin_script() {
-    local label="$1"
-    local source_path="$2"
-    local dest_path="$3"
+reset_secondary_source="${SCRIPT_DIR}/reset_secondary_droplet.sh"
+if [[ -f "${reset_secondary_source}" ]]; then
+    install -m 755 -o root -g root "${reset_secondary_source}" /usr/local/bin/reset_secondary_droplet.sh
+else
+    log "Aviso: reset_secondary_droplet.sh não encontrado em ${reset_secondary_source}; instalação ignorada."
+fi
 
-    if [[ -f "${source_path}" ]]; then
-        install -m 755 -o root -g root "${source_path}" "${dest_path}"
-    else
-        log "Aviso: ${label} não encontrado em ${source_path}; instalação ignorada."
-    fi
-}
-
-maybe_install_admin_script \
-    "reset_secondary_droplet.sh" \
-    "${SCRIPT_DIR}/reset_secondary_droplet.sh" \
-    /usr/local/bin/reset_secondary_droplet.sh
-maybe_install_admin_script \
-    "yt-decider-debug.sh" \
-    "${SCRIPT_DIR}/yt-decider-debug.sh" \
-    /usr/local/bin/yt-decider-debug.sh
+yt_decider_debug_source="${SCRIPT_DIR}/yt-decider-debug.sh"
+if [[ -f "${yt_decider_debug_source}" ]]; then
+    install -m 755 -o root -g root "${yt_decider_debug_source}" /usr/local/bin/yt-decider-debug.sh
+else
+    log "Aviso: yt-decider-debug.sh não encontrado em ${yt_decider_debug_source}; instalação ignorada."
+fi
 
 ENV_FILE="/etc/youtube-fallback.env"
 DEFAULTS_FILE="config/youtube-fallback.defaults"
