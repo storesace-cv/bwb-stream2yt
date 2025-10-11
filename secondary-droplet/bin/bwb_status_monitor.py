@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import errno
 import json
 import logging
 import os
@@ -478,9 +479,28 @@ def run_server(settings: MonitorSettings, args: argparse.Namespace) -> None:
     monitor = StatusMonitor(
         settings=settings, service_manager=ServiceManager(settings.secondary_service)
     )
-    monitor.start()
 
-    httpd = StatusHTTPServer((bind, port), StatusHTTPRequestHandler, monitor)
+    try:
+        httpd = StatusHTTPServer((bind, port), StatusHTTPRequestHandler, monitor)
+    except OSError as exc:
+        if exc.errno == errno.EADDRINUSE:
+            LOGGER.error(
+                "Porta %s já está em uso em %s:%s; verifique se outra instância está ativa.",
+                port,
+                bind,
+                port,
+            )
+            LOGGER.error(
+                "Libere a porta ou ajuste BWB_STATUS_PORT/--port antes de reiniciar o monitor."
+            )
+        else:
+            LOGGER.exception(
+                "Falha ao iniciar servidor HTTP em %s:%s", bind, port
+            )
+        monitor.shutdown()
+        raise SystemExit(1) from exc
+
+    monitor.start()
 
     def _handle_signal(signum, _frame) -> None:
         LOGGER.info("Sinal %s recebido; encerrando.", signum)
