@@ -40,6 +40,15 @@ systemctl daemon-reload
 systemctl enable youtube-fallback.service
 systemctl enable --now bwb-status-monitor.service
 systemctl enable --now ensure-broadcast.timer
+
+# limpeza de serviços antigos
+systemctl disable --now yt-decider-daemon.service yt-decider.service || true
+rm -f /etc/systemd/system/yt-decider-daemon.service \
+      /etc/systemd/system/yt-decider.service \
+      /usr/local/bin/yt_decider_daemon.py \
+      /usr/local/bin/yt-decider-daemon.py \
+      /usr/local/bin/yt-decider-debug.sh
+systemctl daemon-reload
 ```
 
 ### 3) Segredos no droplet (fora do git)
@@ -58,4 +67,4 @@ systemctl restart youtube-fallback
 
 ### 4) Atualizações posteriores
 
-Use `scripts/deploy_to_droplet.sh` para sincronizar ficheiros e, em seguida, conecte via SSH (`ssh -p $DROPLET_PORT $DROPLET_USER@$DROPLET_IP`) para executar `bash /root/bwb-stream2yt/scripts/post_deploy.sh` manualmente.
+Use `scripts/deploy_to_droplet.sh` para sincronizar ficheiros e, em seguida, conecte via SSH (`ssh -p $DROPLET_PORT $DROPLET_USER@$DROPLET_IP`) para executar `bash /root/bwb-stream2yt/scripts/post_deploy.sh` manualmente. O `post_deploy.sh` repete a limpeza acima, garantindo que nenhuma versão antiga do decider permanece instalada.

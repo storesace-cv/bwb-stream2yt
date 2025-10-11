@@ -9,6 +9,37 @@ log() {
     echo "[post_deploy] $*"
 }
 
+remove_legacy_components() {
+    local -a legacy_services=(
+        "yt-decider-daemon.service"
+        "yt-decider.service"
+    )
+
+    for service in "${legacy_services[@]}"; do
+        if systemctl list-unit-files "${service}" >/dev/null 2>&1; then
+            log "Desativando serviço legado ${service}"
+            systemctl disable --now "${service}" >/dev/null 2>&1 || true
+        fi
+    done
+
+    local -a legacy_paths=(
+        "/etc/systemd/system/yt-decider-daemon.service"
+        "/etc/systemd/system/yt-decider.service"
+        "/usr/local/bin/yt_decider_daemon.py"
+        "/usr/local/bin/yt-decider-daemon.py"
+        "/usr/local/bin/yt-decider-debug.sh"
+    )
+
+    for path in "${legacy_paths[@]}"; do
+        if [[ -e "${path}" ]]; then
+            log "Removendo artefacto legado ${path}"
+            rm -f "${path}"
+        fi
+    done
+
+    systemctl daemon-reload
+}
+
 print_available_scripts() {
     log "Scripts disponíveis para diagnóstico e recuperação:"
     log "  reset_secondary_droplet.sh — limpa caches e reinicia serviços críticos (fallback, monitor, backend)."
@@ -22,6 +53,8 @@ print_available_scripts() {
 }
 
 log "Registando saída completa em ${LOG_FILE}"
+
+remove_legacy_components
 
 ensure_swap() {
     if swapon --noheadings 2>/dev/null | grep -q '\S'; then
