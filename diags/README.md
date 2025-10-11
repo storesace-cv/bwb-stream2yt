@@ -36,6 +36,22 @@ cd /root/bwb-stream2yt/diags
 ./monitor_heartbeat_window.py
 ```
 
+### Sequência completa automatizada
+
+Quando for necessário repetir a sequência usada no suporte (dois snapshots do
+status monitor, janela de heartbeats, relatório completo e uma nova janela),
+existe um _wrapper_ que garante que todos os artefactos ficam em
+`diags/history`:
+
+```bash
+cd /root/bwb-stream2yt/diags
+./run_full_snapshot.sh
+```
+
+O script cria cinco ficheiros `*.log` datados na pasta `history/` com a saída
+dos comandos executados, além dos relatórios produzidos pelo próprio
+`run_diagnostics.py` e pelo `status-monitor-debug.sh`.
+
 O script apresenta, no terminal, o número de heartbeats recebidos, o intervalo
 médio, o estado reportado pelo monitor (`fallback_active`) e o estado real do
 serviço `youtube-fallback.service`, indicando se a URL secundária está a
