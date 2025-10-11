@@ -65,8 +65,7 @@ ensure_python_venv() {
 }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-SECONDARY_DIR="${REPO_ROOT}/secondary-droplet"
+SECONDARY_DIR="${SCRIPT_DIR}/../secondary-droplet"
 
 cd "${SECONDARY_DIR}"
 
@@ -80,42 +79,27 @@ install -m 644 -o root -g root systemd/ensure-broadcast.service /etc/systemd/sys
 install -m 644 -o root -g root systemd/ensure-broadcast.timer /etc/systemd/system/ensure-broadcast.timer
 
 log "Instalando utilitários administrativos no /usr/local/bin"
-install_admin_script() {
+
+maybe_install_admin_script() {
     local label="$1"
     local source_path="$2"
     local dest_path="$3"
-    local repo_rel_path="${4:-}"
 
     if [[ -f "${source_path}" ]]; then
         install -m 755 -o root -g root "${source_path}" "${dest_path}"
-        return
+    else
+        log "Aviso: ${label} não encontrado em ${source_path}; instalação ignorada."
     fi
-
-    if [[ -n "${repo_rel_path}" && -d "${REPO_ROOT}/.git" ]] && command -v git >/dev/null 2>&1; then
-        local tmp
-        tmp="$(mktemp)"
-        if git -C "${REPO_ROOT}" show "HEAD:${repo_rel_path}" >"${tmp}" 2>/dev/null; then
-            install -m 755 -o root -g root "${tmp}" "${dest_path}"
-            rm -f "${tmp}"
-            log "${label} ausente no working tree; instalado a partir do HEAD do git."
-            return
-        fi
-        rm -f "${tmp}"
-    fi
-
-    log "Aviso: ${label} não encontrado em ${source_path}; instalação ignorada."
 }
 
-install_admin_script \
+maybe_install_admin_script \
     "reset_secondary_droplet.sh" \
-    "${REPO_ROOT}/scripts/reset_secondary_droplet.sh" \
-    /usr/local/bin/reset_secondary_droplet.sh \
-    scripts/reset_secondary_droplet.sh
-install_admin_script \
+    "${SCRIPT_DIR}/reset_secondary_droplet.sh" \
+    /usr/local/bin/reset_secondary_droplet.sh
+maybe_install_admin_script \
     "yt-decider-debug.sh" \
-    "${REPO_ROOT}/scripts/yt-decider-debug.sh" \
-    /usr/local/bin/yt-decider-debug.sh \
-    scripts/yt-decider-debug.sh
+    "${SCRIPT_DIR}/yt-decider-debug.sh" \
+    /usr/local/bin/yt-decider-debug.sh
 
 ENV_FILE="/etc/youtube-fallback.env"
 DEFAULTS_FILE="config/youtube-fallback.defaults"
