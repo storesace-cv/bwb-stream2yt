@@ -115,6 +115,8 @@ ensure_timer_enabled() {
 
 log "Registando saída completa em ${LOG_FILE}"
 
+remove_legacy_components
+
 ensure_swap() {
     if swapon --noheadings 2>/dev/null | grep -q '\S'; then
         log "Swap já configurado; nenhuma ação necessária."
@@ -343,7 +345,7 @@ yt_decider_debug_source="${SCRIPT_DIR}/yt-decider-debug.sh"
 if [[ -f "${yt_decider_debug_source}" ]]; then
     ensure_installed_file "${yt_decider_debug_source}" /usr/local/bin/yt-decider-debug.sh 755 root root
 else
-    log "Aviso: yt-decider-debug.sh não encontrado em ${yt_decider_debug_source}; instalação ignorada."
+    log "Aviso: status-monitor-debug.sh não encontrado em ${status_monitor_debug_source}; instalação ignorada."
 fi
 
 ENV_FILE="/etc/youtube-fallback.env"

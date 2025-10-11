@@ -17,7 +17,7 @@ quando o backup não está a enviar vídeo para a ingestão do YouTube.
 ## Pré-requisitos
 
 O script foi desenhado para ser executado directamente na droplet secundária,
-onde os serviços `ytc-web-backend`, `yt-decider-daemon` e `youtube-fallback`
+onde os serviços `ytc-web-backend`, `bwb-status-monitor` e `youtube-fallback`
 estão configurados via `systemd`. É necessário Python 3.8+.
 
 ## Execução
@@ -45,7 +45,7 @@ os seguintes blocos de informação:
 1. **Informações de sistema**: versão do SO, uptime, utilização de disco,
    versões de Python/ffmpeg e sockets em escuta.
 2. **Serviços principais**: estado e últimos registos (`journalctl`) das
-   unidades `ytc-web-backend`, `yt-decider-daemon` e `youtube-fallback`.
+   unidades `ytc-web-backend`, `bwb-status-monitor` e `youtube-fallback`.
 3. **Ambiente**: conteúdos relevantes (com a chave `YT_KEY` mascarada) de
    `/etc/youtube-fallback.env`, do ficheiro de defaults em
    `/usr/local/config/youtube-fallback.defaults`, do progresso actual do
