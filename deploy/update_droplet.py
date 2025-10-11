@@ -28,6 +28,38 @@ def scp(local: str, remote: str):
     return subprocess.run(full, check=True)
 
 
+LEGACY_SERVICES = (
+    "yt-decider-daemon.service",
+    "yt-decider.service",
+)
+
+LEGACY_PATHS = (
+    "/etc/systemd/system/yt-decider-daemon.service",
+    "/etc/systemd/system/yt-decider.service",
+    "/usr/local/bin/yt_decider_daemon.py",
+    "/usr/local/bin/yt-decider-daemon.py",
+    "/usr/local/bin/yt-decider-debug.sh",
+)
+
+
+def cleanup_legacy_services(*, dry_run: bool = False):
+    """Disable and remove legacy yt-decider artefacts from the droplet."""
+
+    for service in LEGACY_SERVICES:
+        if dry_run:
+            print(f"[DRY] would disable legacy service {service}")
+            continue
+        ssh(["systemctl", "disable", "--now", service], check=False)
+
+    if dry_run:
+        for path in LEGACY_PATHS:
+            print(f"[DRY] would remove legacy file {path}")
+        return
+
+    for path in LEGACY_PATHS:
+        ssh(["rm", "-f", path], check=False)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true")
@@ -54,12 +86,15 @@ def main():
         scp(lpath, rpath)
         ssh(["chmod", mode, rpath])
 
+    cleanup_legacy_services(dry_run=args.dry_run)
+
     # Reload systemd after potential unit updates
     if not args.dry_run:
         ssh(["systemctl", "daemon-reload"])
-        ssh(["systemctl", "enable", "--now", "yt-decider-daemon.service"])
-        ssh(["systemctl", "enable", "--now", "youtube-fallback.service"])
-        print("Deployed and ensured services are enabled+running.")
+        ssh(["systemctl", "enable", "youtube-fallback.service"])
+        ssh(["systemctl", "enable", "--now", "bwb-status-monitor.service"])
+        ssh(["systemctl", "enable", "--now", "ensure-broadcast.timer"])
+        print("Deployed, cleaned legacy services and ensured monitor/timer services are enabled.")
 
 
 if __name__ == "__main__":

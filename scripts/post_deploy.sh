@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ -z "${BASH_VERSION:-}" ]]; then
+    echo "[post_deploy] Este script requer bash para executar." >&2
+    exit 1
+fi
+
 LOG_FILE="/var/log/bwb_post_deploy.log"
 mkdir -p "$(dirname "${LOG_FILE}")"
 exec > >(tee -a "${LOG_FILE}") 2>&1
@@ -9,19 +14,48 @@ log() {
     echo "[post_deploy] $*"
 }
 
+remove_legacy_components() {
+    local -a legacy_services=(
+        "yt-decider-daemon.service"
+        "yt-decider.service"
+    )
+
+    for service in "${legacy_services[@]}"; do
+        if systemctl list-unit-files "${service}" >/dev/null 2>&1; then
+            log "Desativando serviço legado ${service}"
+            systemctl disable --now "${service}" >/dev/null 2>&1 || true
+        fi
+    done
+
+    local -a legacy_paths=(
+        "/etc/systemd/system/yt-decider-daemon.service"
+        "/etc/systemd/system/yt-decider.service"
+        "/usr/local/bin/yt_decider_daemon.py"
+        "/usr/local/bin/yt-decider-daemon.py"
+        "/usr/local/bin/yt-decider-debug.sh"
+    )
+
+    for path in "${legacy_paths[@]}"; do
+        if [[ -e "${path}" ]]; then
+            log "Removendo artefacto legado ${path}"
+            rm -f "${path}"
+        fi
+    done
+
+    systemctl daemon-reload
+}
+
 print_available_scripts() {
     log "Scripts disponíveis para diagnóstico e recuperação:"
-    log "  reset_secondary_droplet.sh — limpa caches e reinicia serviços críticos (fallback, decider, backend)."
+    log "  reset_secondary_droplet.sh — limpa caches e reinicia serviços críticos (fallback, monitor, backend)."
     log "    Comando: sudo /usr/local/bin/reset_secondary_droplet.sh"
-    log "  yt-decider-debug.sh — recolhe logs do yt-decider das últimas 48h e gera ficheiro de análise."
-    log "    Comando: sudo /usr/local/bin/yt-decider-debug.sh"
+    log "  status-monitor-debug.sh — recolhe evidências do monitor HTTP (últimas 48h) e gera ficheiro de análise."
+    log "    Comando: sudo /usr/local/bin/status-monitor-debug.sh"
     log "  ensure_broadcast.py — valida se existe live do YouTube pronta e ligada ao stream correto."
     log "    Comando: sudo /usr/local/bin/ensure_broadcast.py"
     log "  bwb_status_monitor.py — servidor HTTP que recebe heartbeats do primário; ver --help para opções."
     log "    Comando: sudo /usr/local/bin/bwb_status_monitor.py --help"
 }
-
-log "Registando saída completa em ${LOG_FILE}"
 
 ensure_swap() {
     if swapon --noheadings 2>/dev/null | grep -q '\S'; then
@@ -135,92 +169,103 @@ ENVEOF
     log "Monitor de status ativo em ${state_dir}"
 }
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-SECONDARY_DIR="${REPO_DIR}/secondary-droplet"
+main() {
+    log "Registando saída completa em ${LOG_FILE}"
 
-cd "${SECONDARY_DIR}"
+    remove_legacy_components
 
-log "Instalando dependências base do fallback"
-pip3 install --no-cache-dir -r requirements.txt
+    local script_dir
+    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local repo_dir
+    repo_dir="$(cd "${script_dir}/.." && pwd)"
+    local secondary_dir="${repo_dir}/secondary-droplet"
 
-install -m 755 -o root -g root bin/youtube_fallback.sh /usr/local/bin/youtube_fallback.sh
-install -m 644 -o root -g root systemd/youtube-fallback.service /etc/systemd/system/youtube-fallback.service
-install -m 755 -o root -g root bin/ensure_broadcast.py /usr/local/bin/ensure_broadcast.py
-install -m 644 -o root -g root systemd/ensure-broadcast.service /etc/systemd/system/ensure-broadcast.service
-install -m 644 -o root -g root systemd/ensure-broadcast.timer /etc/systemd/system/ensure-broadcast.timer
+    cd "${secondary_dir}"
 
-log "Instalando utilitários administrativos no /usr/local/bin"
+    log "Instalando dependências base do fallback"
+    pip3 install --no-cache-dir -r requirements.txt
 
-reset_secondary_source="${SCRIPT_DIR}/reset_secondary_droplet.sh"
-if [[ -f "${reset_secondary_source}" ]]; then
-    install -m 755 -o root -g root "${reset_secondary_source}" /usr/local/bin/reset_secondary_droplet.sh
-else
-    log "Aviso: reset_secondary_droplet.sh não encontrado em ${reset_secondary_source}; instalação ignorada."
-fi
+    install -m 755 -o root -g root bin/youtube_fallback.sh /usr/local/bin/youtube_fallback.sh
+    install -m 644 -o root -g root systemd/youtube-fallback.service /etc/systemd/system/youtube-fallback.service
+    install -m 755 -o root -g root bin/ensure_broadcast.py /usr/local/bin/ensure_broadcast.py
+    install -m 644 -o root -g root systemd/ensure-broadcast.service /etc/systemd/system/ensure-broadcast.service
+    install -m 644 -o root -g root systemd/ensure-broadcast.timer /etc/systemd/system/ensure-broadcast.timer
 
-yt_decider_debug_source="${SCRIPT_DIR}/yt-decider-debug.sh"
-if [[ -f "${yt_decider_debug_source}" ]]; then
-    install -m 755 -o root -g root "${yt_decider_debug_source}" /usr/local/bin/yt-decider-debug.sh
-else
-    log "Aviso: yt-decider-debug.sh não encontrado em ${yt_decider_debug_source}; instalação ignorada."
-fi
+    log "Instalando utilitários administrativos no /usr/local/bin"
 
-ENV_FILE="/etc/youtube-fallback.env"
-DEFAULTS_FILE="config/youtube-fallback.defaults"
+    local reset_secondary_source="${script_dir}/reset_secondary_droplet.sh"
+    if [[ -f "${reset_secondary_source}" ]]; then
+        install -m 755 -o root -g root "${reset_secondary_source}" /usr/local/bin/reset_secondary_droplet.sh
+    else
+        log "Aviso: reset_secondary_droplet.sh não encontrado em ${reset_secondary_source}; instalação ignorada."
+    fi
 
-existing_key=""
-if [[ -f "${ENV_FILE}" ]]; then
-    while IFS= read -r line; do
-        case "${line}" in
-            YT_KEY=*)
-                existing_key="${line#YT_KEY=}"
-                ;;
-        esac
-    done < "${ENV_FILE}"
-fi
+    local status_monitor_debug_source="${script_dir}/status-monitor-debug.sh"
+    if [[ -f "${status_monitor_debug_source}" ]]; then
+        install -m 755 -o root -g root "${status_monitor_debug_source}" /usr/local/bin/status-monitor-debug.sh
+    else
+        log "Aviso: status-monitor-debug.sh não encontrado em ${status_monitor_debug_source}; instalação ignorada."
+    fi
 
-if [[ -z "${existing_key}" ]]; then
-    existing_key='""'
-fi
+    local ENV_FILE="/etc/youtube-fallback.env"
+    local DEFAULTS_FILE="config/youtube-fallback.defaults"
 
-tmp_env="$(mktemp)"
-trap 'rm -f "'"${tmp_env}"'"' EXIT
-{
-    echo "# /etc/youtube-fallback.env (managed by post_deploy.sh)"
-    echo "# Defaults live in /usr/local/config/youtube-fallback.defaults. Override only what you need here."
-    echo "YT_KEY=${existing_key}"
-    echo
-    echo "# Default parameters for reference:"
-    while IFS= read -r default_line; do
-        [[ -z "${default_line}" ]] && continue
-        [[ "${default_line}" =~ ^# ]] && continue
-        echo "#${default_line}"
-    done < "${DEFAULTS_FILE}"
-} > "${tmp_env}"
+    local existing_key=""
+    if [[ -f "${ENV_FILE}" ]]; then
+        while IFS= read -r line; do
+            case "${line}" in
+                YT_KEY=*)
+                    existing_key="${line#YT_KEY=}"
+                    ;;
+            esac
+        done < "${ENV_FILE}"
+    fi
 
-install -m 644 -o root -g root "${tmp_env}" "${ENV_FILE}"
-rm -f "${tmp_env}"
-trap - EXIT
+    if [[ -z "${existing_key}" ]]; then
+        existing_key='""'
+    fi
 
-systemctl daemon-reload
-systemctl stop youtube-fallback.service || true
-systemctl disable youtube-fallback.service || true
-systemctl enable --now ensure-broadcast.timer
+    local tmp_env
+    tmp_env="$(mktemp)"
+    trap 'rm -f "'"${tmp_env}"'"' EXIT
+    {
+        echo "# /etc/youtube-fallback.env (managed by post_deploy.sh)"
+        echo "# Defaults live in /usr/local/config/youtube-fallback.defaults. Override only what you need here."
+        echo "YT_KEY=${existing_key}"
+        echo
+        echo "# Default parameters for reference:"
+        while IFS= read -r default_line; do
+            [[ -z "${default_line}" ]] && continue
+            [[ "${default_line}" =~ ^# ]] && continue
+            echo "#${default_line}"
+        done < "${DEFAULTS_FILE}"
+    } > "${tmp_env}"
 
-setup_status_monitor
+    install -m 644 -o root -g root "${tmp_env}" "${ENV_FILE}"
+    rm -f "${tmp_env}"
+    trap - EXIT
 
-log "youtube-fallback atualizado e env sincronizado."
+    systemctl daemon-reload
+    systemctl stop youtube-fallback.service || true
+    systemctl disable youtube-fallback.service || true
+    systemctl enable --now ensure-broadcast.timer
 
-log "Preparando backend do ytc-web via secondary-droplet/bin/ytc_web_backend_setup.sh..."
-ensure_python_venv
-bash bin/ytc_web_backend_setup.sh
+    setup_status_monitor
 
-ensure_swap
+    log "youtube-fallback atualizado e env sincronizado."
 
-log "Operação concluída."
-print_available_scripts
+    log "Preparando backend do ytc-web via secondary-droplet/bin/ytc_web_backend_setup.sh..."
+    ensure_python_venv
+    bash bin/ytc_web_backend_setup.sh
 
-if command -v deactivate >/dev/null 2>&1; then
-    deactivate
-fi
+    ensure_swap
+
+    log "Operação concluída."
+    print_available_scripts
+
+    if command -v deactivate >/dev/null 2>&1; then
+        deactivate
+    fi
+}
+
+main "$@"
