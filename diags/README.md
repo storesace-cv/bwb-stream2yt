@@ -8,6 +8,9 @@ quando o backup não está a enviar vídeo para a ingestão do YouTube.
 
 - `run_diagnostics.py`: script principal que executa todas as verificações e
   produz um ficheiro de relatório.
+- `monitor_heartbeat_window.py`: observa, durante uma janela temporária
+  (120 s por defeito), os heartbeats recebidos do primário e confirma se o
+  fallback está a actuar conforme esperado.
 - `history/`: directório ignorado pelo Git onde os relatórios gerados são
   guardados. Pode ser limpo sempre que necessário.
 
@@ -23,6 +26,18 @@ estão configurados via `systemd`. É necessário Python 3.8+.
 cd /root/bwb-stream2yt/diags
 ./run_diagnostics.py --label "antes-restart"
 ```
+
+Para uma verificação rápida da comunicação nos próximos dois minutos:
+
+```bash
+cd /root/bwb-stream2yt/diags
+./monitor_heartbeat_window.py --duration 120
+```
+
+O script apresenta, no terminal, o número de heartbeats recebidos, o intervalo
+médio, o estado reportado pelo monitor (`fallback_active`) e o estado real do
+serviço `youtube-fallback.service`, indicando se a URL secundária está a
+emitir ou parada.
 
 O comando acima cria um ficheiro em `history/diagnostics-<timestamp>.txt` com
 os seguintes blocos de informação:
