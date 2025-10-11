@@ -172,19 +172,38 @@ def final_verdict(
         if expect_active:
             if service_active:
                 return "✅ URL secundária a emitir conforme esperado."
-            return "⚠️ Monitor activou o fallback como esperado, mas o serviço systemd está parado."
+            return (
+                "⚠️ Monitor activou o fallback como esperado, mas o serviço "
+                "systemd está parado."
+            )
         if service_active:
-            return "⚠️ Monitor mantém o fallback desligado como esperado, mas o serviço systemd permanece activo."
+            return (
+                "⚠️ Monitor mantém o fallback desligado como esperado, mas o "
+                "serviço systemd permanece activo."
+            )
         return "✅ URL secundária parada conforme esperado."
 
     if expect_active:
         if service_active:
-            return "❌ Monitor deveria ter activado a URL secundária após ausência de heartbeats, mas continua a apontar para o primário mesmo com o serviço activo."
-        return "❌ Monitor deveria ter activado a URL secundária após ausência de heartbeats, mas nem monitor nem serviço estão a emitir."
+            return (
+                "❌ Monitor deveria ter activado a URL secundária após "
+                "ausência de heartbeats, mas continua a apontar para o "
+                "primário mesmo com o serviço activo."
+            )
+        return (
+            "❌ Monitor deveria ter activado a URL secundária após ausência de "
+            "heartbeats, mas nem monitor nem serviço estão a emitir."
+        )
 
     if service_active:
-        return "❌ Monitor activou o fallback apesar de existirem heartbeats recentes e o serviço systemd está activo."
-    return "❌ Monitor activou o fallback apesar de existirem heartbeats recentes e o serviço systemd está parado."
+        return (
+            "❌ Monitor activou o fallback apesar de existirem heartbeats "
+            "recentes e o serviço systemd está activo."
+        )
+    return (
+        "❌ Monitor activou o fallback apesar de existirem heartbeats "
+        "recentes e o serviço systemd está parado."
+    )
 
 
 def pretty_duration(seconds: float) -> str:
@@ -280,6 +299,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "Último heartbeat: %s (há %.1fs)"
             % (last_ts.isoformat(), (end_time - last_ts).total_seconds())
         )
+    else:
+        last_known = parse_iso8601(final_snapshot.get("last_timestamp"))
+        if last_known:
+            print(
+                "Último heartbeat conhecido pelo monitor: %s (há %.1fs)"
+                % (
+                    last_known.isoformat(),
+                    max(0.0, (end_time - last_known).total_seconds()),
+                )
+            )
     if intervals[0] is not None:
         print(
             "Intervalos entre heartbeats: mínimo %.1fs | médio %.1fs | máximo %.1fs"
