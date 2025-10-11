@@ -2,7 +2,9 @@
 
 Esta pasta contém a aplicação responsável por recolher informação de diagnóstico
 sobre a stack da URL secundária. O objectivo é simplificar a recolha de dados
-quando o backup não está a enviar vídeo para a ingestão do YouTube.
+quando o backup não está a enviar vídeo para a ingestão do YouTube. Consulte o
+[resumo cronológico](../docs/diagn%C3%B3sticos.md) para perceber qual script usar
+em cada cenário antes de executar qualquer ferramenta aqui listada.
 
 ## Estrutura
 

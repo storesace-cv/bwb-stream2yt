@@ -61,9 +61,7 @@ journalctl -u ensure-broadcast.service -n 50 -l
 
 ## Diagnósticos rápidos da URL secundária
 
-- Gere um snapshot completo da droplet secundária com `./diags/run_diagnostics.py`.
-- Os relatórios ficam em `diags/history/diagnostics-<timestamp>.txt` e incluem estado dos serviços, tail de logs, ficheiros de configuração relevantes e versão do repositório.
-- É seguro anexar o ficheiro num ticket porque a `YT_KEY` é mascarada automaticamente.
+Consulte o [índice actualizado de diagnósticos](docs/diagn%C3%B3sticos.md) para escolher o script adequado a cada situação (snapshot completo, observação de heartbeats ou recolha do `yt-restapi`). Execute o utilitário indicado e anexe o ficheiro gerado ao relatório de incidente para garantir histórico completo.
 
 ## Testes
 
