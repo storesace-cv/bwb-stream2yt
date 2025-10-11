@@ -167,21 +167,24 @@ def final_verdict(
     service_active: bool,
     expect_active: bool,
 ) -> str:
+    """Generate the final verdict message favouring the heartbeat rule."""
     if expect_active:
-        if monitor_flag and service_active:
-            return "✅ URL secundária a emitir (comportamento alinhado com o esperado)."
-        if monitor_flag and not service_active:
-            return "⚠️ Monitor activou fallback, mas o serviço systemd está parado."
-        if (not monitor_flag) and service_active:
+        if monitor_flag:
+            if service_active:
+                return "✅ URL secundária a emitir (comportamento alinhado com o esperado)."
+            return "⚠️ Heartbeats ausentes levaram o monitor a activar o fallback, mas o serviço systemd está parado."
+        if service_active:
             return "⚠️ Serviço systemd activo, mas monitor ainda aponta para o primário."
         return "⚠️ Heartbeats ausentes sugerem fallback activo, mas nem monitor nem serviço estão a emitir."
-    if (not monitor_flag) and (not service_active):
-        return "✅ URL secundária parada conforme esperado."
-    if (not monitor_flag) and service_active:
+
+    if not monitor_flag:
+        if not service_active:
+            return "✅ URL secundária parada conforme esperado."
         return "⚠️ Serviço systemd activo apesar de o monitor indicar fallback desligado."
-    if monitor_flag and (not service_active):
-        return "⚠️ Monitor sinaliza fallback activo, mas o serviço systemd está parado."
-    return "⚠️ Heartbeats presentes sugerem fallback desligado, mas tudo indica que continua activo."
+
+    if service_active:
+        return "⚠️ Monitor sinaliza fallback activo apesar de existirem heartbeats recentes."
+    return "⚠️ Monitor sinaliza fallback activo, mas o serviço systemd está parado e ainda há heartbeats."
 
 
 def pretty_duration(seconds: float) -> str:
