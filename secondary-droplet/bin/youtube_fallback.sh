@@ -40,6 +40,7 @@ else
   FALLBACK_FONT="/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
   FALLBACK_SCROLL_TEXT="BEACHCAM | CABO LEDO | ANGOLA"
   FALLBACK_STATIC_TEXT="VOLTAREMOS DENTRO DE MOMENTOS"
+  FALLBACK_RETRY_DELAY=10
 fi
 
 ENV_FILE="/etc/youtube-fallback.env"
@@ -134,12 +135,6 @@ trap 'handle_signal TERM' TERM
 PROGRESS_FILE="/run/youtube-fallback.progress"
 PROGRESS_LOG_INTERVAL=${PROGRESS_LOG_INTERVAL:-30}
 
-log_line "Iniciando ffmpeg (loglevel=${FALLBACK_LOGLEVEL})"
-
-rm -f "$PROGRESS_FILE"
-
-FFMPEG_PID=""
-
 progress_value() {
   local key="$1" file="$2"
 
@@ -201,46 +196,83 @@ progress_watcher() {
   fi
 }
 
-set +e
-ffmpeg -progress "$PROGRESS_FILE" -hide_banner -loglevel "${FALLBACK_LOGLEVEL}" -nostats \
-  -re -f lavfi -i "life=s=${FALLBACK_WIDTH}x${FALLBACK_HEIGHT}:rate=${FALLBACK_FPS}${FALLBACK_LIFE_ARGS:+:${FALLBACK_LIFE_ARGS}}" \
-  -f lavfi -i "anullsrc=channel_layout=stereo:sample_rate=${FALLBACK_AR}" \
-  -filter_complex "[0:v]scale=${FALLBACK_WIDTH}:${FALLBACK_HEIGHT}:force_original_aspect_ratio=decrease,pad=${FALLBACK_WIDTH}:${FALLBACK_HEIGHT}:(ow-iw)/2:(oh-ih)/2:color=black,format=yuv420p,setpts=PTS+${FALLBACK_DELAY_SEC}/TB,drawtext=fontfile=${FALLBACK_FONT}:text='${FALLBACK_SCROLL_TEXT}':fontsize=44:fontcolor=white:shadowcolor=black@0.85:shadowx=2:shadowy=2:x=w-mod(t*30*8\,w+text_w):y=H-120,drawtext=fontfile=${FALLBACK_FONT}:text='${FALLBACK_STATIC_TEXT}':fontsize=28:fontcolor=white:shadowcolor=black@0.85:shadowx=2:shadowy=2:x=(w-text_w)/2:y=(h-text_h)/2:enable='lt(mod(t\,1)\,0.5)'[vb];[1:a]asetpts=PTS+${FALLBACK_DELAY_SEC}/TB[ab]" \
-  -map "[vb]" -map "[ab]" \
-  -c:v libx264 -preset "${FALLBACK_PRESET}" -pix_fmt yuv420p -profile:v high -level 4.1 \
-  -b:v "${FALLBACK_VBITRATE}" -maxrate "${FALLBACK_MAXRATE}" -bufsize "${FALLBACK_BUFSIZE}" \
-  -g "${FALLBACK_GOP}" -keyint_min "${FALLBACK_KEYINT_MIN}" -sc_threshold 0 \
-  -c:a aac -b:a "${FALLBACK_ABITRATE}" -ar "${FALLBACK_AR}" -ac 2 \
-  -f flv "${YT_URL_BACKUP}" &
-FFMPEG_PID=$!
-set -e
+run_ffmpeg_once() {
+  local status watcher_pid
 
-progress_watcher "$PROGRESS_FILE" "$PROGRESS_LOG_INTERVAL" "$FFMPEG_PID" &
-WATCHER_PID=$!
+  log_line "Iniciando ffmpeg (loglevel=${FALLBACK_LOGLEVEL})"
 
-set +e
-wait "$FFMPEG_PID"
-status=$?
-set -e
+  rm -f "$PROGRESS_FILE"
 
-if [ -n "${WATCHER_PID:-}" ]; then
+  FFMPEG_PID=""
+
   set +e
-  wait "$WATCHER_PID"
+  ffmpeg -progress "$PROGRESS_FILE" -hide_banner -loglevel "${FALLBACK_LOGLEVEL}" -nostats \
+    -re -f lavfi -i "life=s=${FALLBACK_WIDTH}x${FALLBACK_HEIGHT}:rate=${FALLBACK_FPS}${FALLBACK_LIFE_ARGS:+:${FALLBACK_LIFE_ARGS}}" \
+    -f lavfi -i "anullsrc=channel_layout=stereo:sample_rate=${FALLBACK_AR}" \
+    -filter_complex "[0:v]scale=${FALLBACK_WIDTH}:${FALLBACK_HEIGHT}:force_original_aspect_ratio=decrease,pad=${FALLBACK_WIDTH}:${FALLBACK_HEIGHT}:(ow-iw)/2:(oh-ih)/2:color=black,format=yuv420p,setpts=PTS+${FALLBACK_DELAY_SEC}/TB,drawtext=fontfile=${FALLBACK_FONT}:text='${FALLBACK_SCROLL_TEXT}':fontsize=44:fontcolor=white:shadowcolor=black@0.85:shadowx=2:shadowy=2:x=w-mod(t*30*8\,w+text_w):y=H-120,drawtext=fontfile=${FALLBACK_FONT}:text='${FALLBACK_STATIC_TEXT}':fontsize=28:fontcolor=white:shadowcolor=black@0.85:shadowx=2:shadowy=2:x=(w-text_w)/2:y=(h-text_h)/2:enable='lt(mod(t\,1)\,0.5)'[vb];[1:a]asetpts=PTS+${FALLBACK_DELAY_SEC}/TB[ab]" \
+    -map "[vb]" -map "[ab]" \
+    -c:v libx264 -preset "${FALLBACK_PRESET}" -pix_fmt yuv420p -profile:v high -level 4.1 \
+    -b:v "${FALLBACK_VBITRATE}" -maxrate "${FALLBACK_MAXRATE}" -bufsize "${FALLBACK_BUFSIZE}" \
+    -g "${FALLBACK_GOP}" -keyint_min "${FALLBACK_KEYINT_MIN}" -sc_threshold 0 \
+    -c:a aac -b:a "${FALLBACK_ABITRATE}" -ar "${FALLBACK_AR}" -ac 2 \
+    -f flv "${YT_URL_BACKUP}" &
+  FFMPEG_PID=$!
   set -e
-fi
 
-if [ "$status" -ge 128 ]; then
-  signal=$((status - 128))
-  if [ "$signal" -gt 0 ] 2>/dev/null; then
-    if name=$(kill -l "$signal" 2>/dev/null); then
-      log_line "ffmpeg terminou por SIG${name} (exit ${status})"
+  progress_watcher "$PROGRESS_FILE" "$PROGRESS_LOG_INTERVAL" "$FFMPEG_PID" &
+  watcher_pid=$!
+
+  set +e
+  wait "$FFMPEG_PID"
+  status=$?
+  set -e
+
+  if [ -n "$watcher_pid" ]; then
+    set +e
+    wait "$watcher_pid"
+    set -e
+  fi
+
+  if [ "$status" -ge 128 ]; then
+    local signal=$((status - 128))
+    if [ "$signal" -gt 0 ] 2>/dev/null; then
+      if name=$(kill -l "$signal" 2>/dev/null); then
+        log_line "ffmpeg terminou por SIG${name} (exit ${status})"
+      else
+        log_line "ffmpeg terminou por sinal ${signal} (exit ${status})"
+      fi
     else
-      log_line "ffmpeg terminou por sinal ${signal} (exit ${status})"
+      log_line "ffmpeg terminou (exit ${status})"
     fi
   else
     log_line "ffmpeg terminou (exit ${status})"
   fi
-else
-  log_line "ffmpeg terminou (exit ${status})"
+
+  FFMPEG_PID=""
+
+  return "$status"
+}
+
+FALLBACK_RETRY_DELAY=${FALLBACK_RETRY_DELAY:-10}
+
+if ! [[ "$FALLBACK_RETRY_DELAY" =~ ^[0-9]+$ ]] || (( FALLBACK_RETRY_DELAY < 0 )); then
+  FALLBACK_RETRY_DELAY=10
 fi
-exit ${status}
+
+while true; do
+  run_ffmpeg_once
+  status=$?
+
+  if [ "$status" -ge 128 ]; then
+    exit "$status"
+  fi
+
+  if [ "$status" -eq 0 ]; then
+    # ffmpeg não deve terminar com sucesso, mas se acontecer, aguarde e retente.
+    log_line "ffmpeg terminou normalmente (exit 0). Reiniciando em ${FALLBACK_RETRY_DELAY}s para manter transmissão."
+  else
+    log_line "ffmpeg saiu inesperadamente (exit ${status}). Nova tentativa em ${FALLBACK_RETRY_DELAY}s."
+  fi
+
+  sleep "$FALLBACK_RETRY_DELAY"
+done
