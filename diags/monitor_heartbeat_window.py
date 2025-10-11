@@ -126,19 +126,22 @@ def determine_expectation(
     entries: Sequence[HeartbeatEntry],
     window_end: dt.datetime,
     missed_threshold: int,
-) -> str:
+) -> Tuple[str, bool]:
+    """Return a human readable expectation string and whether fallback should be active."""
     if not entries:
-        return "Esperado: fallback ATIVO (sem heartbeats)."
+        return "Esperado: fallback ATIVO (sem heartbeats).", True
     last = entries[-1].timestamp
     silence = (window_end - last).total_seconds()
     if silence > missed_threshold:
         return (
             "Esperado: fallback ATIVO (último heartbeat há %.1fs, acima do limiar de %ss)."
-            % (silence, missed_threshold)
+            % (silence, missed_threshold),
+            True,
         )
     return (
         "Esperado: fallback DESATIVADO (último heartbeat há %.1fs, dentro do limiar de %ss)."
-        % (silence, missed_threshold)
+        % (silence, missed_threshold),
+        False,
     )
 
 
@@ -151,20 +154,37 @@ def format_secondary_state(monitor_flag: bool, systemctl_output: str) -> str:
     )
 
 
+def is_service_active(systemctl_output: str, systemctl_rc: Optional[int]) -> bool:
+    """Interpret the systemd status string/return code as a boolean."""
+    if systemctl_rc is not None:
+        return False
+    normalized = systemctl_output.strip().lower()
+    return normalized in {"active", "activating", "reloading"}
+
+
 def final_verdict(
     monitor_flag: bool,
-    systemctl_output: str,
-    expectation: str,
+    service_active: bool,
+    expect_active: bool,
 ) -> str:
-    expect_active = "ATIVO" in expectation
-    secondary_active = monitor_flag or systemctl_output == "active"
-    if expect_active and secondary_active:
-        return "✅ URL secundária a emitir (comportamento alinhado com o esperado)."
-    if (not expect_active) and (not secondary_active):
-        return "✅ URL secundária parada conforme esperado."
-    if expect_active and (not secondary_active):
-        return "⚠️ Heartbeats ausentes sugerem fallback ativo, mas serviço parece parado."
-    return "⚠️ Heartbeats presentes sugerem fallback desligado, mas serviço aparenta ativo."
+    """Generate the final verdict message favouring the heartbeat rule."""
+    if expect_active:
+        if monitor_flag:
+            if service_active:
+                return "✅ URL secundária a emitir (comportamento alinhado com o esperado)."
+            return "⚠️ Heartbeats ausentes levaram o monitor a activar o fallback, mas o serviço systemd está parado."
+        if service_active:
+            return "⚠️ Serviço systemd activo, mas monitor ainda aponta para o primário."
+        return "⚠️ Heartbeats ausentes sugerem fallback activo, mas nem monitor nem serviço estão a emitir."
+
+    if not monitor_flag:
+        if not service_active:
+            return "✅ URL secundária parada conforme esperado."
+        return "⚠️ Serviço systemd activo apesar de o monitor indicar fallback desligado."
+
+    if service_active:
+        return "⚠️ Monitor sinaliza fallback activo apesar de existirem heartbeats recentes."
+    return "⚠️ Monitor sinaliza fallback activo, mas o serviço systemd está parado e ainda há heartbeats."
 
 
 def pretty_duration(seconds: float) -> str:
@@ -245,6 +265,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     intervals = summarise_intervals(entries)
     fallback_flag = bool(final_snapshot.get("fallback_active"))
     systemctl_output, systemctl_rc = systemctl_state(args.service)
+    service_active = is_service_active(systemctl_output, systemctl_rc)
 
     print()
     print("== Resultados ==")
@@ -265,7 +286,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             % intervals
         )
 
-    expectation = determine_expectation(entries, end_time, missed_threshold)
+    expectation, expect_active = determine_expectation(entries, end_time, missed_threshold)
     print(expectation)
 
     print(format_secondary_state(fallback_flag, systemctl_output))
@@ -275,7 +296,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             % systemctl_rc
         )
 
-    verdict = final_verdict(fallback_flag, systemctl_output, expectation)
+    verdict = final_verdict(fallback_flag, service_active, expect_active)
     print(verdict)
 
     if total:
