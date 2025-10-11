@@ -64,7 +64,11 @@ ensure_python_venv() {
     log "python${version} ensurepip validado após instalação."
 }
 
-cd /root/bwb-stream2yt/secondary-droplet
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+SECONDARY_DIR="${REPO_ROOT}/secondary-droplet"
+
+cd "${SECONDARY_DIR}"
 
 log "Instalando dependências base do fallback"
 pip3 install --no-cache-dir -r requirements.txt
@@ -76,8 +80,8 @@ install -m 644 -o root -g root systemd/ensure-broadcast.service /etc/systemd/sys
 install -m 644 -o root -g root systemd/ensure-broadcast.timer /etc/systemd/system/ensure-broadcast.timer
 
 log "Instalando utilitários administrativos no /usr/local/bin"
-install -m 755 -o root -g root ../scripts/reset_secondary_droplet.sh /usr/local/bin/reset_secondary_droplet.sh
-install -m 755 -o root -g root ../scripts/yt-decider-debug.sh /usr/local/bin/yt-decider-debug.sh
+install -m 755 -o root -g root "${REPO_ROOT}/scripts/reset_secondary_droplet.sh" /usr/local/bin/reset_secondary_droplet.sh
+install -m 755 -o root -g root "${REPO_ROOT}/scripts/yt-decider-debug.sh" /usr/local/bin/yt-decider-debug.sh
 
 ENV_FILE="/etc/youtube-fallback.env"
 DEFAULTS_FILE="config/youtube-fallback.defaults"
