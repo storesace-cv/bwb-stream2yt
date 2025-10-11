@@ -13,6 +13,14 @@
 # Requisitos: git >= 2.20
 set -euo pipefail
 
+REQUIRED_VERSION="2.20.0"
+
+version_ge() {
+  # Returns success if $1 >= $2 using version sort.
+  local current="$1" required="$2"
+  [ "$(printf '%s\n%s\n' "$required" "$current" | sort -V | head -n1)" = "$required" ]
+}
+
 # ---------- UI helpers ----------
 info()  { printf "🔹 %s\n" "$*"; }
 ok()    { printf "✅ %s\n" "$*"; }
@@ -22,6 +30,12 @@ err()   { printf "❌ %s\n" "$*" >&2; }
 # ---------- Sanity checks ----------
 if ! command -v git >/dev/null 2>&1; then
   err "git não encontrado no PATH."
+  exit 1
+fi
+
+GIT_VERSION="$(git --version | awk '{print $3}')"
+if ! version_ge "$GIT_VERSION" "$REQUIRED_VERSION"; then
+  err "Git ${REQUIRED_VERSION} ou superior é obrigatório (detetado ${GIT_VERSION})."
   exit 1
 fi
 
@@ -38,6 +52,14 @@ fi
 
 # ---------- Descoberta ----------
 CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+if [ "$CURRENT_BRANCH" = "HEAD" ]; then
+  err "HEAD está em detached mode. Faz checkout de um branch antes de continuar."
+  exit 1
+fi
+
+if [ -n "$(git status --short)" ]; then
+  warn "Existem alterações locais que serão descartadas."
+fi
 REMOTE_NAME="${REMOTE_NAME:-origin}"
 MAIN_BRANCH="${MAIN_BRANCH:-main}"
 
