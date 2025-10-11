@@ -11,12 +11,13 @@ STATE_FILE="/var/lib/bwb-status-monitor/status.json"
 ENV_FILE="/etc/yt-restapi.env"
 WINDOW="${STATUS_MONITOR_WINDOW:-48 hours}"
 ENDPOINT="${STATUS_MONITOR_ENDPOINT:-http://127.0.0.1:8080/status}"
+OUTPUT_DIR="${STATUS_MONITOR_OUTPUT_DIR:-.}"
 TZ=UTC export TZ
 
 now_utc_epoch()      { date -u +%s; }
 since_utc_epoch()    { date -u -d "${WINDOW}" +%s; }
 ts_utc()             { date -u +"%Y%m%dT%H%M%SZ"; }
-out_file()           { echo "status-monitor-$(ts_utc).log"; }
+out_file()           { printf "%s/status-monitor-%s.log\n" "${OUTPUT_DIR}" "$(ts_utc)"; }
 
 info()  { printf "[info] %s\n" "$*"; }
 warn()  { printf "[warn] %s\n" "$*" >&2; }
@@ -46,6 +47,7 @@ fetch_endpoint() {
   curl --max-time 5 --show-error --silent --location "${url}" || true
 }
 
+mkdir -p "${OUTPUT_DIR}"
 OUT="$(out_file)"
 SINCE_EPOCH="$(since_utc_epoch)"
 NOW_EPOCH="$(now_utc_epoch)"
