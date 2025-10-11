@@ -15,12 +15,11 @@ import os
 import signal
 import subprocess
 import threading
-from collections import deque
 from dataclasses import dataclass, field
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any, Deque, Dict, Optional
+from typing import Any, Dict, Optional
 
 LOGGER = logging.getLogger("bwb_status_monitor")
 
@@ -37,13 +36,12 @@ def isoformat(ts: dt.datetime) -> str:
 
 @dataclass
 class MonitorSettings:
+    """Configuration for the heartbeat monitor."""
+
     bind: str = "0.0.0.0"
     port: int = 8080
-    history_seconds: int = 300
     missed_threshold: int = 40
-    recovery_reports: int = 2
     check_interval: int = 5
-    state_file: Path = Path("/var/lib/bwb-status-monitor/status.json")
     log_file: Path = Path("/var/log/bwb_status_monitor.log")
     secondary_service: str = "youtube-fallback.service"
     auth_token: Optional[str] = None
@@ -91,16 +89,12 @@ class MonitorSettings:
 
         bind = _get_env("YTR_BIND", "BWB_STATUS_BIND") or "0.0.0.0"
         port = _int(("YTR_PORT", "BWB_STATUS_PORT"), 8080)
-        history_seconds = _int(("YTR_HISTORY_SECONDS", "BWB_STATUS_HISTORY_SECONDS"), 300)
         missed_threshold = _int(("YTR_MISSED_THRESHOLD", "BWB_STATUS_MISSED_THRESHOLD"), 40)
-        recovery_reports = _int(("YTR_RECOVERY_REPORTS", "BWB_STATUS_RECOVERY_REPORTS"), 2)
         check_interval = _int(("YTR_CHECK_INTERVAL", "BWB_STATUS_CHECK_INTERVAL"), 5)
 
-        state_override = _get_env("YTR_STATE_FILE", "BWB_STATUS_STATE_FILE")
         log_override = _get_env("YTR_LOG_FILE", "BWB_STATUS_LOG_FILE")
         secondary_override = _get_env("YTR_SECONDARY_SERVICE", "BWB_STATUS_SECONDARY_SERVICE")
 
-        state_path = Path(state_override or cls.state_file.as_posix())
         log_path = Path(log_override or cls.log_file.as_posix())
         secondary_service = secondary_override or cls.secondary_service
         token = _get_env("YTR_TOKEN", "BWB_STATUS_TOKEN")
@@ -139,11 +133,8 @@ class MonitorSettings:
         return cls(
             bind=bind,
             port=port,
-            history_seconds=history_seconds,
             missed_threshold=missed_threshold,
-            recovery_reports=recovery_reports,
             check_interval=check_interval,
-            state_file=state_path,
             log_file=log_path,
             secondary_service=secondary_service,
             auth_token=token if token else None,
@@ -233,26 +224,23 @@ class StatusMonitor:
     ) -> None:
         self._settings = settings
         self._service_manager = service_manager
-        self._history: Deque[StatusEntry] = deque()
         self._lock = threading.Lock()
         self._last_timestamp: Optional[dt.datetime] = None
+        self._started_at = utc_now()
         self._fallback_active = False
-        self._recovery_reports = 0
         self._stop_event = threading.Event()
         self._watcher_thread = threading.Thread(
             target=self._watchdog_loop, name="bwb-status-watchdog", daemon=True
         )
-
-        self._ensure_directories()
         LOGGER.debug("StatusMonitor inicializado com %s", self._settings)
 
     def start(self) -> None:
         if not self._watcher_thread.is_alive():
             self._watcher_thread.start()
             LOGGER.info(
-                "Watchdog iniciado (threshold=%ss, recuperacao=%s reports)",
+                "Watchdog iniciado (limite=%ss, verificação=%ss)",
                 self._settings.missed_threshold,
-                self._settings.recovery_reports,
+                self._settings.check_interval,
             )
 
     def shutdown(self) -> None:
@@ -270,46 +258,35 @@ class StatusMonitor:
             return self._fallback_active
 
     def record_status(self, entry: StatusEntry) -> None:
-        trigger_stop = False
+        should_stop = False
         with self._lock:
-            self._history.append(entry)
-            self._prune_history_locked(entry.timestamp)
             self._last_timestamp = entry.timestamp
             if self._fallback_active:
-                self._recovery_reports += 1
-                LOGGER.debug(
-                    "Heartbeat recebido durante fallback (contagem %s/%s)",
-                    self._recovery_reports,
-                    self._settings.recovery_reports,
-                )
-                if self._recovery_reports >= self._settings.recovery_reports:
-                    trigger_stop = True
+                should_stop = True
 
-        if trigger_stop:
-            LOGGER.info("Heartbeats restabelecidos; solicitando parada do fallback.")
+        if should_stop:
+            LOGGER.info("Heartbeat recebido; solicitando parada do fallback.")
             if self._service_manager.ensure_stopped():
                 with self._lock:
                     self._fallback_active = False
-                    self._recovery_reports = 0
             else:
                 LOGGER.warning(
-                    "Falha ao parar fallback; mantendo flag ativo para nova tentativa."
+                    "Falha ao parar fallback; nova tentativa ocorrerá no próximo heartbeat."
                 )
                 with self._lock:
                     self._fallback_active = True
-                    self._recovery_reports = 0
-
-        self._write_state_file()
 
     def snapshot(self) -> Dict[str, Any]:
         with self._lock:
+            reference = self._last_timestamp or self._started_at
+            elapsed = (utc_now() - reference).total_seconds()
             return {
                 "last_timestamp": (
                     isoformat(self._last_timestamp) if self._last_timestamp else None
                 ),
                 "fallback_active": self._fallback_active,
-                "history": [item.to_dict() for item in list(self._history)],
-                "history_window_seconds": self._settings.history_seconds,
+                "seconds_since_last_heartbeat": elapsed,
+                "missed_threshold": self._settings.missed_threshold,
             }
 
     def _watchdog_loop(self) -> None:
@@ -320,18 +297,15 @@ class StatusMonitor:
     def _evaluate_threshold(self) -> None:
         action = False
         with self._lock:
-            if self._last_timestamp is None:
-                elapsed = None
-            else:
-                elapsed = (utc_now() - self._last_timestamp).total_seconds()
+            reference = self._last_timestamp or self._started_at
+            elapsed = (utc_now() - reference).total_seconds()
 
-            if elapsed is None or elapsed > self._settings.missed_threshold:
+            if elapsed >= self._settings.missed_threshold:
                 if not self._fallback_active:
                     LOGGER.warning(
                         "Sem heartbeats há %s segundos; solicitando fallback.",
-                        "desconhecido" if elapsed is None else int(elapsed),
+                        int(elapsed),
                     )
-                    self._recovery_reports = 0
                     action = True
             else:
                 LOGGER.debug(
@@ -349,40 +323,6 @@ class StatusMonitor:
                 LOGGER.warning(
                     "Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir."
                 )
-
-    def _prune_history_locked(self, reference: dt.datetime) -> None:
-        cutoff = reference - dt.timedelta(seconds=self._settings.history_seconds)
-        while self._history and self._history[0].timestamp < cutoff:
-            self._history.popleft()
-
-    def _write_state_file(self) -> None:
-        try:
-            data = [entry.to_dict() for entry in list(self._history)]
-            tmp_path = self._settings.state_file.with_suffix(".tmp")
-            tmp_path.parent.mkdir(parents=True, exist_ok=True)
-            tmp_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-            tmp_path.replace(self._settings.state_file)
-            os.chmod(self._settings.state_file, 0o640)
-        except Exception as exc:  # noqa: BLE001
-            LOGGER.error(
-                "Falha ao atualizar ficheiro de estado %s: %s",
-                self._settings.state_file,
-                exc,
-            )
-
-    def _ensure_directories(self) -> None:
-        try:
-            self._settings.state_file.parent.mkdir(parents=True, exist_ok=True)
-        except OSError as exc:
-            LOGGER.error(
-                "Falha ao criar diretório de estado %s: %s",
-                self._settings.state_file.parent,
-                exc,
-            )
-        try:
-            self._settings.log_file.parent.mkdir(parents=True, exist_ok=True)
-        except OSError:
-            pass
 
 
 class StatusHTTPRequestHandler(BaseHTTPRequestHandler):
@@ -456,8 +396,8 @@ class StatusHTTPRequestHandler(BaseHTTPRequestHandler):
             "ok": True,
             "server_time": isoformat(utc_now()),
             "fallback_active": snapshot["fallback_active"],
-            "history_size": len(snapshot["history"]),
-            "history_window_seconds": snapshot["history_window_seconds"],
+            "seconds_since_last_heartbeat": snapshot["seconds_since_last_heartbeat"],
+            "missed_threshold": snapshot["missed_threshold"],
         }
         self._send_json(response)
 
@@ -527,10 +467,9 @@ def run_server(settings: MonitorSettings, args: argparse.Namespace) -> None:
 
     LOGGER.info("Iniciando monitor em %s:%s", bind, port)
     LOGGER.info(
-        "Janela historial=%ss, limite ausência=%ss, relatórios recuperação=%s",
-        settings.history_seconds,
+        "Limiar de ausência configurado para %ss; verificação a cada %ss",
         settings.missed_threshold,
-        settings.recovery_reports,
+        settings.check_interval,
     )
     if settings.require_token:
         LOGGER.info("Autenticação Bearer obrigatória para /status")
