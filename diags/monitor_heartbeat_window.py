@@ -168,23 +168,23 @@ def final_verdict(
     expect_active: bool,
 ) -> str:
     """Generate the final verdict message favouring the heartbeat rule."""
-    if expect_active:
-        if monitor_flag:
+    if monitor_flag == expect_active:
+        if expect_active:
             if service_active:
-                return "✅ URL secundária a emitir (comportamento alinhado com o esperado)."
-            return "⚠️ Heartbeats ausentes levaram o monitor a activar o fallback, mas o serviço systemd está parado."
+                return "✅ URL secundária a emitir conforme esperado."
+            return "⚠️ Monitor activou o fallback como esperado, mas o serviço systemd está parado."
         if service_active:
-            return "⚠️ Serviço systemd activo, mas monitor ainda aponta para o primário."
-        return "⚠️ Heartbeats ausentes sugerem fallback activo, mas nem monitor nem serviço estão a emitir."
+            return "⚠️ Monitor mantém o fallback desligado como esperado, mas o serviço systemd permanece activo."
+        return "✅ URL secundária parada conforme esperado."
 
-    if not monitor_flag:
-        if not service_active:
-            return "✅ URL secundária parada conforme esperado."
-        return "⚠️ Serviço systemd activo apesar de o monitor indicar fallback desligado."
+    if expect_active:
+        if service_active:
+            return "❌ Monitor deveria ter activado a URL secundária após ausência de heartbeats, mas continua a apontar para o primário mesmo com o serviço activo."
+        return "❌ Monitor deveria ter activado a URL secundária após ausência de heartbeats, mas nem monitor nem serviço estão a emitir."
 
     if service_active:
-        return "⚠️ Monitor sinaliza fallback activo apesar de existirem heartbeats recentes."
-    return "⚠️ Monitor sinaliza fallback activo, mas o serviço systemd está parado e ainda há heartbeats."
+        return "❌ Monitor activou o fallback apesar de existirem heartbeats recentes e o serviço systemd está activo."
+    return "❌ Monitor activou o fallback apesar de existirem heartbeats recentes e o serviço systemd está parado."
 
 
 def pretty_duration(seconds: float) -> str:
