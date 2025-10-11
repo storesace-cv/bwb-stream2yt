@@ -126,19 +126,22 @@ def determine_expectation(
     entries: Sequence[HeartbeatEntry],
     window_end: dt.datetime,
     missed_threshold: int,
-) -> str:
+) -> Tuple[str, bool]:
+    """Return a human readable expectation string and whether fallback should be active."""
     if not entries:
-        return "Esperado: fallback ATIVO (sem heartbeats)."
+        return "Esperado: fallback ATIVO (sem heartbeats).", True
     last = entries[-1].timestamp
     silence = (window_end - last).total_seconds()
     if silence > missed_threshold:
         return (
             "Esperado: fallback ATIVO (último heartbeat há %.1fs, acima do limiar de %ss)."
-            % (silence, missed_threshold)
+            % (silence, missed_threshold),
+            True,
         )
     return (
         "Esperado: fallback DESATIVADO (último heartbeat há %.1fs, dentro do limiar de %ss)."
-        % (silence, missed_threshold)
+        % (silence, missed_threshold),
+        False,
     )
 
 
@@ -154,9 +157,8 @@ def format_secondary_state(monitor_flag: bool, systemctl_output: str) -> str:
 def final_verdict(
     monitor_flag: bool,
     systemctl_output: str,
-    expectation: str,
+    expect_active: bool,
 ) -> str:
-    expect_active = "ATIVO" in expectation
     secondary_active = monitor_flag or systemctl_output == "active"
     if expect_active and secondary_active:
         return "✅ URL secundária a emitir (comportamento alinhado com o esperado)."
@@ -265,7 +267,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             % intervals
         )
 
-    expectation = determine_expectation(entries, end_time, missed_threshold)
+    expectation, expect_active = determine_expectation(entries, end_time, missed_threshold)
     print(expectation)
 
     print(format_secondary_state(fallback_flag, systemctl_output))
@@ -275,7 +277,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             % systemctl_rc
         )
 
-    verdict = final_verdict(fallback_flag, systemctl_output, expectation)
+    verdict = final_verdict(fallback_flag, systemctl_output, expect_active)
     print(verdict)
 
     if total:
