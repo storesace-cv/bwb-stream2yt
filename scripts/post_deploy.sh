@@ -110,7 +110,11 @@ ENVEOF
 
     if command -v ufw >/dev/null 2>&1; then
         if ufw status 2>/dev/null | grep -qi "status: active"; then
-            ufw --force allow 8080/tcp || log "Aviso: não foi possível abrir a porta 8080 no ufw"
+            if ! ufw status 2>/dev/null | grep -qE '\b8080/tcp\b'; then
+                if ! ufw allow 8080/tcp; then
+                    log "Aviso: não foi possível abrir a porta 8080 no ufw"
+                fi
+            fi
         fi
     fi
 
