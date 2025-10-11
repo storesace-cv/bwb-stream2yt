@@ -31,7 +31,7 @@ jobs:
 
       - name: Build executable
         run: |
-          python -m PyInstaller --clean --onefile primary-windows/src/stream_to_youtube.py
+          python -m PyInstaller --clean primary-windows/via-windows/stream_to_youtube.spec
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
