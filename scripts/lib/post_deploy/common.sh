@@ -172,17 +172,15 @@ setup_status_monitor() {
     install -d -m 750 -o yt-restapi -g yt-restapi "${state_dir}"
     if [[ ! -f "${state_dir}/status.json" ]]; then
         printf '[]\n' >"${state_dir}/status.json"
-        chown yt-restapi:yt-restapi "${state_dir}/status.json"
-        chmod 640 "${state_dir}/status.json"
     fi
+    chown yt-restapi:yt-restapi "${state_dir}/status.json"
+    chmod 640 "${state_dir}/status.json"
 
     if [[ ! -f "/var/log/bwb_status_monitor.log" ]]; then
         touch /var/log/bwb_status_monitor.log
-        chown yt-restapi:yt-restapi /var/log/bwb_status_monitor.log
-        chmod 640 /var/log/bwb_status_monitor.log
-    else
-        chown yt-restapi:yt-restapi /var/log/bwb_status_monitor.log
     fi
+    chown yt-restapi:yt-restapi /var/log/bwb_status_monitor.log
+    chmod 640 /var/log/bwb_status_monitor.log
 
     local env_file="/etc/yt-restapi.env"
     if [[ ! -f "${env_file}" ]]; then
@@ -201,9 +199,11 @@ setup_status_monitor() {
 #YTR_TOKEN=
 #YTR_REQUIRE_TOKEN=1
 ENVEOF
-        chmod 640 "${env_file}"
-        chown yt-restapi:yt-restapi "${env_file}"
     fi
+    chmod 640 "${env_file}"
+    chown yt-restapi:yt-restapi "${env_file}"
+
+    ensure_yt_restapi_sudoers
 
     if command -v ufw >/dev/null 2>&1; then
         if ufw status 2>/dev/null | grep -qi "status: active"; then
@@ -223,4 +223,28 @@ ENVEOF
     fi
 
     log "Monitor de status ativo em ${state_dir}"
+}
+
+ensure_yt_restapi_sudoers() {
+    local sudoers_file="/etc/sudoers.d/yt-restapi"
+    local tmp
+    tmp=$(mktemp)
+
+    cat <<'SUDOEOF' >"${tmp}"
+yt-restapi ALL=(root) NOPASSWD: /bin/systemctl start youtube-fallback.service, /bin/systemctl stop youtube-fallback.service, /bin/systemctl status youtube-fallback.service
+SUDOEOF
+
+    install -m 440 -o root -g root "${tmp}" "${sudoers_file}"
+    rm -f "${tmp}"
+
+    if command -v visudo >/dev/null 2>&1; then
+        if ! visudo -cf "${sudoers_file}" >/dev/null; then
+            rm -f "${sudoers_file}"
+            log "Erro: validação de ${sudoers_file} falhou via visudo"
+            exit 1
+        fi
+        log "yt-restapi sudoers applied (systemctl start/stop/status youtube-fallback.service)"
+    else
+        log "Aviso: visudo não encontrado; não foi possível validar ${sudoers_file}"
+    fi
 }

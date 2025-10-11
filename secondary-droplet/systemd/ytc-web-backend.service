@@ -7,10 +7,10 @@ Type=simple
 User=root
 Group=root
 WorkingDirectory=/opt/ytc-web-service/app
-EnvironmentFile=/etc/ytc-web-backend.env
 Environment=PYTHONUNBUFFERED=1
 Environment=YTC_WEB_BACKEND_HOST=127.0.0.1
 Environment=YTC_WEB_BACKEND_PORT=8081
+EnvironmentFile=-/etc/ytc-web-backend.env
 ExecStart=/opt/ytc-web-service/venv/bin/uvicorn app:app --host ${YTC_WEB_BACKEND_HOST} --port ${YTC_WEB_BACKEND_PORT}
 Restart=on-failure
 RestartSec=5

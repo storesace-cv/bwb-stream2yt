@@ -8,6 +8,7 @@ SYSTEMD_SRC="/root/bwb-stream2yt/secondary-droplet/systemd/ytc-web-backend.servi
 SYSTEMD_DEST="/etc/systemd/system/ytc-web-backend.service"
 ENV_FILE="/etc/ytc-web-backend.env"
 BACKEND_PORT="${YTC_WEB_BACKEND_PORT:-8081}"
+BACKEND_HOST="${YTC_WEB_BACKEND_HOST:-127.0.0.1}"
 FIREWALL_IP="${YTC_WEB_ALLOWED_IP:-0.0.0.0/0}"
 
 log() {
@@ -51,13 +52,19 @@ if [[ ! -f "${ENV_FILE}" ]]; then
 YT_OAUTH_TOKEN_PATH=/root/token.json
 YTC_WEB_CACHE_TTL=30
 YTC_WEB_HTTP_CACHE=10
-YTC_WEB_BACKEND_HOST=127.0.0.1
+YTC_WEB_BACKEND_HOST=${BACKEND_HOST}
 YTC_WEB_BACKEND_PORT=${BACKEND_PORT}
 EOT
-    chmod 640 "${ENV_FILE}"
 else
     log "Ficheiro de ambiente existente preservado em ${ENV_FILE}"
+    existing_host=$(grep -E '^YTC_WEB_BACKEND_HOST=' "${ENV_FILE}" | tail -n1 | cut -d '=' -f2- || true)
+    if [[ -n "${existing_host}" ]]; then
+        BACKEND_HOST="${existing_host}"
+    fi
 fi
+chmod 640 "${ENV_FILE}"
+
+BACKEND_HOST="$(printf '%s' "${BACKEND_HOST}" | tr -d '"')"
 
 log "Instalando unit do systemd"
 install -m 644 "${SYSTEMD_SRC}" "${SYSTEMD_DEST}"
@@ -66,6 +73,23 @@ systemctl enable --now ytc-web-backend.service
 systemctl restart ytc-web-backend.service || true
 
 configure_firewall() {
+    if [[ "${BACKEND_HOST}" == "127.0.0.1" || "${BACKEND_HOST}" == "localhost" ]]; then
+        log "Backend ligado a ${BACKEND_HOST}; omitindo abertura da porta ${BACKEND_PORT}/tcp no ufw."
+        if command -v ufw >/dev/null 2>&1; then
+            ufw status numbered \
+                | awk -v port="${BACKEND_PORT}" '$0 ~ (" " port "/tcp") && /ALLOW IN/ {print $1}' \
+                | tr -d "[] " \
+                | sort -rn \
+                | while read -r rule_number; do
+                    [[ -z "${rule_number}" ]] && continue
+                    ufw --force delete "${rule_number}" >/dev/null 2>&1 || true
+                done
+            ufw reload >/dev/null 2>&1 || true
+        fi
+        log "Porta ${BACKEND_PORT}/tcp mantida privada (acesso via túnel SSH quando necessário)."
+        return
+    fi
+
     log "Configurando firewall (ufw) para ${FIREWALL_IP}:${BACKEND_PORT}/tcp"
 
     if ! command -v ufw >/dev/null 2>&1; then
