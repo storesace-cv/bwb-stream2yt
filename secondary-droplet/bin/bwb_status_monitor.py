@@ -164,15 +164,21 @@ class ServiceManager:
     name: str
     _lock: threading.Lock = field(default_factory=threading.Lock)
 
+    def _systemctl_cmd(self, *args: str) -> list[str]:
+        base_cmd = ["/bin/systemctl", "--no-ask-password", *args, self.name]
+        if os.geteuid() == 0:
+            return base_cmd
+        return ["/usr/bin/sudo", "-n", *base_cmd]
+
     def _run_systemctl(self, *args: str) -> subprocess.CompletedProcess[str]:
-        cmd = ["/bin/systemctl", *args, self.name]
+        cmd = self._systemctl_cmd(*args)
         LOGGER.debug("Executando: %s", " ".join(cmd))
         return subprocess.run(cmd, check=False, capture_output=True, text=True)
 
     def ensure_started(self) -> bool:
         with self._lock:
             status = subprocess.run(
-                ["/bin/systemctl", "is-active", self.name],
+                self._systemctl_cmd("is-active"),
                 check=False,
                 capture_output=True,
                 text=True,
@@ -196,7 +202,7 @@ class ServiceManager:
     def ensure_stopped(self) -> bool:
         with self._lock:
             status = subprocess.run(
-                ["/bin/systemctl", "is-active", self.name],
+                self._systemctl_cmd("is-active"),
                 check=False,
                 capture_output=True,
                 text=True,
