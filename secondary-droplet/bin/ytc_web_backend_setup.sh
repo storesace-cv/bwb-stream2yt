@@ -8,15 +8,14 @@ SYSTEMD_SRC="/root/bwb-stream2yt/secondary-droplet/systemd/ytc-web-backend.servi
 SYSTEMD_DEST="/etc/systemd/system/ytc-web-backend.service"
 ENV_FILE="/etc/ytc-web-backend.env"
 BACKEND_PORT="${YTC_WEB_BACKEND_PORT:-8081}"
-FIREWALL_IP="${YTC_WEB_ALLOWED_IP:-}"
+FIREWALL_IP="${YTC_WEB_ALLOWED_IP:-0.0.0.0/0}"
 
 log() {
     echo "[ytc-web-backend-setup] $*"
 }
 
-if [[ -z "${FIREWALL_IP}" ]]; then
-    log "Variável YTC_WEB_ALLOWED_IP ausente; defina um IP ou '0.0.0.0/0' para aceitar qualquer origem."
-    exit 1
+if [[ -z "${YTC_WEB_ALLOWED_IP:-}" ]]; then
+    log "Variável YTC_WEB_ALLOWED_IP não definida; assumido modo global (0.0.0.0/0)."
 fi
 
 install -d -m 755 "${APP_DEST}" "${APP_DEST}/app"
