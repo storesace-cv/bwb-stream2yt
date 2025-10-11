@@ -84,14 +84,14 @@ install_admin_script() {
     local label="$1"
     local source_path="$2"
     local dest_path="$3"
-    local repo_rel_path="$4"
+    local repo_rel_path="${4:-}"
 
     if [[ -f "${source_path}" ]]; then
         install -m 755 -o root -g root "${source_path}" "${dest_path}"
         return
     fi
 
-    if command -v git >/dev/null 2>&1; then
+    if [[ -n "${repo_rel_path}" && -d "${REPO_ROOT}/.git" ]] && command -v git >/dev/null 2>&1; then
         local tmp
         tmp="$(mktemp)"
         if git -C "${REPO_ROOT}" show "HEAD:${repo_rel_path}" >"${tmp}" 2>/dev/null; then
@@ -103,8 +103,7 @@ install_admin_script() {
         rm -f "${tmp}"
     fi
 
-    log "Erro: não consegui localizar ${label} em ${source_path} nem obtê-lo via git."
-    exit 1
+    log "Aviso: ${label} não encontrado em ${source_path}; instalação ignorada."
 }
 
 install_admin_script "reset_secondary_droplet.sh" "${REPO_ROOT}/scripts/reset_secondary_droplet.sh" /usr/local/bin/reset_secondary_droplet.sh scripts/reset_secondary_droplet.sh
