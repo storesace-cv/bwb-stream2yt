@@ -14,6 +14,34 @@ log() {
     echo "[post_deploy] $*"
 }
 
+warn_missing() {
+    local what=$1
+    local where=$2
+    log "Aviso: ${what} não encontrado em ${where}; instalação ignorada."
+}
+
+ensure_installed_file() {
+    local source=$1
+    local destination=$2
+    local mode=$3
+    local owner=${4:-root}
+    local group=${5:-root}
+
+    if [[ -e "${source}" ]]; then
+        install -m "${mode}" -o "${owner}" -g "${group}" "${source}" "${destination}"
+    else
+        warn_missing "${source##*/}" "${source}"
+    fi
+}
+
+maybe_systemctl_daemon_reload() {
+    if command -v systemctl >/dev/null 2>&1; then
+        systemctl daemon-reload
+    else
+        log "Aviso: systemctl indisponível; ignorando daemon-reload."
+    fi
+}
+
 remove_legacy_components() {
     local -a legacy_services=(
         "yt-decider-daemon.service"
@@ -142,23 +170,8 @@ ensure_secondary_requirements() {
 setup_status_monitor() {
     log "Instalando monitor HTTP de status do primário"
 
-    local restart_required=false
-
-    if ensure_installed_file \
-        bin/bwb_status_monitor.py \
-        /usr/local/bin/bwb_status_monitor.py \
-        755 root root; then
-        restart_required=true
-    fi
-
-    if ensure_installed_file \
-        systemd/bwb-status-monitor.service \
-        /etc/systemd/system/bwb-status-monitor.service \
-        644 root root; then
-        restart_required=true
-    fi
-
-    maybe_systemctl_daemon_reload
+    ensure_installed_file bin/bwb_status_monitor.py /usr/local/bin/bwb_status_monitor.py 755
+    ensure_installed_file systemd/bwb-status-monitor.service /etc/systemd/system/bwb-status-monitor.service 644
 
     local state_dir="/var/lib/bwb-status-monitor"
     install -d -m 755 -o root -g root "${state_dir}"
@@ -205,25 +218,8 @@ ENVEOF
         fi
     fi
 
-    if ! systemctl_is_enabled bwb-status-monitor.service; then
-        log "Ativando bwb-status-monitor.service para arranque automático."
-        systemctl enable bwb-status-monitor.service
-    else
-        log "bwb-status-monitor.service já está configurado para iniciar no arranque."
-    fi
-
-    if systemctl_is_active bwb-status-monitor.service; then
-        if [[ "${restart_required}" == "true" ]]; then
-            log "Reiniciando bwb-status-monitor.service para aplicar alterações."
-            systemctl restart bwb-status-monitor.service
-        else
-            log "bwb-status-monitor.service já está em execução."
-        fi
-    else
-        log "Iniciando bwb-status-monitor.service."
-        systemctl start bwb-status-monitor.service
-    fi
-
+    maybe_systemctl_daemon_reload
+    systemctl enable --now bwb-status-monitor.service
     log "Monitor de status ativo em ${state_dir}"
 }
 
@@ -243,27 +239,16 @@ main() {
     log "Instalando dependências base do fallback"
     pip3 install --no-cache-dir -r requirements.txt
 
-    install -m 755 -o root -g root bin/youtube_fallback.sh /usr/local/bin/youtube_fallback.sh
-    install -m 644 -o root -g root systemd/youtube-fallback.service /etc/systemd/system/youtube-fallback.service
-    install -m 755 -o root -g root bin/ensure_broadcast.py /usr/local/bin/ensure_broadcast.py
-    install -m 644 -o root -g root systemd/ensure-broadcast.service /etc/systemd/system/ensure-broadcast.service
-    install -m 644 -o root -g root systemd/ensure-broadcast.timer /etc/systemd/system/ensure-broadcast.timer
+    ensure_installed_file bin/youtube_fallback.sh /usr/local/bin/youtube_fallback.sh 755
+    ensure_installed_file systemd/youtube-fallback.service /etc/systemd/system/youtube-fallback.service 644
+    ensure_installed_file bin/ensure_broadcast.py /usr/local/bin/ensure_broadcast.py 755
+    ensure_installed_file systemd/ensure-broadcast.service /etc/systemd/system/ensure-broadcast.service 644
+    ensure_installed_file systemd/ensure-broadcast.timer /etc/systemd/system/ensure-broadcast.timer 644
 
     log "Instalando utilitários administrativos no /usr/local/bin"
 
-    local reset_secondary_source="${script_dir}/reset_secondary_droplet.sh"
-    if [[ -f "${reset_secondary_source}" ]]; then
-        install -m 755 -o root -g root "${reset_secondary_source}" /usr/local/bin/reset_secondary_droplet.sh
-    else
-        log "Aviso: reset_secondary_droplet.sh não encontrado em ${reset_secondary_source}; instalação ignorada."
-    fi
-
-    local status_monitor_debug_source="${script_dir}/status-monitor-debug.sh"
-    if [[ -f "${status_monitor_debug_source}" ]]; then
-        install -m 755 -o root -g root "${status_monitor_debug_source}" /usr/local/bin/status-monitor-debug.sh
-    else
-        log "Aviso: status-monitor-debug.sh não encontrado em ${status_monitor_debug_source}; instalação ignorada."
-    fi
+    ensure_installed_file "${script_dir}/reset_secondary_droplet.sh" /usr/local/bin/reset_secondary_droplet.sh 755
+    ensure_installed_file "${script_dir}/status-monitor-debug.sh" /usr/local/bin/status-monitor-debug.sh 755
 
     local ENV_FILE="/etc/youtube-fallback.env"
     local DEFAULTS_FILE="config/youtube-fallback.defaults"
@@ -303,7 +288,7 @@ main() {
     rm -f "${tmp_env}"
     trap - EXIT
 
-    systemctl daemon-reload
+    maybe_systemctl_daemon_reload
     systemctl stop youtube-fallback.service || true
     systemctl disable youtube-fallback.service || true
     systemctl enable --now ensure-broadcast.timer
