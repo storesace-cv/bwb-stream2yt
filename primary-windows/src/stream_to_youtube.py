@@ -6,19 +6,29 @@
 
 import atexit
 import datetime
+import json
 import os
+import platform
 import shlex
 import signal
 import subprocess
 import sys
 import threading
 import time
+import urllib.error
+import urllib.request
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Any, Callable, Dict, Optional
 
 from autotune import estimate_upload_bitrate
+
+
+DEFAULT_STATUS_ENDPOINT = "http://104.248.134.44:8080/status"
+APP_VERSION = "2024.09"
+HEARTBEAT_USER_AGENT = f"BWBPrimary/{APP_VERSION}"
+HEARTBEAT_DEFAULT_LOG_RELATIVE = "logs/heartbeat-status.jsonl"
 
 
 ENV_TEMPLATE_CONTENT = """# Configurações para stream_to_youtube.py
@@ -57,6 +67,16 @@ ENV_TEMPLATE_CONTENT = """# Configurações para stream_to_youtube.py
 
 # Caminho para o executável ffmpeg. Deixe vazio para usar o ffmpeg no PATH.
 #FFMPEG=C:\\caminho\\para\\ffmpeg.exe
+
+# Configurações do heartbeat/status para comunicar com a droplet secundária.
+#BWB_STATUS_ENABLED=1
+#BWB_STATUS_ENDPOINT=http://104.248.134.44:8080/status
+#BWB_STATUS_INTERVAL=20
+#BWB_STATUS_TIMEOUT=5
+#BWB_STATUS_MACHINE_ID=BEACHCAM-PRIMARY
+#BWB_STATUS_TOKEN=
+#BWB_STATUS_LOG_FILE=logs/heartbeat-status.jsonl
+#BWB_STATUS_LOG_RETENTION_SECONDS=3600
 """
 
 
@@ -118,6 +138,20 @@ def _resolve_log_target() -> tuple[Path, str, str]:
     suffix = candidate.suffix or ".log"
     stem = candidate.stem or "bwb_services"
     return directory, stem, suffix
+
+
+def _resolve_custom_path(env_name: str, default_relative: str) -> Path:
+    script_dir = _script_base_dir()
+    raw_path = os.environ.get(env_name, "").strip()
+
+    if raw_path:
+        expanded = os.path.expandvars(raw_path)
+        candidate = Path(expanded).expanduser()
+        if not candidate.is_absolute():
+            candidate = (script_dir / candidate).resolve()
+        return candidate
+
+    return (script_dir / default_relative).resolve()
 
 
 LOG_DIR, LOG_STEM, LOG_SUFFIX = _resolve_log_target()
@@ -481,9 +515,19 @@ class ResolutionPreset:
 
 
 _RESOLUTION_PRESETS: dict[str, ResolutionPreset] = {
-    "360p": ResolutionPreset(width=640, height=360, bitrate_kbps=1000, maxrate_kbps=1500, bufsize_kbps=3000),
-    "720p": ResolutionPreset(width=1280, height=720, bitrate_kbps=3500, maxrate_kbps=4500, bufsize_kbps=9000),
-    "1080p": ResolutionPreset(width=1920, height=1080, bitrate_kbps=5000, maxrate_kbps=6000, bufsize_kbps=12000),
+    "360p": ResolutionPreset(
+        width=640, height=360, bitrate_kbps=1000, maxrate_kbps=1500, bufsize_kbps=3000
+    ),
+    "720p": ResolutionPreset(
+        width=1280, height=720, bitrate_kbps=3500, maxrate_kbps=4500, bufsize_kbps=9000
+    ),
+    "1080p": ResolutionPreset(
+        width=1920,
+        height=1080,
+        bitrate_kbps=5000,
+        maxrate_kbps=6000,
+        bufsize_kbps=12000,
+    ),
 }
 
 _DEFAULT_RESOLUTION = "1080p"
@@ -668,6 +712,18 @@ def _select_preset(base_preset: Optional[str], bitrate_kbps: int) -> Optional[st
 
 
 @dataclass(frozen=True)
+class HeartbeatConfig:
+    enabled: bool
+    endpoint: Optional[str]
+    interval: float
+    timeout: float
+    machine_id: str
+    token: Optional[str]
+    log_path: Path
+    log_retention_seconds: int
+
+
+@dataclass(frozen=True)
 class StreamingConfig:
     yt_url: Optional[str]
     input_args: list[str]
@@ -682,6 +738,57 @@ class StreamingConfig:
     bitrate_max_kbps: int
     autotune_interval: float
     autotune_safety_margin: float
+    heartbeat: HeartbeatConfig
+
+
+def _resolve_heartbeat_config(base_dir: Path) -> HeartbeatConfig:
+    enabled_flag = _env_flag("BWB_STATUS_ENABLED", True)
+    endpoint_raw = os.environ.get("BWB_STATUS_ENDPOINT")
+    endpoint = (endpoint_raw or DEFAULT_STATUS_ENDPOINT).strip()
+
+    if not endpoint:
+        enabled_flag = False
+        endpoint_value: Optional[str] = None
+    else:
+        endpoint_value = endpoint
+
+    interval = _env_float("BWB_STATUS_INTERVAL", 20.0)
+    if interval < 5.0:
+        interval = 5.0
+
+    timeout = _env_float("BWB_STATUS_TIMEOUT", 5.0)
+    if timeout <= 0:
+        timeout = 5.0
+    if timeout >= interval:
+        timeout = max(1.0, interval / 2)
+
+    retention = _env_int("BWB_STATUS_LOG_RETENTION_SECONDS", 3600)
+    if retention <= 0:
+        retention = 3600
+    retention = max(retention, int(interval * 4))
+
+    machine_id_raw = os.environ.get("BWB_STATUS_MACHINE_ID", "").strip()
+    if machine_id_raw:
+        machine_id = machine_id_raw
+    else:
+        node = platform.node().strip()
+        machine_id = node or "primary-sender"
+
+    token_raw = os.environ.get("BWB_STATUS_TOKEN", "").strip()
+    log_path = _resolve_custom_path(
+        "BWB_STATUS_LOG_FILE", HEARTBEAT_DEFAULT_LOG_RELATIVE
+    )
+
+    return HeartbeatConfig(
+        enabled=enabled_flag and endpoint_value is not None,
+        endpoint=endpoint_value if enabled_flag else None,
+        interval=interval,
+        timeout=timeout,
+        machine_id=machine_id,
+        token=token_raw or None,
+        log_path=log_path,
+        log_retention_seconds=retention,
+    )
 
 
 def load_config(resolution: Optional[str] = None) -> StreamingConfig:
@@ -770,7 +877,9 @@ def load_config(resolution: Optional[str] = None) -> StreamingConfig:
     output_args = _apply_resolution_preset(output_args, resolved_resolution)
 
     default_bitrate = _parse_bitrate_from_args(output_args, "-b:v") or 5000
-    default_maxrate = _parse_bitrate_from_args(output_args, "-maxrate") or max(default_bitrate, 6000)
+    default_maxrate = _parse_bitrate_from_args(output_args, "-maxrate") or max(
+        default_bitrate, 6000
+    )
 
     bitrate_min = _env_int("YT_BITRATE_MIN", default_bitrate)
     bitrate_max = _env_int("YT_BITRATE_MAX", default_maxrate)
@@ -797,6 +906,7 @@ def load_config(resolution: Optional[str] = None) -> StreamingConfig:
         bitrate_max_kbps=bitrate_max,
         autotune_interval=_env_float("YT_AUTOTUNE_INTERVAL", 8.0),
         autotune_safety_margin=safety_margin,
+        heartbeat=_resolve_heartbeat_config(_script_base_dir()),
     )
 
 
@@ -805,6 +915,220 @@ def in_day_window(config: StreamingConfig, now_utc=None):
         now_utc = datetime.datetime.utcnow()
     local = now_utc + datetime.timedelta(hours=config.tz_offset_hours)
     return config.day_start_hour <= local.hour < config.day_end_hour
+
+
+class HeartbeatReporter:
+    """Send periodic status reports to the secondary droplet."""
+
+    def __init__(
+        self,
+        config: HeartbeatConfig,
+        status_provider: Callable[[], Dict[str, Any]],
+    ) -> None:
+        self._config = config
+        self._status_provider = status_provider
+        self._thread: Optional[threading.Thread] = None
+        self._stop_event = threading.Event()
+
+    @property
+    def is_running(self) -> bool:
+        thread = self._thread
+        return bool(thread and thread.is_alive())
+
+    def start(self) -> None:
+        if not self._config.enabled or not self._config.endpoint:
+            return
+        if self.is_running:
+            return
+        self._stop_event.clear()
+        thread = threading.Thread(
+            target=self._run_loop, name="HeartbeatReporter", daemon=True
+        )
+        self._thread = thread
+        log_event(
+            "primary-heartbeat",
+            (
+                "Heartbeat iniciado para %s (intervalo %.1fs, timeout %.1fs)."
+                % (self._config.endpoint, self._config.interval, self._config.timeout)
+            ),
+        )
+        thread.start()
+
+    def stop(self, timeout: Optional[float] = 5.0) -> None:
+        thread = self._thread
+        if not thread:
+            return
+        self._stop_event.set()
+        if timeout is not None:
+            thread.join(timeout=timeout)
+        else:
+            thread.join()
+        if thread.is_alive():
+            log_event(
+                "primary-heartbeat",
+                "Heartbeat não finalizou dentro do timeout configurado.",
+            )
+        else:
+            log_event("primary-heartbeat", "Heartbeat finalizado.")
+        self._thread = None
+
+    def _run_loop(self) -> None:
+        delay = 0.0
+        while not self._stop_event.wait(delay):
+            try:
+                self._send_once()
+            except Exception as exc:  # noqa: BLE001
+                log_event("primary-heartbeat", f"Erro inesperado no heartbeat: {exc}")
+            delay = self._config.interval
+
+    def _build_payload(self) -> Dict[str, Any]:
+        now = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc)
+        try:
+            status = self._status_provider() or {}
+        except Exception as exc:  # noqa: BLE001
+            status = {
+                "provider_error": f"{exc.__class__.__name__}: {exc}",
+            }
+
+        return {
+            "machine_id": self._config.machine_id,
+            "timestamp": now.isoformat(),
+            "software": "stream_to_youtube.py",
+            "version": APP_VERSION,
+            "platform": platform.platform(),
+            "python_version": platform.python_version(),
+            "pid": os.getpid(),
+            "status": status,
+        }
+
+    def _send_once(self) -> None:
+        endpoint = self._config.endpoint
+        if not endpoint:
+            return
+
+        payload = self._build_payload()
+        data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        request = urllib.request.Request(
+            endpoint,
+            data=data,
+            headers={
+                "Content-Type": "application/json",
+                "User-Agent": HEARTBEAT_USER_AGENT,
+            },
+            method="POST",
+        )
+        if self._config.token:
+            request.add_header("Authorization", f"Bearer {self._config.token}")
+
+        started = time.monotonic()
+        status_code: Optional[int] = None
+        error_text: Optional[str] = None
+        response_excerpt = ""
+        success = False
+
+        try:
+            with urllib.request.urlopen(
+                request, timeout=self._config.timeout
+            ) as response:
+                status_code = response.getcode()
+                body_bytes = response.read()
+                response_excerpt = body_bytes.decode("utf-8", errors="replace")[:512]
+                success = 200 <= status_code < 300
+                if not success:
+                    error_text = f"HTTP {status_code}"
+        except urllib.error.HTTPError as exc:
+            status_code = exc.code
+            body_bytes = exc.read()
+            response_excerpt = body_bytes.decode("utf-8", errors="replace")[:512]
+            error_text = f"HTTP {exc.code} {exc.reason}"
+        except urllib.error.URLError as exc:
+            reason = getattr(exc, "reason", exc)
+            error_text = f"URLError: {reason}"
+        except Exception as exc:  # noqa: BLE001
+            error_text = f"{exc.__class__.__name__}: {exc}"
+
+        latency_ms = int((time.monotonic() - started) * 1000)
+        entry = {
+            "timestamp": payload["timestamp"],
+            "endpoint": endpoint,
+            "machine_id": self._config.machine_id,
+            "success": success,
+            "status_code": status_code,
+            "latency_ms": latency_ms,
+            "error": error_text,
+            "response_excerpt": response_excerpt,
+            "payload": payload,
+        }
+
+        self._append_log_entry(entry)
+
+        if not success:
+            detail = error_text or (
+                f"HTTP {status_code}"
+                if status_code is not None
+                else "erro desconhecido"
+            )
+            log_event("primary-heartbeat", f"Falha ao enviar status: {detail}")
+
+    def _append_log_entry(self, entry: Dict[str, Any]) -> None:
+        path = self._config.log_path
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            return
+
+        try:
+            current_ts = datetime.datetime.fromisoformat(
+                entry["timestamp"].replace("Z", "+00:00")
+            )
+        except ValueError:
+            current_ts = datetime.datetime.utcnow().replace(
+                tzinfo=datetime.timezone.utc
+            )
+
+        cutoff = current_ts - datetime.timedelta(
+            seconds=self._config.log_retention_seconds
+        )
+        retained: list[Dict[str, Any]] = []
+
+        if path.exists():
+            try:
+                with path.open("r", encoding="utf-8") as handle:
+                    for raw_line in handle:
+                        line = raw_line.strip()
+                        if not line:
+                            continue
+                        try:
+                            data = json.loads(line)
+                        except json.JSONDecodeError:
+                            continue
+                        ts_text = data.get("timestamp")
+                        if not isinstance(ts_text, str):
+                            continue
+                        try:
+                            ts_value = datetime.datetime.fromisoformat(
+                                ts_text.replace("Z", "+00:00")
+                            )
+                        except ValueError:
+                            continue
+                        if ts_value.tzinfo is None:
+                            ts_value = ts_value.replace(tzinfo=datetime.timezone.utc)
+                        if ts_value >= cutoff:
+                            retained.append(data)
+            except OSError:
+                retained = []
+
+        retained.append(entry)
+
+        tmp_path = path.with_suffix(".tmp")
+        try:
+            with tmp_path.open("w", encoding="utf-8") as handle:
+                for item in retained:
+                    handle.write(json.dumps(item, ensure_ascii=False) + "\n")
+            tmp_path.replace(path)
+        except OSError:
+            with suppress(OSError):
+                tmp_path.unlink()
 
 
 class StreamingWorker:
@@ -823,13 +1147,23 @@ class StreamingWorker:
         self._last_autotune_bitrate: Optional[int] = None
         self._last_autotune_preset: Optional[str] = None
         self._autotune_failed_once = False
+        self._started_at: Optional[float] = None
+        self._last_launch_time: Optional[float] = None
+        self._restart_count = 0
+        self._last_exit_code: Optional[int] = None
 
     def start(self) -> None:
         if self.is_running:
             return
 
         self._stop_event.clear()
-        self._thread = threading.Thread(target=self._run_loop, name="StreamingWorker", daemon=True)
+        self._started_at = time.time()
+        self._last_launch_time = None
+        self._restart_count = 0
+        self._last_exit_code = None
+        self._thread = threading.Thread(
+            target=self._run_loop, name="StreamingWorker", daemon=True
+        )
         self._thread.start()
 
     def stop(self, timeout: Optional[float] = 10.0) -> None:
@@ -857,6 +1191,36 @@ class StreamingWorker:
     def is_running(self) -> bool:
         thread = self._thread
         return bool(thread and thread.is_alive())
+
+    def status_snapshot(self) -> Dict[str, Any]:
+        with self._process_lock:
+            proc = self._process
+            running = bool(proc and proc.poll() is None)
+            pid = proc.pid if running and proc else None
+
+        now = time.time()
+        started = self._started_at
+        uptime = now - started if started else 0.0
+        launch_age = now - self._last_launch_time if self._last_launch_time else None
+
+        snapshot: Dict[str, Any] = {
+            "thread_running": self.is_running,
+            "ffmpeg_running": running,
+            "ffmpeg_pid": pid,
+            "stop_requested": self._stop_event.is_set(),
+            "restarts": self._restart_count,
+            "last_exit_code": self._last_exit_code,
+            "uptime_seconds": round(uptime, 1) if started else 0.0,
+            "seconds_since_launch": (
+                round(launch_age, 1) if launch_age is not None else None
+            ),
+            "in_day_window": in_day_window(self._config),
+            "autotune_enabled": self._config.autotune_enabled,
+            "resolution": self._config.resolution,
+            "yt_url_present": bool(self._config.yt_url),
+            "heartbeat_configured": self._config.heartbeat.enabled,
+        }
+        return snapshot
 
     def _run_loop(self) -> None:
         print(
@@ -915,6 +1279,8 @@ class StreamingWorker:
                 with self._process_lock:
                     try:
                         self._process = subprocess.Popen(cmd)
+                        self._last_launch_time = time.time()
+                        self._last_exit_code = None
                     except OSError as exc:
                         log_event("primary", f"Falha ao iniciar ffmpeg: {exc}")
                         if self._stop_event.wait(5):
@@ -1045,6 +1411,13 @@ class StreamingWorker:
         with self._process_lock:
             self._process = None
 
+        if code is None:
+            return None
+
+        self._last_exit_code = code
+        if not self._stop_event.is_set():
+            self._restart_count += 1
+
         return code
 
     def _terminate_process(self) -> None:
@@ -1072,6 +1445,7 @@ class StreamingWorker:
 
         with self._process_lock:
             self._process = None
+            self._last_launch_time = None
 
 
 def run_forever(
@@ -1081,19 +1455,48 @@ def run_forever(
     global _ACTIVE_WORKER
     if existing_worker is not None:
         worker = existing_worker
+        active_config = (
+            worker._config
+        )  # noqa: SLF001 - internal access acceptable within module
     else:
         if config is None:
             config = load_config()
         worker = StreamingWorker(config)
+        active_config = config
     _ACTIVE_WORKER = worker
     if not worker.is_running and not _stop_request_active():
         worker.start()
     stop_logged = False
+    reporter: Optional[HeartbeatReporter] = None
+    if active_config.heartbeat.enabled and active_config.heartbeat.endpoint:
+
+        def _heartbeat_status() -> Dict[str, Any]:
+            snapshot = worker.status_snapshot()
+            snapshot.update(
+                {
+                    "stop_request_active": _stop_request_active(),
+                    "bitrate_min_kbps": active_config.bitrate_min_kbps,
+                    "bitrate_max_kbps": active_config.bitrate_max_kbps,
+                    "autotune_interval": active_config.autotune_interval,
+                    "autotune_safety_margin": active_config.autotune_safety_margin,
+                    "day_window": {
+                        "start_hour": active_config.day_start_hour,
+                        "end_hour": active_config.day_end_hour,
+                        "tz_offset_hours": active_config.tz_offset_hours,
+                    },
+                }
+            )
+            return snapshot
+
+        reporter = HeartbeatReporter(active_config.heartbeat, _heartbeat_status)
+        reporter.start()
     try:
         while True:
             if _stop_request_active():
                 if not stop_logged:
-                    log_event("primary", "Stop sentinel detected; shutting down worker.")
+                    log_event(
+                        "primary", "Stop sentinel detected; shutting down worker."
+                    )
                     stop_logged = True
                 worker.stop()
                 _clear_stop_request()
@@ -1101,6 +1504,8 @@ def run_forever(
                 break
             worker.join(timeout=0.5)
     finally:
+        if reporter is not None:
+            reporter.stop()
         worker.stop()
         _ACTIVE_WORKER = None
         _clear_stop_request()
@@ -1163,7 +1568,9 @@ def _stop_streaming_instance(timeout: float = 30.0) -> int:
         log_event("primary", message)
         return 1
 
-    message = f"Solicitação de parada registrada para PID {pid}; aguardando finalização."
+    message = (
+        f"Solicitação de parada registrada para PID {pid}; aguardando finalização."
+    )
     print(f"[primary] {message}")
     log_event("primary", message)
 

@@ -1,9 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+LOG_FILE="/var/log/bwb_post_deploy.log"
+mkdir -p "$(dirname "${LOG_FILE}")"
+exec > >(tee -a "${LOG_FILE}") 2>&1
+
 log() {
     echo "[post_deploy] $*"
 }
+
+log "Registando saída completa em ${LOG_FILE}"
 
 ensure_swap() {
     if swapon --noheadings 2>/dev/null | grep -q '\S'; then
@@ -62,6 +68,55 @@ ensure_python_venv() {
     fi
 
     log "python${version} ensurepip validado após instalação."
+}
+
+setup_status_monitor() {
+    log "Instalando monitor HTTP de status do primário"
+
+    install -m 755 -o root -g root bin/bwb_status_monitor.py /usr/local/bin/bwb_status_monitor.py
+    install -m 644 -o root -g root systemd/bwb-status-monitor.service /etc/systemd/system/bwb-status-monitor.service
+
+    local state_dir="/var/lib/bwb-status-monitor"
+    install -d -m 755 -o root -g root "${state_dir}"
+    if [[ ! -f "${state_dir}/status.json" ]]; then
+        printf '[]\n' >"${state_dir}/status.json"
+        chown root:root "${state_dir}/status.json"
+        chmod 640 "${state_dir}/status.json"
+    fi
+
+    if [[ ! -f "/var/log/bwb_status_monitor.log" ]]; then
+        touch /var/log/bwb_status_monitor.log
+        chmod 640 /var/log/bwb_status_monitor.log
+    fi
+
+    local env_file="/etc/bwb-status-monitor.env"
+    if [[ ! -f "${env_file}" ]]; then
+        cat <<'ENVEOF' >"${env_file}"
+# /etc/bwb-status-monitor.env — configurações para o monitor HTTP de status.
+# Descomente e ajuste as variáveis conforme necessário.
+#BWB_STATUS_BIND=0.0.0.0
+#BWB_STATUS_PORT=8080
+#BWB_STATUS_HISTORY_SECONDS=300
+#BWB_STATUS_MISSED_THRESHOLD=40
+#BWB_STATUS_RECOVERY_REPORTS=2
+#BWB_STATUS_CHECK_INTERVAL=5
+#BWB_STATUS_STATE_FILE=/var/lib/bwb-status-monitor/status.json
+#BWB_STATUS_LOG_FILE=/var/log/bwb_status_monitor.log
+#BWB_STATUS_SECONDARY_SERVICE=youtube-fallback.service
+#BWB_STATUS_TOKEN=
+ENVEOF
+        chmod 640 "${env_file}"
+    fi
+
+    if command -v ufw >/dev/null 2>&1; then
+        if ufw status 2>/dev/null | grep -qi "status: active"; then
+            ufw --force allow 8080/tcp || log "Aviso: não foi possível abrir a porta 8080 no ufw"
+        fi
+    fi
+
+    systemctl daemon-reload
+    systemctl enable --now bwb-status-monitor.service
+    log "Monitor de status ativo em ${state_dir}"
 }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -133,9 +188,11 @@ rm -f "${tmp_env}"
 trap - EXIT
 
 systemctl daemon-reload
-systemctl enable --now youtube-fallback.service
-systemctl restart youtube-fallback.service || true
+systemctl stop youtube-fallback.service || true
+systemctl disable youtube-fallback.service || true
 systemctl enable --now ensure-broadcast.timer
+
+setup_status_monitor
 
 log "youtube-fallback atualizado e env sincronizado."
 
