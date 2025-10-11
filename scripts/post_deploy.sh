@@ -64,7 +64,10 @@ ensure_python_venv() {
     log "python${version} ensurepip validado após instalação."
 }
 
-cd /root/bwb-stream2yt/secondary-droplet
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SECONDARY_DIR="${SCRIPT_DIR}/../secondary-droplet"
+
+cd "${SECONDARY_DIR}"
 
 log "Instalando dependências base do fallback"
 pip3 install --no-cache-dir -r requirements.txt
@@ -76,8 +79,27 @@ install -m 644 -o root -g root systemd/ensure-broadcast.service /etc/systemd/sys
 install -m 644 -o root -g root systemd/ensure-broadcast.timer /etc/systemd/system/ensure-broadcast.timer
 
 log "Instalando utilitários administrativos no /usr/local/bin"
-install -m 755 -o root -g root ../scripts/reset_secondary_droplet.sh /usr/local/bin/reset_secondary_droplet.sh
-install -m 755 -o root -g root ../scripts/yt-decider-debug.sh /usr/local/bin/yt-decider-debug.sh
+
+maybe_install_admin_script() {
+    local label="$1"
+    local source_path="$2"
+    local dest_path="$3"
+
+    if [[ -f "${source_path}" ]]; then
+        install -m 755 -o root -g root "${source_path}" "${dest_path}"
+    else
+        log "Aviso: ${label} não encontrado em ${source_path}; instalação ignorada."
+    fi
+}
+
+maybe_install_admin_script \
+    "reset_secondary_droplet.sh" \
+    "${SCRIPT_DIR}/reset_secondary_droplet.sh" \
+    /usr/local/bin/reset_secondary_droplet.sh
+maybe_install_admin_script \
+    "yt-decider-debug.sh" \
+    "${SCRIPT_DIR}/yt-decider-debug.sh" \
+    /usr/local/bin/yt-decider-debug.sh
 
 ENV_FILE="/etc/youtube-fallback.env"
 DEFAULTS_FILE="config/youtube-fallback.defaults"
