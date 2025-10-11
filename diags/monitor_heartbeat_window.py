@@ -154,19 +154,34 @@ def format_secondary_state(monitor_flag: bool, systemctl_output: str) -> str:
     )
 
 
+def is_service_active(systemctl_output: str, systemctl_rc: Optional[int]) -> bool:
+    """Interpret the systemd status string/return code as a boolean."""
+    if systemctl_rc is not None:
+        return False
+    normalized = systemctl_output.strip().lower()
+    return normalized in {"active", "activating", "reloading"}
+
+
 def final_verdict(
     monitor_flag: bool,
-    systemctl_output: str,
+    service_active: bool,
     expect_active: bool,
 ) -> str:
-    secondary_active = monitor_flag or systemctl_output == "active"
-    if expect_active and secondary_active:
-        return "✅ URL secundária a emitir (comportamento alinhado com o esperado)."
-    if (not expect_active) and (not secondary_active):
+    if expect_active:
+        if monitor_flag and service_active:
+            return "✅ URL secundária a emitir (comportamento alinhado com o esperado)."
+        if monitor_flag and not service_active:
+            return "⚠️ Monitor activou fallback, mas o serviço systemd está parado."
+        if (not monitor_flag) and service_active:
+            return "⚠️ Serviço systemd activo, mas monitor ainda aponta para o primário."
+        return "⚠️ Heartbeats ausentes sugerem fallback activo, mas nem monitor nem serviço estão a emitir."
+    if (not monitor_flag) and (not service_active):
         return "✅ URL secundária parada conforme esperado."
-    if expect_active and (not secondary_active):
-        return "⚠️ Heartbeats ausentes sugerem fallback ativo, mas serviço parece parado."
-    return "⚠️ Heartbeats presentes sugerem fallback desligado, mas serviço aparenta ativo."
+    if (not monitor_flag) and service_active:
+        return "⚠️ Serviço systemd activo apesar de o monitor indicar fallback desligado."
+    if monitor_flag and (not service_active):
+        return "⚠️ Monitor sinaliza fallback activo, mas o serviço systemd está parado."
+    return "⚠️ Heartbeats presentes sugerem fallback desligado, mas tudo indica que continua activo."
 
 
 def pretty_duration(seconds: float) -> str:
@@ -247,6 +262,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     intervals = summarise_intervals(entries)
     fallback_flag = bool(final_snapshot.get("fallback_active"))
     systemctl_output, systemctl_rc = systemctl_state(args.service)
+    service_active = is_service_active(systemctl_output, systemctl_rc)
 
     print()
     print("== Resultados ==")
@@ -277,7 +293,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             % systemctl_rc
         )
 
-    verdict = final_verdict(fallback_flag, systemctl_output, expect_active)
+    verdict = final_verdict(fallback_flag, service_active, expect_active)
     print(verdict)
 
     if total:
