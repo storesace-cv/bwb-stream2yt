@@ -11,7 +11,7 @@ Pipeline redundante para transmissão para o YouTube do canal **BeachCam | Praia
 O sistema automatiza o fluxo RTSP → YouTube, garantindo resiliência através de duas cadeias de transmissão:
 
 - **Transmissão principal (Windows):** envia o RTSP (ou DirectShow) diretamente para a URL primária do YouTube.
-- **Fallback secundário (Droplet Linux):** mantém serviços de imagem e texto, comutados automaticamente por um monitor HTTP (`bwb-status-monitor`) que reage aos heartbeats enviados pelo primário.
+- **Fallback secundário (Droplet Linux):** mantém serviços de imagem e texto, comutados automaticamente pelo serviço `yt-restapi` (monitor HTTP) que reage aos heartbeats enviados pelo primário.
 - **Integração com a API do YouTube:** continua disponível via scripts auxiliares (`yt_api_probe_once.py`), mas a decisão de failover é agora feita exclusivamente com base na comunicação entre emissor e droplet.
 
 ## Componentes principais

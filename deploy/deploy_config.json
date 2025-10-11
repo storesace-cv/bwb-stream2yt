@@ -32,8 +32,8 @@
       "mode": "755"
     },
     {
-      "local": "secondary-droplet/systemd/bwb-status-monitor.service",
-      "remote": "/etc/systemd/system/bwb-status-monitor.service",
+      "local": "secondary-droplet/systemd/yt-restapi.service",
+      "remote": "/etc/systemd/system/yt-restapi.service",
       "mode": "644"
     },
     {

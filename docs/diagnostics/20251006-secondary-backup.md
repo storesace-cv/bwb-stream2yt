@@ -1,14 +1,14 @@
 # Diagnóstico 2025-10-06 — Falha no envio pela URL secundária do YouTube
 
-> **Nota histórica:** este relatório descreve a arquitectura anterior baseada no `yt-decider-daemon`. Após a migração para o `bwb-status-monitor`, substitua mentalmente as referências a esse serviço quando aplicar recomendações em ambientes actuais.
+> **Nota histórica:** este relatório descreve a arquitectura anterior baseada no `yt-decider-daemon`. Após a migração para o serviço `yt-restapi` (que executa `bwb_status_monitor.py`), substitua mentalmente as referências a esse serviço quando aplicar recomendações em ambientes actuais.
 
 Fonte: [`diags/history/diagnostics-antes-restart-20251006-002341Z.txt`](../../diags/history/diagnostics-antes-restart-20251006-002341Z.txt)
 
 ## Resumo
 - O `youtube-fallback.service`, responsável por enviar o slate para a URL secundária, está a ser terminado repetidamente pelo OOM killer (código de saída 137) e por falhas subsequentes do `ffmpeg` logo após o reinício.
 - A máquina analisada tem apenas 957 MiB de RAM disponível e **sem swap**, com ~412 MiB já utilizados no momento da recolha, o que deixa pouca margem para o `ffmpeg` operar de forma estável.
-- A queda do serviço secundário coincide temporalmente com falhas no `yt-decider-daemon`, que não consegue contactar `oauth2.googleapis.com` (falhas DNS temporárias) para renovar as credenciais, impedindo qualquer automatização de recuperação. (Na arquitectura recente, o `bwb-status-monitor` não depende da API do YouTube, mas continua a necessitar de conectividade com o emissor primário.)
-- O mini-projecto **ytc-web** é independente destes serviços de fallback; na época, `yt-decider-daemon` e `youtube-fallback` integravam a infraestrutura de emissão secundária e deviam permanecer activos mesmo quando o backend web estava em manutenção. Hoje o `bwb-status-monitor` substitui o decider.
+- A queda do serviço secundário coincide temporalmente com falhas no `yt-decider-daemon`, que não consegue contactar `oauth2.googleapis.com` (falhas DNS temporárias) para renovar as credenciais, impedindo qualquer automatização de recuperação. (Na arquitectura recente, o serviço `yt-restapi` não depende da API do YouTube, mas continua a necessitar de conectividade com o emissor primário.)
+- O mini-projecto **ytc-web** é independente destes serviços de fallback; na época, `yt-decider-daemon` e `youtube-fallback` integravam a infraestrutura de emissão secundária e deviam permanecer activos mesmo quando o backend web estava em manutenção. Hoje o serviço `yt-restapi` substitui o decider.
 
 ## Evidências principais
 
@@ -32,8 +32,8 @@ Fonte: [`diags/history/diagnostics-antes-restart-20251006-002341Z.txt`](../../di
    - Caso o consumo continue elevado, ajustar o `ffmpeg` para um perfil mais leve (por exemplo, reduzir `-b:v` ou resolução) e acompanhar o impacto em `/run/youtube-fallback.progress`.
 2. **Verificar conectividade DNS/Internet**
    - Validar resolução DNS para `oauth2.googleapis.com` com `dig`/`systemd-resolve`; se falhar, rever os servidores DNS configurados e garantir que a firewall (ou `ufw`) permite saídas TCP/443.
-   - Assim que a conectividade for restabelecida, forçar a renovação das credenciais (`systemctl restart yt-decider-daemon`) e monitorizar `journalctl -u yt-decider-daemon` em busca de novos erros. (Em instalações actuais, valide antes se o `bwb-status-monitor.service` permanece activo e a receber heartbeats.)
+   - Assim que a conectividade for restabelecida, forçar a renovação das credenciais (`systemctl restart yt-decider-daemon`) e monitorizar `journalctl -u yt-decider-daemon` em busca de novos erros. (Em instalações actuais, valide antes se o `yt-restapi.service` permanece activo e a receber heartbeats.)
 3. **Monitorizar recuperação automática**
-   - Utilizar `systemctl status youtube-fallback yt-decider-daemon` para confirmar que ambos os serviços permanecem activos durante pelo menos 10–15 minutos após as correcções (substitua por `bwb-status-monitor` nas versões actuais).
+   - Utilizar `systemctl status youtube-fallback yt-decider-daemon` para confirmar que ambos os serviços permanecem activos durante pelo menos 10–15 minutos após as correcções (substitua por `yt-restapi` nas versões actuais).
    - Adicionar alarmes em `prometheus`/`grafana` (ou scripts existentes) para alertar sobre novos eventos do OOM killer e falhas de DNS, evitando regressões futuras.
 

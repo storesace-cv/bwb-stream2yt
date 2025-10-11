@@ -10,12 +10,12 @@ ss -tnp | grep -Ei 'youtube|rtmps|ffmpeg' || pgrep -fa ffmpeg
 
 ## Monitor de heartbeats do primário
 
-O serviço `bwb-status-monitor.service` recebe relatórios do Windows e aciona o
+O serviço `yt-restapi.service` recebe relatórios do Windows e aciona o
 fallback quando necessário.
 
 ```
-systemctl status bwb-status-monitor --no-pager -l
-journalctl -u bwb-status-monitor -n 50 -l
+systemctl status yt-restapi --no-pager -l
+journalctl -u yt-restapi -n 50 -l
 tail -n 20 /var/log/bwb_status_monitor.log
 cat /var/lib/bwb-status-monitor/status.json
 ```

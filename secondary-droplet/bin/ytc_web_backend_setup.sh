@@ -8,11 +8,16 @@ SYSTEMD_SRC="/root/bwb-stream2yt/secondary-droplet/systemd/ytc-web-backend.servi
 SYSTEMD_DEST="/etc/systemd/system/ytc-web-backend.service"
 ENV_FILE="/etc/ytc-web-backend.env"
 BACKEND_PORT="${YTC_WEB_BACKEND_PORT:-8081}"
-FIREWALL_IP="${YTC_WEB_ALLOWED_IP:-94.46.15.210}"
+FIREWALL_IP="${YTC_WEB_ALLOWED_IP:-}"
 
 log() {
     echo "[ytc-web-backend-setup] $*"
 }
+
+if [[ -z "${FIREWALL_IP}" ]]; then
+    log "Variável YTC_WEB_ALLOWED_IP ausente; defina o IP autorizado antes de prosseguir (ex.: export YTC_WEB_ALLOWED_IP=1.2.3.4)"
+    exit 1
+fi
 
 install -d -m 755 "${APP_DEST}" "${APP_DEST}/app"
 

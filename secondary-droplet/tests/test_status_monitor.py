@@ -1,7 +1,10 @@
 import datetime as dt
 import errno
+import http.client
 import importlib.util
+import json
 import sys
+import threading
 from types import SimpleNamespace
 from pathlib import Path
 
@@ -123,3 +126,69 @@ def test_run_server_handles_address_in_use(tmp_path: Path, monkeypatch, caplog):
 
     assert excinfo.value.code == 1
     assert any("já está em uso" in message for message in caplog.messages)
+
+
+def test_monitor_settings_accepts_ytr_env(monkeypatch):
+    monkeypatch.setenv("YTR_TOKEN", "supersecret")
+    monkeypatch.setenv("YTR_REQUIRE_TOKEN", "1")
+    monkeypatch.setenv("YTR_PORT", "9090")
+    monkeypatch.setenv("YTR_SECONDARY_SERVICE", "custom.service")
+
+    settings = MonitorSettings.from_env()
+
+    assert settings.auth_token == "supersecret"
+    assert settings.require_token is True
+    assert settings.port == 9090
+    assert settings.secondary_service == "custom.service"
+
+
+def test_post_requires_bearer_token(tmp_path: Path):
+    settings = MonitorSettings(
+        history_seconds=60,
+        missed_threshold=2,
+        recovery_reports=2,
+        check_interval=1,
+        state_file=tmp_path / "status.json",
+        log_file=tmp_path / "monitor.log",
+        auth_token="topsecret",
+        require_token=True,
+    )
+    monitor = StatusMonitor(settings=settings, service_manager=DummyServiceManager())
+    server = status_monitor.StatusHTTPServer(
+        ("127.0.0.1", 0), status_monitor.StatusHTTPRequestHandler, monitor
+    )
+    port = server.server_address[1]
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", port)
+        conn.request(
+            "POST",
+            "/status",
+            body=json.dumps({"machine_id": "PC-1"}),
+            headers={"Content-Type": "application/json"},
+        )
+        response = conn.getresponse()
+        assert response.status == 403
+        response.read()
+        conn.close()
+
+        conn = http.client.HTTPConnection("127.0.0.1", port)
+        conn.request(
+            "POST",
+            "/status",
+            body=json.dumps({"machine_id": "PC-1"}),
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": "Bearer topsecret",
+            },
+        )
+        response = conn.getresponse()
+        payload = json.loads(response.read().decode("utf-8"))
+        assert response.status == 200
+        assert payload["ok"] is True
+        conn.close()
+    finally:
+        server.shutdown()
+        thread.join(timeout=1)
+        monitor.shutdown()

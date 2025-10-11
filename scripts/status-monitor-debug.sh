@@ -5,10 +5,10 @@
 
 set -euo pipefail
 
-SERVICE="bwb-status-monitor"
+SERVICE="yt-restapi.service"
 LOGFILE="/var/log/bwb_status_monitor.log"
 STATE_FILE="/var/lib/bwb-status-monitor/status.json"
-ENV_FILE="/etc/bwb-status-monitor.env"
+ENV_FILE="/etc/yt-restapi.env"
 WINDOW="${STATUS_MONITOR_WINDOW:-48 hours}"
 ENDPOINT="${STATUS_MONITOR_ENDPOINT:-http://127.0.0.1:8080/status}"
 TZ=UTC export TZ
@@ -33,7 +33,7 @@ sanitize_env_file() {
     echo "(${ENV_FILE} não existe)"
     return
   fi
-  sed -E 's/(BWB_STATUS_TOKEN=).*/\1<redacted>/' "${ENV_FILE}"
+  sed -E 's/((YTR_TOKEN|BWB_STATUS_TOKEN)=).*/\1<redacted>/' "${ENV_FILE}"
 }
 
 fetch_endpoint() {

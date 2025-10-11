@@ -24,7 +24,7 @@ Two-module setup:
   ```bash
   sudo systemctl daemon-reload
   sudo systemctl enable youtube-fallback.service
-  sudo systemctl enable --now bwb-status-monitor.service
+  sudo systemctl enable --now yt-restapi.service
   sudo systemctl enable --now ensure-broadcast.timer
   ```
 
@@ -49,7 +49,7 @@ secondary-droplet/
     youtube-fallback.env.example
   systemd/
     youtube-fallback.service
-    bwb-status-monitor.service
+    yt-restapi.service
   tools/
     regen_token.py
 
