@@ -1,66 +1,39 @@
-# BWB Stream2YT
+# Guia rápido da documentação
 
-Two-module setup:
-- `primary-windows/` → streams camera to **YouTube Primary** (Windows).
-- `secondary-droplet/` → backup slate stream to **YouTube Backup** (Linux, DigitalOcean).
+Este índice agrupa todos os materiais de apoio por tema. Use os links abaixo para chegar rapidamente ao documento certo consoante a tarefa em mãos.
 
-> The `docs/` folder also ships `youtube-data-api.v3.discovery.json`, an offline copy of the YouTube Data API discovery document for tooling without external network access.
+## 1. Visão geral e arquitectura
+- [README](../README.md): visão macro do projecto e avisos operacionais.
+- [ARCHITECTURE.md](../ARCHITECTURE.md): redundância entre emissor Windows e fallback Linux.
+- [PROJECT_OVERVIEW.md](PROJECT_OVERVIEW.md): narrativa funcional e papéis de cada módulo.
 
-## Quick start
+## 2. Configuração e deploy
+- [DEPLOY.md](../DEPLOY.md): preparar a droplet secundária e automatizar sincronizações.
+- [docs/primary-windows-instalacao.md](primary-windows-instalacao.md): instalar o emissor principal em Windows.
+- [deploy/](../deploy): scripts Python para `rsync`/SSH, com exemplos de `--dry-run`.
+- [start.sh](../start.sh) e [update_from_main.sh](../update_from_main.sh): atalhos internos para bootstrap/actualizações locais.
 
-### Primary (Windows)
+## 3. Operações do dia a dia
+- [OPERATIONS.md](../OPERATIONS.md): comandos de verificação rápida (serviços, logs, reset da droplet).
+- [OPERATIONS_CHECKLIST.md](OPERATIONS_CHECKLIST.md): checklist sequencial para handovers ou turnos.
+- [REGRAS_URL_SECUNDARIA.md](REGRAS_URL_SECUNDARIA.md): políticas para mexer na URL de backup.
 
-- 📘 Consulte o [guia completo de instalação no Windows](primary-windows-instalacao.md#2-executável-distribuído) para seguir o fluxo recomendado com o executável distribuído.
+## 4. Diagnósticos e histórico
+- [diagnósticos.md](diagnósticos.md): linha temporal dos scripts de diagnóstico e quando usar cada um.
+- [diagnostics/](diagnostics): relatórios pós-incidente e guias específicos (logs do fallback, capturas do monitor, etc.).
+- [diags/README.md](../diags/README.md): referência de baixo nível para os scripts Python de recolha.
 
-1. Posicione `stream_to_youtube.exe` em `C:\myapps\` e mantenha o FFmpeg em `C:\bwb\ffmpeg\bin\ffmpeg.exe`.
-2. Crie um `.env` ao lado do executável com `YT_KEY=<CHAVE_DO_STREAM>` (e, se necessário, `YT_URL` ou um caminho alternativo para `FFMPEG`; para usar outro diretório basta sobrescrever essa variável no `.env`).
-3. Rode `stream_to_youtube.exe` a partir desse diretório e verifique os logs em `C:\myapps\logs\bwb_services.log`.
-4. (Opcional) Para manutenção via código-fonte ou geração de novos builds, siga as seções 3 e 4 do mesmo guia.
+## 5. Desenvolvimento e qualidade
+- [CODING_GUIDE.md](CODING_GUIDE.md): convenções de código e boas práticas para contribuições.
+- [CODER_GUIDE.md](../CODER_GUIDE.md) e [CODEX_PROMPT.md](CODEX_PROMPT.md): suporte ao fluxo de trabalho assistido por IA.
+- [tests/](../tests): suites de validação automatizada (pytest) usadas no fallback.
+- [requirements-dev.txt](../requirements-dev.txt) e [pyproject.toml](../pyproject.toml): dependências para lint/format.
 
-### Secondary (Droplet)
-1. Defaults ship in `/usr/local/config/youtube-fallback.defaults`; adjust there if the standard slate settings need to change.
-2. Put stream key in `/etc/youtube-fallback.env` (`YT_KEY="..."`). O `post_deploy.sh` reescreve este ficheiro preservando `YT_KEY` e restaurando as linhas comentadas com os defaults para referência — use-o apenas para segredos ou overrides conscientes.
-2. Install units & scripts from `secondary-droplet/` and run:
-  ```bash
-  sudo systemctl daemon-reload
-  sudo systemctl enable youtube-fallback.service
-  sudo systemctl enable --now yt-restapi.service
-  sudo systemctl enable --now ensure-broadcast.timer
-  ```
+## 6. Segurança e conformidade
+- [SECURITY.md](../SECURITY.md): política de segredos, gestão de acessos e protecção de logs.
+- [OPERATIONS_CHECKLIST.md](OPERATIONS_CHECKLIST.md): secção final com lembretes de segurança antes de fechar um turno.
 
-### Deploy tool
-- Configure `deploy/deploy_config.json` with SSH user/identity.
-- Run: `python3 deploy/update_droplet.py --dry-run` then without `--dry-run` to apply.
-
-
-## Folder structure
-
-```
-primary-windows/
-  src/
-    stream_to_youtube.py
-secondary-droplet/
-  bin/
-    youtube_fallback.sh
-    bwb_status_monitor.py
-    yt_api_probe_once.py
-  config/
-    youtube-fallback.defaults
-    youtube-fallback.env.example
-  systemd/
-    youtube-fallback.service
-    yt-restapi.service
-  tools/
-    regen_token.py
-
-deploy/
-  update_droplet.py
-  deploy_config.json
-
-docs/
-  PROJECT_OVERVIEW.md
-  CODING_GUIDE.md
-  CODEX_PROMPT.md
-  OPERATIONS_CHECKLIST.md
-  youtube-data-api.v3.discovery.json
-```
+## 7. Referências complementares
+- [OPERATIONS.md](../OPERATIONS.md): secção de testes, lint e scripts auxiliares.
+- [docs/bwb-sty_Apresentacao de trabalho - Cliente.md](bwb-sty_Apresentacao%20de%20trabalho%20-%20Cliente.md): apresentação executiva do projecto.
+- [youtube-data-api.v3.discovery.json](youtube-data-api.v3.discovery.json): ficheiro offline para chamadas manuais à API do YouTube.

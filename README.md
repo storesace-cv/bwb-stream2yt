@@ -21,6 +21,18 @@ O sistema automatiza o fluxo RTSP → YouTube, garantindo resiliência através 
 - **scripts/** – utilitários de deploy/atualização para o droplet via SSH/rsync.
 - **docs/** – documentação complementar (visão geral, guias de codificação e prompts de suporte).
 
+## Documentação reorganizada
+
+O conteúdo está agora agrupado por tema para acelerar a navegação:
+
+- **Mapa geral:** [`docs/README.md`](docs/README.md) apresenta o índice completo e descreve em que momento consultar cada documento.
+- **Visão geral e arquitectura:** [`ARCHITECTURE.md`](ARCHITECTURE.md) e [`docs/PROJECT_OVERVIEW.md`](docs/PROJECT_OVERVIEW.md) detalham a redundância entre emissor primário e fallback.
+- **Configuração e deploy:** [`DEPLOY.md`](DEPLOY.md), [`docs/primary-windows-instalacao.md`](docs/primary-windows-instalacao.md) e [`deploy/`](deploy) cobrem requisitos, variáveis de ambiente e fluxo de publicação.
+- **Operações do dia a dia:** [`OPERATIONS.md`](OPERATIONS.md), [`docs/OPERATIONS_CHECKLIST.md`](docs/OPERATIONS_CHECKLIST.md) e [`docs/REGRAS_URL_SECUNDARIA.md`](docs/REGRAS_URL_SECUNDARIA.md) consolidam verificações, rotinas e políticas de mudança.
+- **Diagnósticos e troubleshooting:** [`docs/diagnósticos.md`](docs/diagn%C3%B3sticos.md) resume a evolução dos scripts e aponta para relatórios históricos em [`docs/diagnostics/`](docs/diagnostics).
+- **Desenvolvimento e qualidade:** [`docs/CODING_GUIDE.md`](docs/CODING_GUIDE.md), [`CODER_GUIDE.md`](CODER_GUIDE.md) e [`tests/`](tests) documentam padrões de código, prompts de suporte e suites automatizadas.
+- **Segurança e governança:** [`SECURITY.md`](SECURITY.md) e [`docs/OPERATIONS_CHECKLIST.md`](docs/OPERATIONS_CHECKLIST.md) listam salvaguardas para credenciais e acessos.
+
 ## Estrutura do repositório
 
 ```
