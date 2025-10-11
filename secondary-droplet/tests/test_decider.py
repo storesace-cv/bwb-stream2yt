@@ -149,6 +149,25 @@ def test_daytime_primary_ok_stops_secondary(monkeypatch):
     assert fields[5] == "day primary OK"
 
 
+def test_daytime_primary_warning_stops_secondary(monkeypatch):
+    scenarios = [
+        {
+            "state": {"streamStatus": "active", "health": "warning", "note": ""},
+            "hour": 9,
+            "fallback_active": True,
+        }
+        for _ in range(decider.STOP_OK_STREAK)
+    ]
+
+    result = run_cycles(monkeypatch, scenarios)
+
+    assert result["stop_calls"] == 1
+    assert result["start_calls"] == 0
+    fields = _extract_decision_fields(result)
+    assert fields[4] == "STOP secondary"
+    assert fields[5] == "day primary OK"
+
+
 def test_daytime_without_primary_starts_secondary(monkeypatch):
     scenarios = [
         {
@@ -202,6 +221,25 @@ def test_daytime_health_revoked_starts_secondary(monkeypatch):
     fields = _extract_decision_fields(result)
     assert fields[4] == "START secondary"
     assert fields[5] == "day but no primary"
+
+
+def test_daytime_warning_does_not_start_secondary(monkeypatch):
+    scenarios = [
+        {
+            "state": {"streamStatus": "active", "health": "warning", "note": ""},
+            "hour": 13,
+            "fallback_active": False,
+        }
+        for _ in range(decider.START_BAD_STREAK)
+    ]
+
+    result = run_cycles(monkeypatch, scenarios)
+
+    assert result["start_calls"] == 0
+    assert result["stop_calls"] == 0
+    fields = _extract_decision_fields(result)
+    assert fields[4] == "KEEP"
+    assert "aguardar" in fields[5]
 
 
 def test_night_without_primary_starts_secondary(monkeypatch):
