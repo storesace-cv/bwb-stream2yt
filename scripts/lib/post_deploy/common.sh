@@ -225,6 +225,40 @@ ENVEOF
     log "Monitor de status ativo em ${state_dir}"
 }
 
+setup_youtube_fallback_watcher() {
+    local base_dir=$1
+
+    log "Instalando watcher de fallback do YouTube"
+
+    ensure_installed_file "${base_dir}/bin/youtube_fallback_watcher.py" \
+        /usr/local/bin/youtube_fallback_watcher.py 755
+
+    if [[ -f "/etc/youtube-fallback-watcher.conf" ]]; then
+        log "Configuração existente detectada em /etc/youtube-fallback-watcher.conf; mantendo ficheiro atual."
+    else
+        ensure_installed_file "${base_dir}/config/youtube-fallback-watcher.conf" \
+            /etc/youtube-fallback-watcher.conf 644
+    fi
+
+    ensure_installed_file "${base_dir}/systemd/youtube-fallback-watcher.service" \
+        /etc/systemd/system/youtube-fallback-watcher.service 644
+
+    maybe_systemctl_daemon_reload
+
+    if command -v systemctl >/dev/null 2>&1; then
+        if systemctl list-unit-files yt-comm-watcher.service >/dev/null 2>&1; then
+            log "Desativando watcher legado yt-comm-watcher.service"
+            systemctl disable --now yt-comm-watcher.service >/dev/null 2>&1 || true
+        fi
+
+        if ! systemctl enable --now youtube-fallback-watcher.service; then
+            log "Aviso: não foi possível ativar/arrancar youtube-fallback-watcher.service; consultar journalctl para detalhes."
+        fi
+    else
+        log "Aviso: systemctl indisponível; não foi possível ativar youtube-fallback-watcher.service"
+    fi
+}
+
 ensure_yt_restapi_sudoers() {
     local sudoers_file="/etc/sudoers.d/yt-restapi"
     local tmp
