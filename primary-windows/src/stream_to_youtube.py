@@ -10,6 +10,7 @@ import json
 import os
 import platform
 import shlex
+import shutil
 import signal
 import subprocess
 import sys
@@ -20,6 +21,7 @@ import urllib.request
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
+import textwrap
 from typing import Any, Callable, Dict, Optional
 
 from autotune import estimate_upload_bitrate
@@ -192,6 +194,7 @@ _STOP_SENTINEL_NAME = "stream_to_youtube.stop"
 _SIGNAL_HANDLERS_INSTALLED = False
 _ACTIVE_WORKER: Optional["StreamingWorker"] = None
 _CTRL_HANDLER_REF = None
+_FULL_DIAGNOSTICS_REQUESTED = False
 
 
 def _pid_file_path() -> Path:
@@ -432,6 +435,248 @@ def log_event(component: str, message: str) -> None:
             print(line.rstrip("\n"), flush=True)
         except OSError:
             pass
+
+
+def _mask_sensitive_arg(value: str) -> str:
+    sanitized = value
+    if "://" in sanitized and "@" in sanitized:
+        prefix, _, remainder = sanitized.partition("://")
+        credentials, sep, tail = remainder.partition("@")
+        if sep:
+            user, colon, _password = credentials.partition(":")
+            if colon:
+                masked_credentials = f"{user}:***" if user else "***"
+            else:
+                masked_credentials = f"{credentials}:***" if credentials else "***"
+            sanitized = f"{prefix}://{masked_credentials}@{tail}"
+        else:
+            sanitized = f"{prefix}://{remainder}"
+
+    lowered = sanitized.lower()
+    for marker in ("password=", "pass=", "pwd="):
+        idx = lowered.find(marker)
+        if idx == -1:
+            continue
+        end = sanitized.find("&", idx)
+        if end == -1:
+            end = len(sanitized)
+        sanitized = sanitized[: idx + len(marker)] + "***" + sanitized[end:]
+        lowered = sanitized.lower()
+    return sanitized
+
+
+def _describe_executable(candidate: str) -> str:
+    value = candidate.strip()
+    if not value:
+        return "não configurado"
+
+    path_candidate = Path(value)
+    try:
+        if path_candidate.exists():
+            try:
+                stats = path_candidate.stat()
+            except OSError as exc:
+                return f"{path_candidate} (inacessível: {exc})"
+            size = stats.st_size
+            return f"{path_candidate} (encontrado, tamanho={size} bytes)"
+
+        contains_sep = path_candidate.is_absolute() or any(
+            sep in value for sep in ("/", "\\")
+        )
+        if contains_sep:
+            return f"{path_candidate} (não encontrado)"
+    except OSError as exc:
+        return f"{value} (erro ao aceder: {exc})"
+
+    resolved = shutil.which(value)
+    if resolved:
+        return f"{value} (resolvido via PATH: {resolved})"
+    return f"{value} (não encontrado)"
+
+
+def _collect_full_diagnostics(config: "StreamingConfig") -> str:
+    generated_at = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc)
+    timestamp_text = generated_at.isoformat().replace("+00:00", "Z")
+
+    sanitized_input = [_mask_sensitive_arg(arg) for arg in config.input_args]
+    sanitized_output = [_mask_sensitive_arg(arg) for arg in config.output_args]
+
+    camera_snapshot: Dict[str, Any] = {}
+    camera_result: Optional[bool] = None
+    camera_error: Optional[str] = None
+    try:
+        monitor = CameraSignalMonitor(
+            config.camera_probe.ffprobe,
+            config.input_args,
+            config.camera_probe.interval,
+            config.camera_probe.timeout,
+            config.camera_probe.required,
+            log_fn=lambda *_args, **_kwargs: None,
+        )
+        camera_result = monitor.confirm_signal(force=True)
+        camera_snapshot = monitor.snapshot()
+        camera_error = camera_snapshot.get("last_error")
+    except Exception as exc:  # noqa: BLE001 - diagnostics must never abort
+        camera_snapshot = {"error": f"{exc.__class__.__name__}: {exc}"}
+        camera_error = str(exc)
+
+    ffmpeg_status = _describe_executable(config.ffmpeg)
+    ffprobe_status = _describe_executable(config.camera_probe.ffprobe)
+    inside_day_window = in_day_window(config)
+    stop_active = _stop_request_active()
+
+    active_worker = _ACTIVE_WORKER
+    worker_snapshot: Optional[Dict[str, Any]] = None
+    worker_error: Optional[str] = None
+    if active_worker is not None:
+        try:
+            worker_snapshot = active_worker.status_snapshot()
+        except Exception as exc:  # noqa: BLE001
+            worker_error = f"{exc.__class__.__name__}: {exc}"
+
+    summary_lines = [
+        f"- YT ingest configurado: {'sim' if config.yt_url else 'não'}",
+        f"- ffmpeg: {ffmpeg_status}",
+        f"- ffprobe: {ffprobe_status}",
+        f"- Janela diurna neste instante: {'sim' if inside_day_window else 'não'}",
+        f"- Autotune: {'ativo' if config.autotune_enabled else 'desativado'}",
+        f"- Sentinela de paragem ativa: {'sim' if stop_active else 'não'}",
+    ]
+
+    if worker_snapshot is not None:
+        running = bool(worker_snapshot.get("thread_running")) or bool(
+            worker_snapshot.get("ffmpeg_running")
+        )
+        summary_lines.append(f"- Worker em execução: {'sim' if running else 'não'}")
+    elif active_worker is None:
+        summary_lines.append("- Worker em execução: não inicializado")
+    elif worker_error:
+        summary_lines.append(
+            f"- Worker em execução: desconhecido ({worker_error})"
+        )
+
+    if camera_result is True:
+        detail = camera_snapshot.get("last_success") or "último probe bem-sucedido desconhecido"
+        summary_lines.append(f"- Sinal da câmara: disponível (último sucesso: {detail})")
+    elif camera_result is False:
+        detail = camera_error or "motivo desconhecido"
+        summary_lines.append(f"- Sinal da câmara: indisponível ({detail})")
+    else:
+        detail = camera_error or "ver secção abaixo"
+        summary_lines.append(f"- Sinal da câmara: não foi possível determinar ({detail})")
+
+    heartbeat_status = config.heartbeat
+    heartbeat_token_present = bool(heartbeat_status.token)
+
+    pid_path = _pid_file_path()
+    sentinel_path = _stop_sentinel_path()
+    log_path = _current_log_file()
+
+    lines: list[str] = [
+        "# Diagnóstico stream_to_youtube",
+        f"Gerado em: {timestamp_text}",
+        f"Versão da aplicação: {APP_VERSION}",
+        "",
+        "## Resumo",
+        *summary_lines,
+        "",
+        "## Configuração carregada",
+        f"- Resolução atual: {config.resolution}",
+        f"- Intervalo diário: {config.day_start_hour:02d}h–{config.day_end_hour:02d}h (UTC{'+' if config.tz_offset_hours >= 0 else ''}{config.tz_offset_hours})",
+        f"- Bitrate mínimo/máximo (kbps): {config.bitrate_min_kbps}/{config.bitrate_max_kbps}",
+        f"- Intervalo do autotune (s): {config.autotune_interval:.1f}",
+        f"- Margem de segurança do autotune: {config.autotune_safety_margin:.2f}",
+        f"- URL do YouTube presente: {'sim' if bool(config.yt_url) else 'não'}",
+        "- Argumentos de entrada (ffmpeg):",
+    ]
+
+    if sanitized_input:
+        lines.extend(f"  - {item}" for item in sanitized_input)
+    else:
+        lines.append("  - (nenhum argumento configurado)")
+
+    lines.append("- Argumentos de saída (ffmpeg):")
+    if sanitized_output:
+        lines.extend(f"  - {item}" for item in sanitized_output)
+    else:
+        lines.append("  - (nenhum argumento configurado)")
+
+    lines.extend(
+        [
+            "",
+            "## Caminhos e ficheiros",
+            f"- Ficheiro de log ativo: {log_path}",
+            f"- PID file: {pid_path} ({'existe' if pid_path.exists() else 'inexistente'})",
+            f"- Sentinela de paragem: {sentinel_path} ({'existe' if sentinel_path.exists() else 'inexistente'})",
+            f"- Heartbeat ativo: {'sim' if heartbeat_status.enabled else 'não'}",
+            f"- Endpoint do heartbeat: {heartbeat_status.endpoint or 'não configurado'}",
+            f"- Intervalo/timeout do heartbeat: {heartbeat_status.interval:.1f}s / {heartbeat_status.timeout:.1f}s",
+            f"- Machine ID configurado: {heartbeat_status.machine_id}",
+            f"- Token do heartbeat presente: {'sim' if heartbeat_token_present else 'não'}",
+            f"- Ficheiro de log do heartbeat: {heartbeat_status.log_path}",
+            "",
+            "## Sinal da câmara",
+            f"- Verificação obrigatória: {'sim' if config.camera_probe.required else 'não'}",
+            f"- Intervalo do probe (s): {config.camera_probe.interval:.1f}",
+            f"- Timeout do probe (s): {config.camera_probe.timeout:.1f}",
+            f"- Último erro registado: {camera_error or 'nenhum'}",
+            "Estado detalhado:",
+        ]
+    )
+
+    try:
+        snapshot_json = json.dumps(camera_snapshot, indent=2, ensure_ascii=False)
+    except TypeError:
+        snapshot_json = str(camera_snapshot)
+    lines.append("```")
+    lines.append(snapshot_json)
+    lines.append("```")
+
+    if worker_snapshot is not None:
+        lines.extend(["", "## Estado do worker ativo", "Estado detalhado:"])
+        try:
+            worker_json = json.dumps(worker_snapshot, indent=2, ensure_ascii=False)
+        except TypeError:
+            worker_json = str(worker_snapshot)
+        lines.append("```")
+        lines.append(worker_json)
+        lines.append("```")
+    elif worker_error:
+        lines.extend(
+            [
+                "",
+                "## Estado do worker ativo",
+                f"- Não foi possível recolher snapshot: {worker_error}",
+            ]
+        )
+
+    report = "\n".join(lines)
+    if not report.endswith("\n"):
+        report += "\n"
+    return report
+
+
+def _write_full_diagnostics(config: "StreamingConfig") -> None:
+    path = _script_base_dir() / "stream2yt-diags.txt"
+    try:
+        content = _collect_full_diagnostics(config)
+    except Exception as exc:  # noqa: BLE001
+        message = f"Falha ao gerar diagnóstico completo: {exc}"
+        print(f"[primary] {message}", file=sys.stderr)
+        log_event("primary", message)
+        return
+
+    try:
+        path.write_text(content, encoding="utf-8")
+    except OSError as exc:
+        message = f"Falha ao gravar diagnóstico completo ({exc})"
+        print(f"[primary] {message}", file=sys.stderr)
+        log_event("primary", message)
+        return
+
+    message = f"Diagnóstico completo registado em {path}"
+    print(f"[primary] {message}")
+    log_event("primary", message)
 
 
 def _load_env_template(base_dir: Path) -> str:
@@ -1803,7 +2048,9 @@ def run_forever(
         _clear_stop_request()
 
 
-def _start_streaming_instance(resolution: Optional[str] = None) -> int:
+def _start_streaming_instance(
+    resolution: Optional[str] = None, full_diagnostics: bool = False
+) -> int:
     try:
         _claim_pid_file()
     except RuntimeError as exc:
@@ -1820,6 +2067,8 @@ def _start_streaming_instance(resolution: Optional[str] = None) -> int:
     try:
         _ensure_signal_handlers()
         config = load_config(resolution=resolution)
+        if full_diagnostics:
+            _write_full_diagnostics(config)
         if not config.yt_url:
             message = "Credenciais YT_URL/YT_KEY ausentes; streaming worker finalizado."
             print(f"[primary] {message}", file=sys.stderr)
@@ -1907,7 +2156,7 @@ def main() -> None:
     if normalized_pairs and normalized_pairs[0][0] in {"--start", "--stop"}:
         command = normalized_pairs[0][0]
         extra_pairs = normalized_pairs[1:]
-    elif normalized_pairs and normalized_pairs[0][0] not in {"--showonscreen"}:
+    elif normalized_pairs and normalized_pairs[0][0] not in {"--showonscreen", "--fulldiags"}:
         message = f"Flag desconhecida: {normalized_pairs[0][1]}"
         print(f"[primary] {message}", file=sys.stderr)
         log_event("primary", message)
@@ -1915,6 +2164,7 @@ def main() -> None:
 
     show_on_screen = False
     resolution_arg: Optional[str] = None
+    full_diagnostics = False
 
     if command == "--stop":
         if extra_pairs:
@@ -1929,6 +2179,10 @@ def main() -> None:
     for normalized, raw in extra_pairs:
         if normalized == "--showonscreen":
             show_on_screen = True
+            continue
+
+        if normalized == "--fulldiags":
+            full_diagnostics = True
             continue
 
         if not normalized.startswith("--"):
@@ -1955,8 +2209,9 @@ def main() -> None:
 
         resolution_arg = normalized_resolution
 
-    global _SHOW_ON_SCREEN
+    global _SHOW_ON_SCREEN, _FULL_DIAGNOSTICS_REQUESTED
     _SHOW_ON_SCREEN = show_on_screen
+    _FULL_DIAGNOSTICS_REQUESTED = full_diagnostics
 
     if not show_on_screen:
         _minimize_console_window()
@@ -1966,7 +2221,15 @@ def main() -> None:
             "Flag --showonscreen ativa; exibindo logs em tempo real no console.",
         )
 
-    exit_code = _start_streaming_instance(resolution=resolution_arg)
+    if full_diagnostics:
+        log_event(
+            "primary",
+            "Flag --fulldiags ativa; relatório completo será gerado antes do arranque.",
+        )
+
+    exit_code = _start_streaming_instance(
+        resolution=resolution_arg, full_diagnostics=full_diagnostics
+    )
     sys.exit(exit_code)
 
 
