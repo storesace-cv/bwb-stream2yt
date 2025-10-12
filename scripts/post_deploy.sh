@@ -382,12 +382,12 @@ prepare_fallback_env() {
         done < "${env_link}"
     fi
 
+    if [[ -n "${existing_key}" ]]; then
+        existing_key="$(sanitize_stream_key "${existing_key}")"
+    fi
+
     if [[ -n "${existing_key}" && -z "${existing_url}" ]]; then
-        local sanitized
-        sanitized="$(sanitize_stream_key "${existing_key}")"
-        if [[ -n "${sanitized}" ]]; then
-            existing_url="rtmp://b.rtmp.youtube.com/live2?backup=1/${sanitized}"
-        fi
+        existing_url="rtmps://b.rtmps.youtube.com/live2?backup=1/${existing_key}"
     fi
 
     if [[ -f "${env_link}" && ! -L "${env_link}" ]]; then
@@ -409,7 +409,21 @@ prepare_fallback_env() {
             local escaped
             escaped="${existing_url//\\/\\\\}"
             escaped="${escaped//&/\\&}"
-            sed -i "s#^YT_URL=\".*\"#YT_URL=\"${escaped}\"#" "${tmp_profile}"
+            if grep -q '^YT_URL=' "${tmp_profile}"; then
+                sed -i "s#^YT_URL=.*#YT_URL=\"${escaped}\"#" "${tmp_profile}"
+            else
+                printf '\nYT_URL="%s"\n' "${existing_url}" >> "${tmp_profile}"
+            fi
+        fi
+        if [[ -n "${existing_key}" ]]; then
+            local escaped_key
+            escaped_key="${existing_key//\\/\\\\}"
+            escaped_key="${escaped_key//&/\\&}"
+            if grep -q '^YT_KEY=' "${tmp_profile}"; then
+                sed -i "s#^YT_KEY=.*#YT_KEY=\"${escaped_key}\"#" "${tmp_profile}"
+            else
+                printf 'YT_KEY="%s"\n' "${existing_key}" >> "${tmp_profile}"
+            fi
         fi
         install -m 644 -o root -g root "${tmp_profile}" "${env_dir}/${profile_name}"
         rm -f "${tmp_profile}"

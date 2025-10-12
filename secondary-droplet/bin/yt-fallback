@@ -9,8 +9,47 @@ CLI_NAME="yt-fallback"
 usage() {
   cat <<USAGE
 uso: ${CLI_NAME} set {life|bars} | current | status
+
+Perfis devem definir YT_URL completo ou YT_KEY (para gerar a URL automaticamente).
 USAGE
   exit 1
+}
+
+clean_env_value() {
+  local value="$1"
+  value="$(printf '%s' "$value" | tr -d '\r\n\t')"
+  value="${value#\"}"
+  value="${value%\"}"
+  value="${value#\'}"
+  value="${value%\'}"
+  printf '%s' "$value"
+}
+
+profile_has_stream_config() {
+  local env_file="$1" line
+  local has_url=0 has_key=0
+
+  while IFS= read -r line; do
+    case "$line" in
+      YT_URL=*)
+        if [[ -n "$(clean_env_value "${line#*=}")" ]]; then
+          has_url=1
+        fi
+        ;;
+      YT_KEY=*)
+        if [[ -n "$(clean_env_value "${line#*=}")" ]]; then
+          has_key=1
+        fi
+        ;;
+    esac
+  done < "$env_file"
+
+  if (( has_url == 0 && has_key == 0 )); then
+    echo "${CLI_NAME}: perfil ${env_file} não define YT_URL nem YT_KEY." >&2
+    return 1
+  fi
+
+  return 0
 }
 
 need_sudo() {
@@ -55,6 +94,10 @@ set_profile() {
   if [[ ! -f "${target}" ]]; then
     echo "${CLI_NAME}: perfil desconhecido: ${profile}" >&2
     exit 2
+  fi
+
+  if ! profile_has_stream_config "${target}"; then
+    exit 3
   fi
 
   run_ln -sfn "${target}" "${ENV_LINK}"
