@@ -142,8 +142,8 @@ else
         log "Swapfile ${swapfile} ativo."
     }
 
-    ensure_python_venv() {
-        local python_bin=${PYTHON_BIN:-python3}
+ensure_python_venv() {
+    local python_bin=${PYTHON_BIN:-python3}
         if "${python_bin}" -m ensurepip --help >/dev/null 2>&1; then
             log "python3 venv disponível; nenhum pacote adicional necessário."
             return
@@ -254,7 +254,10 @@ main() {
     pip3 install --no-cache-dir -r "${secondary_dir}/requirements.txt"
 
     ensure_installed_file "${secondary_dir}/bin/youtube_fallback.sh" /usr/local/bin/youtube_fallback.sh 755
+    ensure_installed_file "${secondary_dir}/bin/yt-fallback" /usr/local/bin/yt-fallback 755
+    ensure_installed_file "${secondary_dir}/bin/yt-comm-watcher.sh" /usr/local/bin/yt-comm-watcher.sh 755
     ensure_installed_file "${secondary_dir}/systemd/youtube-fallback.service" /etc/systemd/system/youtube-fallback.service 644
+    ensure_installed_file "${secondary_dir}/systemd/yt-comm-watcher.service" /etc/systemd/system/yt-comm-watcher.service 644
     ensure_installed_file "${secondary_dir}/bin/ensure_broadcast.py" /usr/local/bin/ensure_broadcast.py 755
     ensure_installed_file "${secondary_dir}/systemd/ensure-broadcast.service" /etc/systemd/system/ensure-broadcast.service 644
     ensure_installed_file "${secondary_dir}/systemd/ensure-broadcast.timer" /etc/systemd/system/ensure-broadcast.timer 644
@@ -264,43 +267,7 @@ main() {
     ensure_installed_file_optional "${SCRIPT_DIR}/reset_secondary_droplet.sh" /usr/local/bin/reset_secondary_droplet.sh 755
     ensure_installed_file_optional "${SCRIPT_DIR}/status-monitor-debug.sh" /usr/local/bin/status-monitor-debug.sh 755
 
-    local ENV_FILE="/etc/youtube-fallback.env"
-    local DEFAULTS_FILE="${secondary_dir}/config/youtube-fallback.defaults"
-
-    local existing_key=""
-    if [[ -f "${ENV_FILE}" ]]; then
-        while IFS= read -r line; do
-            case "${line}" in
-                YT_KEY=*)
-                    existing_key="${line#YT_KEY=}"
-                    ;;
-            esac
-        done < "${ENV_FILE}"
-    fi
-
-    if [[ -z "${existing_key}" ]]; then
-        existing_key='""'
-    fi
-
-    local tmp_env
-    tmp_env="$(mktemp)"
-    trap 'rm -f "${tmp_env}"' RETURN
-    {
-        echo "# /etc/youtube-fallback.env (managed by post_deploy.sh)"
-        echo "# Defaults live in /usr/local/config/youtube-fallback.defaults. Override only what you need here."
-        echo "YT_KEY=${existing_key}"
-        echo
-        echo "# Default parameters for reference:"
-        while IFS= read -r default_line; do
-            [[ -z "${default_line}" ]] && continue
-            [[ "${default_line}" =~ ^# ]] && continue
-            echo "#${default_line}"
-        done < "${DEFAULTS_FILE}"
-    } > "${tmp_env}"
-
-    install -m 644 -o root -g root "${tmp_env}" "${ENV_FILE}"
-    trap - RETURN
-    rm -f "${tmp_env}"
+    prepare_fallback_env "${secondary_dir}"
 
     maybe_systemctl_daemon_reload
 
@@ -345,6 +312,126 @@ main() {
     if command -v deactivate >/dev/null 2>&1; then
         deactivate
     fi
+}
+
+clean_env_value() {
+    local value="$1"
+    value="$(printf '%s' "$value" | tr -d '\r\n\t')"
+    value="${value#\"}"
+    value="${value%\"}"
+    value="${value#\'}"
+    value="${value%\'}"
+    echo "$value"
+}
+
+sanitize_stream_key() {
+    local key
+    key="$(clean_env_value "$1")"
+    key="${key// /}"
+    key="${key//\?backup=1\/}"
+    key="${key//backup=1\/}"
+    key="${key//\?backup=1/}"
+    key="${key##*live2/}"
+    key="${key##*/}"
+    key="${key%%\?*}"
+    echo "$key"
+}
+
+prepare_fallback_env() {
+    local secondary_dir="$1"
+    local env_link="/etc/youtube-fallback.env"
+    local env_dir="/etc/youtube-fallback.d"
+    local src_dir="${secondary_dir}/config/youtube-fallback.d"
+    local drop_in_dir="/etc/systemd/system/youtube-fallback.service.d"
+    local existing_url=""
+    local existing_key=""
+    local current_target=""
+
+    if [[ -d "${drop_in_dir}" ]]; then
+        local legacy_removed=0
+        if [[ -f "${drop_in_dir}/override.conf" ]]; then
+            rm -f "${drop_in_dir}/override.conf"
+            log "Removido drop-in legacy ${drop_in_dir}/override.conf."
+            legacy_removed=1
+        fi
+        if rmdir "${drop_in_dir}" 2>/dev/null; then
+            log "Removido diretório vazio ${drop_in_dir}."
+        elif (( legacy_removed == 1 )); then
+            log "Drop-in legacy removido mas diretório ${drop_in_dir} mantido (continha outros ficheiros)."
+        fi
+    fi
+
+    if [[ -L "${env_link}" ]]; then
+        current_target="$(readlink -f "${env_link}" || true)"
+    fi
+
+    if [[ -f "${env_link}" && ! -L "${env_link}" ]]; then
+        while IFS= read -r line; do
+            case "${line}" in
+                YT_URL=*|YT_URL_BACKUP=*)
+                    if [[ -z "${existing_url}" ]]; then
+                        existing_url="$(clean_env_value "${line#*=}")"
+                    fi
+                    ;;
+                YT_KEY=*)
+                    if [[ -z "${existing_key}" ]]; then
+                        existing_key="$(clean_env_value "${line#*=}")"
+                    fi
+                    ;;
+            esac
+        done < "${env_link}"
+    fi
+
+    if [[ -n "${existing_key}" && -z "${existing_url}" ]]; then
+        local sanitized
+        sanitized="$(sanitize_stream_key "${existing_key}")"
+        if [[ -n "${sanitized}" ]]; then
+            existing_url="rtmp://b.rtmp.youtube.com/live2?backup=1/${sanitized}"
+        fi
+    fi
+
+    if [[ -f "${env_link}" && ! -L "${env_link}" ]]; then
+        local backup="${env_link}.legacy.$(date +%Y%m%d%H%M%S)"
+        mv "${env_link}" "${backup}"
+        log "Env legacy detetado; copiado para ${backup}."
+    fi
+
+    install -d -m 755 -o root -g root "${env_dir}"
+
+    for profile_path in "${src_dir}"/*.env; do
+        [[ -e "${profile_path}" ]] || continue
+        local profile_name
+        profile_name="$(basename "${profile_path}")"
+        local tmp_profile
+        tmp_profile="$(mktemp)"
+        cp "${profile_path}" "${tmp_profile}"
+        if [[ -n "${existing_url}" ]]; then
+            local escaped
+            escaped="${existing_url//\\/\\\\}"
+            escaped="${escaped//&/\\&}"
+            sed -i "s#^YT_URL=\".*\"#YT_URL=\"${escaped}\"#" "${tmp_profile}"
+        fi
+        install -m 644 -o root -g root "${tmp_profile}" "${env_dir}/${profile_name}"
+        rm -f "${tmp_profile}"
+    done
+
+    if [[ -z "${current_target}" || ! -e "${current_target}" ]]; then
+        current_target="${env_dir}/life.env"
+    fi
+
+    ln -sfn "${current_target}" "${env_link}"
+
+    local active_profile="life"
+    case "${current_target}" in
+        "${env_dir}/bars.env")
+            active_profile="bars"
+            ;;
+        "${env_dir}/life.env")
+            active_profile="life"
+            ;;
+    esac
+
+    log "Perfis do fallback instalados em ${env_dir} (ativo: ${active_profile})."
 }
 
 ensure_yt_restapi_sudoers() {

@@ -4,17 +4,12 @@
   "ssh_port": 2202,
   "ssh_key": "~/.ssh/id_rsa",
   "remote_prefix": "/",
-  "post_deploy_notes": "post_deploy.sh reescreve /etc/youtube-fallback.env preservando YT_KEY e restaurando os padrões comentados.",
+  "post_deploy_notes": "post_deploy.sh cria perfis em /etc/youtube-fallback.d e gere o symlink /etc/youtube-fallback.env via yt-fallback.",
   "sync_map": [
     {
       "local": "secondary-droplet/bin/youtube_fallback.sh",
       "remote": "/usr/local/bin/youtube_fallback.sh",
       "mode": "755"
-    },
-    {
-      "local": "secondary-droplet/config/youtube-fallback.defaults",
-      "remote": "/usr/local/config/youtube-fallback.defaults",
-      "mode": "644"
     },
     {
       "local": "secondary-droplet/bin/yt_api_probe_once.py",
@@ -35,12 +30,6 @@
       "local": "secondary-droplet/systemd/yt-restapi.service",
       "remote": "/etc/systemd/system/yt-restapi.service",
       "mode": "644"
-    },
-    {
-      "local": "secondary-droplet/config/youtube-fallback.env.example",
-      "remote": "/etc/youtube-fallback.env",
-      "mode": "644",
-      "if_missing_only": true
     },
     {
       "local": "secondary-droplet/config/logrotate/bwb-services",

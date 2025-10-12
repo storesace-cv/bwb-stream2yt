@@ -65,8 +65,7 @@ os seguintes blocos de informação:
 2. **Serviços principais**: estado e últimos registos (`journalctl`) das
    unidades `ytc-web-backend`, `yt-restapi` e `youtube-fallback`.
 3. **Ambiente**: conteúdos relevantes (com a chave `YT_KEY` mascarada) de
-   `/etc/youtube-fallback.env`, do ficheiro de defaults em
-   `/usr/local/config/youtube-fallback.defaults`, do progresso actual do
+  `/etc/youtube-fallback.env`, dos perfis em `/etc/youtube-fallback.d/`, do progresso actual do
    ffmpeg e do log partilhado em `/root/bwb_services.log`.
 4. **Repositório**: estado do Git para confirmar que a droplet está alinhada
    com o repositório.
@@ -74,7 +73,7 @@ os seguintes blocos de informação:
 ## Personalização
 
 - Use `--services` para acrescentar ou remover unidades `systemd`.
-- Use `--log-path`, `--env-path`, `--defaults-path` ou `--progress-path` caso o
+- Use `--log-path`, `--env-path`, `--profiles-dir` ou `--progress-path` caso o
   deployment utilize localizações alternativas.
 - A porta HTTP monitorizada é inferida a partir de `/etc/youtube-fallback.env`,
   podendo ser sobreposta com `--env-path` se necessário.

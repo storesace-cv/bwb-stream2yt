@@ -20,4 +20,4 @@
 
 ## Próximos passos
 - Após estabilizar os serviços, recolher novos logs (`journalctl -u youtube-fallback --since "-2h"`) e anexar à pasta `tests/droplet_logs/` para comparação histórica.
-- Documentar qualquer alteração de bitrate/resolução aplicada, para manter a configuração de produção alinhada com o repositório (`secondary-droplet/config/youtube-fallback.defaults`).
+- Documentar qualquer alteração de bitrate/resolução aplicada, para manter a configuração de produção alinhada com os perfis (`secondary-droplet/config/youtube-fallback.d/`).
