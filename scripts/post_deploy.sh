@@ -31,6 +31,17 @@ declare -i RESTART_ENSURE_BROADCAST=0
 declare -i RESTART_STATUS_MONITOR=0
 declare -i RESTART_WATCHER=0
 
+declare -a INFO_ITEMS=()
+declare -a USER_ACTIONS=()
+
+record_info() {
+    INFO_ITEMS+=("$1")
+}
+
+record_user_action() {
+    USER_ACTIONS+=("$1")
+}
+
 sync_file() {
     local source=$1
     local destination=$2
@@ -76,6 +87,7 @@ sync_optional_file() {
     if [[ -e "${source}" ]]; then
         sync_file "$@"
     else
+        SYNC_LAST_CHANGED=0
         log "Opcional ${source##*/} ausente; ignorado."
     fi
 }
@@ -184,6 +196,7 @@ install_python_dependencies() {
     pip3 install --no-cache-dir -r "${requirements_file}"
     printf '%s' "${current_hash}" > "${hash_file}"
     log "Dependências Python atualizadas."
+    record_info "Dependências Python do fallback atualizadas."
 }
 
 install_secondary_services() {
@@ -191,37 +204,48 @@ install_secondary_services() {
     sync_file "${SECONDARY_DIR}/bin/youtube_fallback.sh" /usr/local/bin/youtube_fallback.sh 755
     if (( SYNC_LAST_CHANGED )); then
         RESTART_YOUTUBE_FALLBACK=1
+        record_info "/usr/local/bin/youtube_fallback.sh atualizado."
     fi
 
     sync_file "${SECONDARY_DIR}/systemd/youtube-fallback.service" /etc/systemd/system/youtube-fallback.service 644
     if (( SYNC_LAST_CHANGED )); then
         NEED_SYSTEMD_RELOAD=1
         RESTART_YOUTUBE_FALLBACK=1
+        record_info "/etc/systemd/system/youtube-fallback.service atualizado."
     fi
 
     log "Sincronizando verificação automática de broadcast"
     sync_file "${SECONDARY_DIR}/bin/ensure_broadcast.py" /usr/local/bin/ensure_broadcast.py 755
     if (( SYNC_LAST_CHANGED )); then
         RESTART_ENSURE_BROADCAST=1
+        record_info "/usr/local/bin/ensure_broadcast.py atualizado."
     fi
 
     sync_file "${SECONDARY_DIR}/systemd/ensure-broadcast.service" /etc/systemd/system/ensure-broadcast.service 644
     if (( SYNC_LAST_CHANGED )); then
         NEED_SYSTEMD_RELOAD=1
         RESTART_ENSURE_BROADCAST=1
+        record_info "/etc/systemd/system/ensure-broadcast.service atualizado."
     fi
 
     sync_file "${SECONDARY_DIR}/systemd/ensure-broadcast.timer" /etc/systemd/system/ensure-broadcast.timer 644
     if (( SYNC_LAST_CHANGED )); then
         NEED_SYSTEMD_RELOAD=1
         RESTART_ENSURE_BROADCAST=1
+        record_info "/etc/systemd/system/ensure-broadcast.timer atualizado."
     fi
 }
 
 install_utilities() {
     log "Instalando utilitários administrativos"
     sync_optional_file "${SCRIPT_DIR}/reset_secondary_droplet.sh" /usr/local/bin/reset_secondary_droplet.sh 755
+    if (( SYNC_LAST_CHANGED )); then
+        record_info "/usr/local/bin/reset_secondary_droplet.sh atualizado."
+    fi
     sync_optional_file "${SCRIPT_DIR}/status-monitor-debug.sh" /usr/local/bin/status-monitor-debug.sh 755
+    if (( SYNC_LAST_CHANGED )); then
+        record_info "/usr/local/bin/status-monitor-debug.sh atualizado."
+    fi
 }
 
 update_fallback_env() {
@@ -257,6 +281,7 @@ update_fallback_env() {
     sync_file "${tmp_env}" "${env_file}" 644
     if (( SYNC_LAST_CHANGED )); then
         RESTART_YOUTUBE_FALLBACK=1
+        record_info "/etc/youtube-fallback.env atualizado."
     fi
 
     trap - RETURN
@@ -268,17 +293,20 @@ install_status_monitor() {
     sync_file "${SECONDARY_DIR}/bin/bwb_status_monitor.py" /usr/local/bin/bwb_status_monitor.py 755
     if (( SYNC_LAST_CHANGED )); then
         RESTART_STATUS_MONITOR=1
+        record_info "/usr/local/bin/bwb_status_monitor.py atualizado."
     fi
 
     sync_file "${SECONDARY_DIR}/systemd/yt-restapi.service" /etc/systemd/system/yt-restapi.service 644
     if (( SYNC_LAST_CHANGED )); then
         NEED_SYSTEMD_RELOAD=1
         RESTART_STATUS_MONITOR=1
+        record_info "/etc/systemd/system/yt-restapi.service atualizado."
     fi
 
     if ! id -u yt-restapi >/dev/null 2>&1; then
         useradd --system --no-create-home --shell /usr/sbin/nologin yt-restapi
         log "Utilizador yt-restapi criado"
+        record_info "Conta de sistema yt-restapi criada."
     fi
 
     local state_dir="/var/lib/bwb-status-monitor"
@@ -316,6 +344,7 @@ ENVEOF
         chmod 640 "${env_file}"
         chown yt-restapi:yt-restapi "${env_file}"
         log "Configuração padrão criada em ${env_file}"
+        record_info "/etc/yt-restapi.env criado."
     fi
 
     install_yt_restapi_sudoers
@@ -344,6 +373,7 @@ SUDOEOF
         else
             log "Aviso: visudo não encontrado; sudoers não foi validado automaticamente."
         fi
+        record_info "/etc/sudoers.d/yt-restapi atualizado."
     fi
 }
 
@@ -352,18 +382,21 @@ install_watcher() {
     sync_file "${SECONDARY_DIR}/bin/youtube_fallback_watcher.py" /usr/local/bin/youtube_fallback_watcher.py 755
     if (( SYNC_LAST_CHANGED )); then
         RESTART_WATCHER=1
+        record_info "/usr/local/bin/youtube_fallback_watcher.py atualizado."
     fi
 
     sync_file "${SECONDARY_DIR}/systemd/youtube-fallback-watcher.service" /etc/systemd/system/youtube-fallback-watcher.service 644
     if (( SYNC_LAST_CHANGED )); then
         NEED_SYSTEMD_RELOAD=1
         RESTART_WATCHER=1
+        record_info "/etc/systemd/system/youtube-fallback-watcher.service atualizado."
     fi
 
     local config_file="/etc/youtube-fallback-watcher.conf"
     if [[ ! -f "${config_file}" ]]; then
         sync_file "${SECONDARY_DIR}/config/youtube-fallback-watcher.conf" "${config_file}" 644
         log "Configuração padrão criada em ${config_file}"
+        record_info "/etc/youtube-fallback-watcher.conf criado."
     fi
 }
 
@@ -391,6 +424,7 @@ update_backend() {
     bash "${SECONDARY_DIR}/bin/ytc_web_backend_setup.sh"
     printf '%s' "${current_hash}" > "${state_file}"
     log "Configuração do backend do ytc-web atualizada."
+    record_info "Backend do ytc-web atualizado."
 }
 
 apply_systemd_changes() {
@@ -423,44 +457,42 @@ apply_systemd_changes() {
             restart_if_running youtube-fallback-watcher.service
         else
             log "Watcher youtube-fallback-watcher.service atualizado; ative manualmente se necessário."
+            record_user_action "Ativar youtube-fallback-watcher.service caso pretenda executar o watcher automaticamente."
         fi
     fi
 }
 
-main() {
-    log "Registando saída em ${LOG_FILE}"
+print_summary_block() {
+    local title=$1
+    shift || true
 
-    install_python_dependencies
-    install_secondary_services
-    install_utilities
-    update_fallback_env
-    install_status_monitor
-    install_watcher
-    update_backend
+    echo
+    echo "${title}"
+    local underline=""
+    local title_len=${#title}
+    for ((i = 0; i < title_len; i++)); do
+        underline+='='
+    done
+    printf '%s\n' "${underline}"
 
-    apply_systemd_changes
-
-    log "Atualização concluída."
-}
-
-update_backend() {
-    log "Preparando backend do ytc-web"
-    bash "${SECONDARY_DIR}/bin/ytc_web_backend_setup.sh"
-}
-
-apply_systemd_changes() {
-    systemd_reload
-    enable_service youtube-fallback.service
-    enable_service ensure-broadcast.timer
-    enable_service yt-restapi.service
-
-    if systemctl_available; then
-        if systemctl is-enabled --quiet youtube-fallback-watcher.service; then
-            restart_if_running youtube-fallback-watcher.service
+    if (($# == 0)); then
+        if [[ "${title}" == "BLOCO INFORMATIVO" ]]; then
+            echo "- Nenhuma alteração aplicada nesta execução."
         else
-            log "Watcher youtube-fallback-watcher.service instalado; ative manualmente se necessário."
+            echo "- Nenhuma ação pendente para o utilizador."
         fi
+        return
     fi
+
+    local item
+    for item in "$@"; do
+        echo "- ${item}"
+    done
+}
+
+print_summary_blocks() {
+    print_summary_block "BLOCO INFORMATIVO" "${INFO_ITEMS[@]}"
+    print_summary_block "ACÇÕES A TOMAR POR PARTE DO UTILIZADOR:" "${USER_ACTIONS[@]}"
 }
 
 main() {
@@ -477,6 +509,7 @@ main() {
     apply_systemd_changes
 
     log "Atualização concluída."
+    print_summary_blocks
 }
 
 main "$@"
