@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ENV_DIR="/etc/youtube-fallback.d"
+ENV_LINK="/etc/youtube-fallback.env"
+UNIT="youtube-fallback.service"
+CLI_NAME="yt-fallback"
+
+usage() {
+  cat <<USAGE
+uso: ${CLI_NAME} set {life|bars} | current | status
+USAGE
+  exit 1
+}
+
+need_sudo() {
+  if [[ ${EUID} -eq 0 ]]; then
+    return 1
+  fi
+  if ! command -v sudo >/dev/null 2>&1; then
+    echo "${CLI_NAME}: requer sudo ou execução como root." >&2
+    exit 1
+  fi
+  return 0
+}
+
+run_ln() {
+  if need_sudo; then
+    sudo -n ln "$@"
+  else
+    ln "$@"
+  fi
+}
+
+run_systemctl() {
+  local args=("$@")
+  if need_sudo; then
+    sudo -n systemctl "${args[@]}"
+  else
+    systemctl "${args[@]}"
+  fi
+}
+
+ensure_env_dir() {
+  if [[ ! -d "${ENV_DIR}" ]]; then
+    echo "${CLI_NAME}: directório ${ENV_DIR} não encontrado." >&2
+    exit 1
+  fi
+}
+
+set_profile() {
+  local profile="$1"
+  ensure_env_dir
+  local target="${ENV_DIR}/${profile}.env"
+  if [[ ! -f "${target}" ]]; then
+    echo "${CLI_NAME}: perfil desconhecido: ${profile}" >&2
+    exit 2
+  fi
+
+  run_ln -sfn "${target}" "${ENV_LINK}"
+  run_systemctl restart "${UNIT}"
+  echo "ok: perfil ativo = ${profile}"
+}
+
+current_profile() {
+  local target
+  if [[ -L "${ENV_LINK}" ]]; then
+    target="$(readlink -f "${ENV_LINK}" || true)"
+  elif [[ -f "${ENV_LINK}" ]]; then
+    target="${ENV_LINK}"
+  else
+    echo "desconhecido"
+    return 0
+  fi
+
+  case "${target}" in
+    "${ENV_DIR}/life.env")
+      echo "life"
+      ;;
+    "${ENV_DIR}/bars.env")
+      echo "bars"
+      ;;
+    *)
+      echo "desconhecido (${target})"
+      ;;
+  esac
+}
+
+cmd="${1:-}"; shift || true
+case "${cmd}" in
+  set)
+    profile="${1:-}"; shift || true
+    [[ -n "${profile}" ]] || usage
+    set_profile "${profile}"
+    ;;
+  current)
+    current_profile
+    ;;
+  status)
+    run_systemctl status "${UNIT}" --no-pager
+    ;;
+  *)
+    usage
+    ;;
+ esac

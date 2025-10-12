@@ -30,7 +30,7 @@ SERVICE_JOURNAL_ARGS = ("journalctl", "-o", "short-iso", "--no-pager")
 DEFAULT_LOG_PATH = Path("/root/bwb_services.log")
 DEFAULT_PROGRESS_PATH = Path("/run/youtube-fallback.progress")
 DEFAULT_ENV_PATH = Path("/etc/youtube-fallback.env")
-DEFAULT_CONFIG_PATH = Path("/usr/local/config/youtube-fallback.defaults")
+DEFAULT_PROFILES_DIR = Path("/etc/youtube-fallback.d")
 DEFAULT_HISTORY_DIR = Path(__file__).resolve().parent / "history"
 DEFAULT_REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_EXPECTED_PORT = 8081
@@ -280,8 +280,21 @@ def gather_environment_info(paths: Mapping[str, Path]) -> List[str]:
     env_content = mask_secret(load_file(paths["env"]))
     sections.append(f"--- {paths['env']} ---\n{env_content}".rstrip())
 
-    defaults_content = load_file(paths["defaults"])
-    sections.append(f"--- {paths['defaults']} ---\n{defaults_content}".rstrip())
+    profiles_dir = paths["profiles"]
+    if profiles_dir.is_dir():
+        profile_sections: List[str] = []
+        for profile in sorted(profiles_dir.glob("*.env")):
+            profile_sections.append(
+                f"--- {profile} ---\n{mask_secret(load_file(profile))}".rstrip()
+            )
+        if profile_sections:
+            sections.extend(profile_sections)
+        else:
+            sections.append(f"--- {profiles_dir} ---\n<sem perfis .env>".rstrip())
+    else:
+        sections.append(
+            f"--- {profiles_dir} ---\n<directório não encontrado>".rstrip()
+        )
 
     progress_content = load_file(paths["progress"]) if paths["progress"].exists() else "<sem progresso disponível>"
     sections.append(f"--- {paths['progress']} ---\n{progress_content}".rstrip())
@@ -540,7 +553,7 @@ def gather_diagnostics(args: argparse.Namespace) -> str:
     env_sections = gather_environment_info(
         {
             "env": args.env_path,
-            "defaults": args.defaults_path,
+            "profiles": args.profiles_dir,
             "progress": args.progress_path,
             "log": args.log_path,
         }
@@ -653,10 +666,10 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         help="Ficheiro de configuração com credenciais do fallback.",
     )
     parser.add_argument(
-        "--defaults-path",
+        "--profiles-dir",
         type=Path,
-        default=DEFAULT_CONFIG_PATH,
-        help="Ficheiro de defaults do fallback.",
+        default=DEFAULT_PROFILES_DIR,
+        help="Directório com os perfis do fallback.",
     )
     parsed = parser.parse_args(argv)
     parsed.services = list(dict.fromkeys(parsed.services))

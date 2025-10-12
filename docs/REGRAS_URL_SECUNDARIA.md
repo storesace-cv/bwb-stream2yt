@@ -82,8 +82,9 @@ Os serviços principais do Droplet:
 | Caminho | Função |
 |----------|--------|
 | `/usr/local/bin/youtube_fallback.sh` | Script principal do sinal secundário |
-| `/usr/local/config/youtube-fallback.defaults` | Defaults do slate (resolução, bitrates, textos) |
-| `/etc/youtube-fallback.env` | Overrides conscientes (`YT_KEY`, ajustes específicos) — reescrito pelo `post_deploy.sh` preservando a chave |
+| `/usr/local/bin/yt-fallback` | CLI para trocar perfis (`life`/`bars`) e reiniciar o serviço |
+| `/etc/youtube-fallback.d/` | Perfis `.env` dedicados (life/bars) geridos pelo deploy |
+| `/etc/youtube-fallback.env` | Symlink para o perfil ativo — atualizado por `yt-fallback set ...` |
 | `/usr/local/bin/bwb_status_monitor.py` | Monitor HTTP que recebe heartbeats e aciona/paralisa o fallback |
 | `/etc/systemd/system/youtube-fallback.service` | Unit de arranque e recuperação |
 | `/etc/systemd/system/yt-restapi.service` | Unit do monitor HTTP |
