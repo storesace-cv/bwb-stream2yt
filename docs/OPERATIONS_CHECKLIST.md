@@ -13,9 +13,9 @@
 - Rodar manualmente se necessário: `logrotate -f /etc/logrotate.d/bwb-services`.
 
 ## If backup URL reuses `${YT_KEY}` literal
-- Executar `yt-fallback info` e confirmar que `YT_URL` aponta para a chave correcta e que as cenas configuradas fazem sentido.
-- Usar `yt-fallback progress` para verificar que o ffmpeg está a avançar (frame/time actualizados).
-- Validar que `/etc/youtube-fallback.env` existe (ficheiro normal) e que o drop-in `/etc/systemd/system/youtube-fallback.service.d/override.conf` está presente.
+- Confirm `/usr/local/config/youtube-fallback.defaults` matches the expected slate defaults (managed via deploy).
+- Confirm `/etc/youtube-fallback.env` preserva `YT_KEY="..."` e mostra as linhas comentadas com os defaults atuais.
+- Ensure **no** `YT_URL_BACKUP` line remains stale.
 - `systemctl daemon-reload && systemctl restart youtube-fallback`
 
 ## Night/Day behaviour

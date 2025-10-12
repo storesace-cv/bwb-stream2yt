@@ -30,6 +30,7 @@ SERVICE_JOURNAL_ARGS = ("journalctl", "-o", "short-iso", "--no-pager")
 DEFAULT_LOG_PATH = Path("/root/bwb_services.log")
 DEFAULT_PROGRESS_PATH = Path("/run/youtube-fallback.progress")
 DEFAULT_ENV_PATH = Path("/etc/youtube-fallback.env")
+DEFAULT_CONFIG_PATH = Path("/usr/local/config/youtube-fallback.defaults")
 DEFAULT_HISTORY_DIR = Path(__file__).resolve().parent / "history"
 DEFAULT_REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_EXPECTED_PORT = 8081
@@ -276,54 +277,11 @@ def gather_binary_details(binary: Optional[str]) -> List[str]:
 def gather_environment_info(paths: Mapping[str, Path]) -> List[str]:
     sections: List[str] = []
 
-    env_path = paths["env"]
-    env_content = mask_secret(load_file(env_path))
-    sections.append(f"--- {env_path} ---\n{env_content}".rstrip())
+    env_content = mask_secret(load_file(paths["env"]))
+    sections.append(f"--- {paths['env']} ---\n{env_content}".rstrip())
 
-    if env_path.exists():
-        try:
-            raw_env = env_path.read_text(encoding="utf-8")
-        except Exception as exc:  # noqa: BLE001
-            sections.append(f"<erro ao analisar {env_path}: {exc}>")
-        else:
-            parsed: Dict[str, str] = {}
-            for raw_line in raw_env.splitlines():
-                line = raw_line.strip()
-                if not line or line.startswith("#") or "=" not in line:
-                    continue
-                key, value = line.split("=", 1)
-                parsed[key.strip()] = value.strip()
-
-            highlights: List[str] = []
-            video_src = parsed.get("VIDEO_SRC")
-            duration = parsed.get("DURATION_PER_SCENE")
-            scenes_raw = parsed.get("SCENES_TXT")
-            if video_src:
-                highlights.append(f"VIDEO_SRC={video_src}")
-            if duration:
-                highlights.append(f"DURATION_PER_SCENE={duration}")
-            if scenes_raw:
-                normalized = scenes_raw
-                if normalized.startswith("$'") and normalized.endswith("'"):
-                    normalized = normalized[2:-1]
-                    try:
-                        normalized = normalized.encode("utf-8").decode("unicode_escape")
-                    except UnicodeDecodeError:
-                        pass
-                elif (normalized.startswith("\"") and normalized.endswith("\"")) or (
-                    normalized.startswith("'") and normalized.endswith("'")
-                ):
-                    normalized = normalized[1:-1]
-                expanded = normalized.replace("\\r", "").replace("\\n", "\n")
-                scenes = [entry for entry in expanded.splitlines() if entry]
-                if scenes:
-                    highlights.append("SCENES_TXT (expandido):")
-                    for idx, scene in enumerate(scenes, start=1):
-                        highlights.append(f"  [{idx}] {scene}")
-                else:
-                    highlights.append(f"SCENES_TXT={scenes_raw}")
-            if highlights:
-                sections.append("Variáveis detectadas:\n" + "\n".join(highlights))
+    defaults_content = load_file(paths["defaults"])
+    sections.append(f"--- {paths['defaults']} ---\n{defaults_content}".rstrip())
 
     progress_content = load_file(paths["progress"]) if paths["progress"].exists() else "<sem progresso disponível>"
     sections.append(f"--- {paths['progress']} ---\n{progress_content}".rstrip())
@@ -582,6 +540,7 @@ def gather_diagnostics(args: argparse.Namespace) -> str:
     env_sections = gather_environment_info(
         {
             "env": args.env_path,
+            "defaults": args.defaults_path,
             "progress": args.progress_path,
             "log": args.log_path,
         }
@@ -692,6 +651,12 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         type=Path,
         default=DEFAULT_ENV_PATH,
         help="Ficheiro de configuração com credenciais do fallback.",
+    )
+    parser.add_argument(
+        "--defaults-path",
+        type=Path,
+        default=DEFAULT_CONFIG_PATH,
+        help="Ficheiro de defaults do fallback.",
     )
     parsed = parser.parse_args(argv)
     parsed.services = list(dict.fromkeys(parsed.services))
