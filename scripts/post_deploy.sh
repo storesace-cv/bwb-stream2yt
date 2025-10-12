@@ -342,9 +342,24 @@ prepare_fallback_env() {
     local env_link="/etc/youtube-fallback.env"
     local env_dir="/etc/youtube-fallback.d"
     local src_dir="${secondary_dir}/config/youtube-fallback.d"
+    local drop_in_dir="/etc/systemd/system/youtube-fallback.service.d"
     local existing_url=""
     local existing_key=""
     local current_target=""
+
+    if [[ -d "${drop_in_dir}" ]]; then
+        local legacy_removed=0
+        if [[ -f "${drop_in_dir}/override.conf" ]]; then
+            rm -f "${drop_in_dir}/override.conf"
+            log "Removido drop-in legacy ${drop_in_dir}/override.conf."
+            legacy_removed=1
+        fi
+        if rmdir "${drop_in_dir}" 2>/dev/null; then
+            log "Removido diretório vazio ${drop_in_dir}."
+        elif (( legacy_removed == 1 )); then
+            log "Drop-in legacy removido mas diretório ${drop_in_dir} mantido (continha outros ficheiros)."
+        fi
+    fi
 
     if [[ -L "${env_link}" ]]; then
         current_target="$(readlink -f "${env_link}" || true)"
