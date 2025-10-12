@@ -7,198 +7,326 @@ if [[ -z "${BASH_VERSION:-}" ]]; then
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LIB_FILE="${SCRIPT_DIR}/lib/post_deploy/common.sh"
+REPO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+SECONDARY_DIR="${REPO_DIR}/secondary-droplet"
+LOG_FILE="/var/log/bwb_post_deploy.log"
+STATE_DIR="/var/lib/bwb-post-deploy"
 
-if [[ -r "${LIB_FILE}" ]]; then
-    # shellcheck source=./lib/post_deploy/common.sh
-    source "${LIB_FILE}"
-else
-    echo "[post_deploy] Aviso: biblioteca comum em falta (${LIB_FILE}); a usar versão incorporada." >&2
+mkdir -p "$(dirname "${LOG_FILE}")"
+mkdir -p "${STATE_DIR}"
+exec > >(tee -a "${LOG_FILE}") 2>&1
 
-    POST_DEPLOY_PREFIX="[post_deploy]"
+log() {
+    echo "[post_deploy] $*"
+}
 
-    log() {
-        echo "${POST_DEPLOY_PREFIX} $*"
-    }
+systemctl_available() {
+    command -v systemctl >/dev/null 2>&1
+}
 
-    warn_missing() {
-        local label=$1
-        local path=$2
-        log "Aviso: ${label} não encontrado em ${path}; instalação ignorada."
-    }
+declare -i SYNC_LAST_CHANGED=0
+declare -i NEED_SYSTEMD_RELOAD=0
+declare -i RESTART_YOUTUBE_FALLBACK=0
+declare -i RESTART_ENSURE_BROADCAST=0
+declare -i RESTART_STATUS_MONITOR=0
+declare -i RESTART_WATCHER=0
 
-    ensure_installed_file() {
-        local source=$1
-        local destination=$2
-        local mode=$3
-        local owner=${4:-root}
-        local group=${5:-root}
+declare -a INFO_ITEMS=()
+declare -a USER_ACTIONS=()
 
-        if [[ -e "${source}" ]]; then
-            install -m "${mode}" -o "${owner}" -g "${group}" "${source}" "${destination}"
-            log "Instalado ${destination}"
-            return 0
+record_info() {
+    INFO_ITEMS+=("$1")
+}
+
+record_user_action() {
+    USER_ACTIONS+=("$1")
+}
+
+sync_file() {
+    local source=$1
+    local destination=$2
+    local mode=$3
+    local owner=${4:-root}
+    local group=${5:-root}
+
+    SYNC_LAST_CHANGED=0
+
+    if [[ ! -e "${source}" ]]; then
+        log "Aviso: ${source} não encontrado; a ignorar."
+        return 0
+    fi
+
+    local needs_update=0
+    if [[ ! -e "${destination}" ]]; then
+        needs_update=1
+    else
+        if ! cmp -s "${source}" "${destination}"; then
+            needs_update=1
+        else
+            local current_mode owner_name group_name
+            current_mode=$(stat -c '%a' "${destination}")
+            owner_name=$(stat -c '%U' "${destination}")
+            group_name=$(stat -c '%G' "${destination}")
+            if [[ "${current_mode}" != "${mode}" || "${owner_name}" != "${owner}" || "${group_name}" != "${group}" ]]; then
+                needs_update=1
+            fi
         fi
+    fi
 
-        warn_missing "${source##*/}" "${source}"
+    if [[ "${needs_update}" -eq 1 ]]; then
+        install -m "${mode}" -o "${owner}" -g "${group}" "${source}" "${destination}"
+        log "Atualizado ${destination}"
+        SYNC_LAST_CHANGED=1
+    else
+        log "Sem alterações em ${destination}"
+    fi
+}
+
+sync_optional_file() {
+    local source=$1
+    if [[ -e "${source}" ]]; then
+        sync_file "$@"
+    else
+        SYNC_LAST_CHANGED=0
+        log "Opcional ${source##*/} ausente; ignorado."
+    fi
+}
+
+directory_hash() {
+    local dir=$1
+    if [[ ! -d "${dir}" ]]; then
         return 1
-    }
+    fi
 
-    ensure_installed_file_optional() {
-        local source=$1
-        if [[ ! -e "${source}" ]]; then
-            log "Opcional ${source##*/} ausente; ignorando instalação."
-            return 0
-        fi
+    find "${dir}" -type f -print0 | sort -z | xargs -0 --no-run-if-empty sha256sum | sha256sum | awk '{print $1}'
+}
 
-        ensure_installed_file "$@"
-    }
+systemd_reload() {
+    if systemctl_available; then
+        systemctl daemon-reload
+    else
+        log "Aviso: systemctl indisponível; a ignorar daemon-reload."
+    fi
+}
 
-    maybe_systemctl_daemon_reload() {
-        if command -v systemctl >/dev/null 2>&1; then
-            systemctl daemon-reload
+enable_service() {
+    local unit=$1
+    if ! systemctl_available; then
+        log "Aviso: systemctl indisponível; ${unit} não foi ativado."
+        return
+    fi
+
+    if systemctl is-enabled --quiet "${unit}"; then
+        if systemctl is-active --quiet "${unit}"; then
+            log "Serviço ${unit} já ativo; nenhuma alteração."
         else
-            log "Aviso: systemctl indisponível; ignorando daemon-reload."
-        fi
-    }
-
-    remove_legacy_components() {
-        if ! command -v systemctl >/dev/null 2>&1; then
-            log "Aviso: systemctl não encontrado; ignorando remoção de serviços legados."
-            return
-        fi
-
-        local -a legacy_services=(
-            "yt-decider-daemon.service"
-            "yt-decider.service"
-        )
-
-        for service in "${legacy_services[@]}"; do
-            if systemctl list-unit-files "${service}" >/dev/null 2>&1; then
-                log "Desativando serviço legado ${service}"
-                systemctl disable --now "${service}" >/dev/null 2>&1 || true
+            if systemctl start "${unit}"; then
+                log "Serviço ${unit} iniciado."
+            else
+                log "Aviso: falha ao iniciar ${unit}; ver journalctl para detalhes."
             fi
-        done
-
-        local -a legacy_paths=(
-            "/etc/systemd/system/yt-decider-daemon.service"
-            "/etc/systemd/system/yt-decider.service"
-            "/usr/local/bin/yt_decider_daemon.py"
-            "/usr/local/bin/yt-decider-daemon.py"
-            "/usr/local/bin/yt-decider-debug.sh"
-        )
-
-        for path in "${legacy_paths[@]}"; do
-            if [[ -e "${path}" ]]; then
-                log "Removendo artefacto legado ${path}"
-                rm -f "${path}"
-            fi
-        done
-
-        maybe_systemctl_daemon_reload
-    }
-
-    print_available_scripts() {
-        log "Scripts disponíveis para diagnóstico e recuperação:"
-        log "  reset_secondary_droplet.sh — limpa caches e reinicia serviços críticos (fallback, monitor, backend)."
-        log "    Comando: sudo /usr/local/bin/reset_secondary_droplet.sh"
-        log "  status-monitor-debug.sh — recolhe evidências do monitor HTTP (últimas 48h) e gera ficheiro de análise."
-        log "    Comando: sudo /usr/local/bin/status-monitor-debug.sh"
-        log "  ensure_broadcast.py — valida se existe live do YouTube pronta e ligada ao stream correto."
-        log "    Comando: sudo /usr/local/bin/ensure_broadcast.py"
-        log "  bwb_status_monitor.py — servidor HTTP que recebe heartbeats do primário; ver --help para opções."
-        log "    Comando: sudo /usr/local/bin/bwb_status_monitor.py --help"
-    }
-
-    ensure_swap() {
-        if swapon --noheadings 2>/dev/null | grep -q '\\S'; then
-            log "Swap já configurado; nenhuma ação necessária."
-            return
         fi
+        return
+    fi
 
-        local swapfile="/swapfile"
-        if [[ ! -f "${swapfile}" ]]; then
-            log "Criando swapfile de 512 MiB em ${swapfile}."
-            if ! fallocate -l 512M "${swapfile}" 2>/dev/null; then
-                log "fallocate indisponível; usando dd para criar swapfile."
-                dd if=/dev/zero of="${swapfile}" bs=1M count=512 status=none
-            fi
-            chmod 600 "${swapfile}"
-            mkswap "${swapfile}" >/dev/null
+    if systemctl enable --now "${unit}"; then
+        log "Serviço ${unit} ativado."
+    else
+        log "Aviso: não foi possível ativar ${unit}; ver journalctl para detalhes."
+    fi
+}
+
+ensure_service_if_needed() {
+    local unit=$1
+    local requested=${2:-0}
+
+    if ! systemctl_available; then
+        return
+    fi
+
+    local needs_action=${requested}
+    if ! systemctl is-enabled --quiet "${unit}"; then
+        needs_action=1
+    fi
+    if ! systemctl is-active --quiet "${unit}"; then
+        needs_action=1
+    fi
+
+    if (( needs_action )); then
+        enable_service "${unit}"
+    fi
+}
+
+restart_if_running() {
+    local unit=$1
+    if ! systemctl_available; then
+        return
+    fi
+
+    if systemctl is-active --quiet "${unit}"; then
+        if systemctl restart "${unit}"; then
+            log "Serviço ${unit} reiniciado."
         else
-            log "Swapfile existente encontrado; reutilizando ${swapfile}."
+            log "Aviso: falha ao reiniciar ${unit}."
         fi
+    fi
+}
 
-        if ! swapon "${swapfile}" >/dev/null 2>&1; then
-            log "Falha ao ativar swapfile ${swapfile}."
-            return
+install_python_dependencies() {
+    local requirements_file="${SECONDARY_DIR}/requirements.txt"
+    local hash_file="${STATE_DIR}/secondary_requirements.sha256"
+
+    if [[ ! -f "${requirements_file}" ]]; then
+        log "Aviso: ficheiro de dependências ${requirements_file} não encontrado; a ignorar."
+        return
+    fi
+
+    local current_hash previous_hash=""
+    current_hash=$(sha256sum "${requirements_file}" | awk '{print $1}')
+    if [[ -f "${hash_file}" ]]; then
+        previous_hash=$(cat "${hash_file}")
+    fi
+
+    if [[ "${current_hash}" == "${previous_hash}" ]]; then
+        log "Dependências do fallback inalteradas; instalação ignorada."
+        return
+    fi
+
+    log "Instalando dependências Python do fallback"
+    pip3 install --no-cache-dir -r "${requirements_file}"
+    printf '%s' "${current_hash}" > "${hash_file}"
+    log "Dependências Python atualizadas."
+    record_info "Dependências Python do fallback atualizadas."
+}
+
+install_secondary_services() {
+    log "Sincronizando serviço principal de fallback"
+    sync_file "${SECONDARY_DIR}/bin/youtube_fallback.sh" /usr/local/bin/youtube_fallback.sh 755
+    if (( SYNC_LAST_CHANGED )); then
+        RESTART_YOUTUBE_FALLBACK=1
+        record_info "/usr/local/bin/youtube_fallback.sh atualizado."
+    fi
+
+    sync_file "${SECONDARY_DIR}/systemd/youtube-fallback.service" /etc/systemd/system/youtube-fallback.service 644
+    if (( SYNC_LAST_CHANGED )); then
+        NEED_SYSTEMD_RELOAD=1
+        RESTART_YOUTUBE_FALLBACK=1
+        record_info "/etc/systemd/system/youtube-fallback.service atualizado."
+    fi
+
+    log "Sincronizando verificação automática de broadcast"
+    sync_file "${SECONDARY_DIR}/bin/ensure_broadcast.py" /usr/local/bin/ensure_broadcast.py 755
+    if (( SYNC_LAST_CHANGED )); then
+        RESTART_ENSURE_BROADCAST=1
+        record_info "/usr/local/bin/ensure_broadcast.py atualizado."
+    fi
+
+    sync_file "${SECONDARY_DIR}/systemd/ensure-broadcast.service" /etc/systemd/system/ensure-broadcast.service 644
+    if (( SYNC_LAST_CHANGED )); then
+        NEED_SYSTEMD_RELOAD=1
+        RESTART_ENSURE_BROADCAST=1
+        record_info "/etc/systemd/system/ensure-broadcast.service atualizado."
+    fi
+
+    sync_file "${SECONDARY_DIR}/systemd/ensure-broadcast.timer" /etc/systemd/system/ensure-broadcast.timer 644
+    if (( SYNC_LAST_CHANGED )); then
+        NEED_SYSTEMD_RELOAD=1
+        RESTART_ENSURE_BROADCAST=1
+        record_info "/etc/systemd/system/ensure-broadcast.timer atualizado."
+    fi
+}
+
+install_utilities() {
+    log "Instalando utilitários administrativos"
+    sync_optional_file "${SCRIPT_DIR}/reset_secondary_droplet.sh" /usr/local/bin/reset_secondary_droplet.sh 755
+    if (( SYNC_LAST_CHANGED )); then
+        record_info "/usr/local/bin/reset_secondary_droplet.sh atualizado."
+    fi
+    sync_optional_file "${SCRIPT_DIR}/status-monitor-debug.sh" /usr/local/bin/status-monitor-debug.sh 755
+    if (( SYNC_LAST_CHANGED )); then
+        record_info "/usr/local/bin/status-monitor-debug.sh atualizado."
+    fi
+}
+
+update_fallback_env() {
+    local env_file="/etc/youtube-fallback.env"
+    local defaults_file="${SECONDARY_DIR}/config/youtube-fallback.defaults"
+    local tmp_env
+    tmp_env="$(mktemp)"
+    trap 'rm -f "${tmp_env}"' RETURN
+
+    local existing_key=""
+    if [[ -f "${env_file}" ]]; then
+        existing_key=$(grep -E '^YT_KEY=' "${env_file}" | tail -n1 | cut -d'=' -f2-)
+    fi
+
+    if [[ -z "${existing_key}" ]]; then
+        existing_key='""'
+    fi
+
+    {
+        echo "# /etc/youtube-fallback.env"
+        echo "# Este ficheiro é gerido por post_deploy.sh – adicione apenas overrides."
+        echo "YT_KEY=${existing_key}"
+        echo
+        echo "# Parâmetros por defeito para referência:"
+        if [[ -f "${defaults_file}" ]]; then
+            while IFS= read -r line; do
+                [[ -z "${line}" || "${line}" =~ ^# ]] && continue
+                echo "#${line}"
+            done < "${defaults_file}"
         fi
+    } > "${tmp_env}"
 
-        if ! grep -q "^${swapfile} " /etc/fstab; then
-            log "Persistindo swapfile em /etc/fstab."
-            printf '%s\n' "${swapfile} none swap sw 0 0" >> /etc/fstab
-        fi
+    sync_file "${tmp_env}" "${env_file}" 644
+    if (( SYNC_LAST_CHANGED )); then
+        RESTART_YOUTUBE_FALLBACK=1
+        record_info "/etc/youtube-fallback.env atualizado."
+    fi
 
-        log "Swapfile ${swapfile} ativo."
-    }
+    trap - RETURN
+    rm -f "${tmp_env}"
+}
 
-    ensure_python_venv() {
-        local python_bin=${PYTHON_BIN:-python3}
-        if "${python_bin}" -m ensurepip --help >/dev/null 2>&1; then
-            log "python3 venv disponível; nenhum pacote adicional necessário."
-            return
-        fi
+install_status_monitor() {
+    log "Instalando monitor HTTP de status"
+    sync_file "${SECONDARY_DIR}/bin/bwb_status_monitor.py" /usr/local/bin/bwb_status_monitor.py 755
+    if (( SYNC_LAST_CHANGED )); then
+        RESTART_STATUS_MONITOR=1
+        record_info "/usr/local/bin/bwb_status_monitor.py atualizado."
+    fi
 
-        log "python3 venv indisponível; instalando pacotes do sistema."
-        export DEBIAN_FRONTEND=noninteractive
-        apt-get update
+    sync_file "${SECONDARY_DIR}/systemd/yt-restapi.service" /etc/systemd/system/yt-restapi.service 644
+    if (( SYNC_LAST_CHANGED )); then
+        NEED_SYSTEMD_RELOAD=1
+        RESTART_STATUS_MONITOR=1
+        record_info "/etc/systemd/system/yt-restapi.service atualizado."
+    fi
 
-        local version
-        version=$("${python_bin}" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
-        local pkg="python${version}-venv"
-        if ! apt-get install -y "${pkg}"; then
-            log "Pacote ${pkg} indisponível; tentando python3-venv."
-            apt-get install -y python3-venv
-        fi
+    if ! id -u yt-restapi >/dev/null 2>&1; then
+        useradd --system --no-create-home --shell /usr/sbin/nologin yt-restapi
+        log "Utilizador yt-restapi criado"
+        record_info "Conta de sistema yt-restapi criada."
+    fi
 
-        if ! "${python_bin}" -m ensurepip --help >/dev/null 2>&1; then
-            log "Falha ao preparar python3-venv mesmo após instalação."
-            exit 1
-        fi
+    local state_dir="/var/lib/bwb-status-monitor"
+    install -d -m 750 -o yt-restapi -g yt-restapi "${state_dir}"
+    if [[ ! -f "${state_dir}/status.json" ]]; then
+        printf '[]\n' > "${state_dir}/status.json"
+    fi
+    chown yt-restapi:yt-restapi "${state_dir}/status.json"
+    chmod 640 "${state_dir}/status.json"
 
-        log "python${version} ensurepip validado após instalação."
-    }
+    local log_file="/var/log/bwb_status_monitor.log"
+    if [[ ! -f "${log_file}" ]]; then
+        touch "${log_file}"
+    fi
+    chown yt-restapi:yt-restapi "${log_file}"
+    chmod 640 "${log_file}"
 
-    setup_status_monitor() {
-        local base_dir=$1
-
-        log "Instalando monitor HTTP de status do primário"
-
-        ensure_installed_file "${base_dir}/bin/bwb_status_monitor.py" /usr/local/bin/bwb_status_monitor.py 755
-        ensure_installed_file "${base_dir}/systemd/yt-restapi.service" /etc/systemd/system/yt-restapi.service 644
-
-        if ! id -u yt-restapi >/dev/null 2>&1; then
-            log "Criando utilizador de sistema yt-restapi"
-            useradd --system --no-create-home --shell /usr/sbin/nologin yt-restapi
-        fi
-
-        local state_dir="/var/lib/bwb-status-monitor"
-        install -d -m 750 -o yt-restapi -g yt-restapi "${state_dir}"
-        if [[ ! -f "${state_dir}/status.json" ]]; then
-            printf '[]\n' >"${state_dir}/status.json"
-        fi
-        chown yt-restapi:yt-restapi "${state_dir}/status.json"
-        chmod 640 "${state_dir}/status.json"
-
-        if [[ ! -f "/var/log/bwb_status_monitor.log" ]]; then
-            touch /var/log/bwb_status_monitor.log
-        fi
-        chown yt-restapi:yt-restapi /var/log/bwb_status_monitor.log
-        chmod 640 /var/log/bwb_status_monitor.log
-
-        local env_file="/etc/yt-restapi.env"
-        if [[ ! -f "${env_file}" ]]; then
-            cat <<'ENVEOF' >"${env_file}"
+    local env_file="/etc/yt-restapi.env"
+    if [[ ! -f "${env_file}" ]]; then
+        cat <<'ENVEOF' > "${env_file}"
 # /etc/yt-restapi.env — configurações para o monitor HTTP de status.
 # Ajuste as variáveis conforme necessário.
 #YTR_BIND=0.0.0.0
@@ -213,198 +341,175 @@ else
 #YTR_TOKEN=
 #YTR_REQUIRE_TOKEN=1
 ENVEOF
-        fi
         chmod 640 "${env_file}"
         chown yt-restapi:yt-restapi "${env_file}"
-
-        ensure_yt_restapi_sudoers
-
-        if command -v ufw >/dev/null 2>&1; then
-            if ufw status 2>/dev/null | grep -qi "status: active"; then
-                if ! ufw status 2>/dev/null | grep -qE '\\b8080/tcp\\b'; then
-                    ufw allow 8080/tcp
-                else
-                    log "UFW já permite 8080/tcp; nenhum ajuste."
-                fi
-            else
-                log "UFW inativo; nenhuma regra adicionada."
-            fi
-        else
-            log "UFW não encontrado; ignorando configuração de firewall."
-        fi
-
-        maybe_systemctl_daemon_reload
-        systemctl enable --now yt-restapi.service
-    }
-
-    setup_youtube_fallback_watcher() {
-        local base_dir=$1
-
-        log "Instalando watcher de fallback do YouTube"
-
-        ensure_installed_file "${base_dir}/bin/youtube_fallback_watcher.py" \
-            /usr/local/bin/youtube_fallback_watcher.py 755
-
-        if [[ -f "/etc/youtube-fallback-watcher.conf" ]]; then
-            log "Configuração existente detectada em /etc/youtube-fallback-watcher.conf; mantendo ficheiro atual."
-        else
-            ensure_installed_file "${base_dir}/config/youtube-fallback-watcher.conf" \
-                /etc/youtube-fallback-watcher.conf 644
-        fi
-
-        ensure_installed_file "${base_dir}/systemd/youtube-fallback-watcher.service" \
-            /etc/systemd/system/youtube-fallback-watcher.service 644
-
-        maybe_systemctl_daemon_reload
-
-        if command -v systemctl >/dev/null 2>&1; then
-            if systemctl list-unit-files yt-comm-watcher.service >/dev/null 2>&1; then
-                log "Desativando watcher legado yt-comm-watcher.service"
-                systemctl disable --now yt-comm-watcher.service >/dev/null 2>&1 || true
-            fi
-
-            if ! systemctl enable --now youtube-fallback-watcher.service; then
-                log "Aviso: não foi possível ativar/arrancar youtube-fallback-watcher.service; consultar journalctl para detalhes."
-            fi
-        else
-            log "Aviso: systemctl indisponível; não foi possível ativar youtube-fallback-watcher.service"
-        fi
-    }
-fi
-LOG_FILE="/var/log/bwb_post_deploy.log"
-mkdir -p "$(dirname "${LOG_FILE}")"
-exec > >(tee -a "${LOG_FILE}") 2>&1
-
-main() {
-    log "Registando saída completa em ${LOG_FILE}"
-
-    remove_legacy_components
-
-    local repo_dir
-    repo_dir="$(cd "${SCRIPT_DIR}/.." && pwd)"
-    local secondary_dir="${repo_dir}/secondary-droplet"
-
-    log "Instalando dependências base do fallback"
-    pip3 install --no-cache-dir -r "${secondary_dir}/requirements.txt"
-
-    ensure_installed_file "${secondary_dir}/bin/youtube_fallback.sh" /usr/local/bin/youtube_fallback.sh 755
-    ensure_installed_file "${secondary_dir}/systemd/youtube-fallback.service" /etc/systemd/system/youtube-fallback.service 644
-    ensure_installed_file "${secondary_dir}/bin/ensure_broadcast.py" /usr/local/bin/ensure_broadcast.py 755
-    ensure_installed_file "${secondary_dir}/systemd/ensure-broadcast.service" /etc/systemd/system/ensure-broadcast.service 644
-    ensure_installed_file "${secondary_dir}/systemd/ensure-broadcast.timer" /etc/systemd/system/ensure-broadcast.timer 644
-
-    log "Instalando utilitários administrativos no /usr/local/bin"
-
-    ensure_installed_file_optional "${SCRIPT_DIR}/reset_secondary_droplet.sh" /usr/local/bin/reset_secondary_droplet.sh 755
-    ensure_installed_file_optional "${SCRIPT_DIR}/status-monitor-debug.sh" /usr/local/bin/status-monitor-debug.sh 755
-
-    local ENV_FILE="/etc/youtube-fallback.env"
-    local DEFAULTS_FILE="${secondary_dir}/config/youtube-fallback.defaults"
-
-    local existing_key=""
-    if [[ -f "${ENV_FILE}" ]]; then
-        while IFS= read -r line; do
-            case "${line}" in
-                YT_KEY=*)
-                    existing_key="${line#YT_KEY=}"
-                    ;;
-            esac
-        done < "${ENV_FILE}"
+        log "Configuração padrão criada em ${env_file}"
+        record_info "/etc/yt-restapi.env criado."
     fi
 
-    if [[ -z "${existing_key}" ]]; then
-        existing_key='""'
-    fi
-
-    local tmp_env
-    tmp_env="$(mktemp)"
-    trap 'rm -f "${tmp_env}"' RETURN
-    {
-        echo "# /etc/youtube-fallback.env (managed by post_deploy.sh)"
-        echo "# Defaults live in /usr/local/config/youtube-fallback.defaults. Override only what you need here."
-        echo "YT_KEY=${existing_key}"
-        echo
-        echo "# Default parameters for reference:"
-        while IFS= read -r default_line; do
-            [[ -z "${default_line}" ]] && continue
-            [[ "${default_line}" =~ ^# ]] && continue
-            echo "#${default_line}"
-        done < "${DEFAULTS_FILE}"
-    } > "${tmp_env}"
-
-    install -m 644 -o root -g root "${tmp_env}" "${ENV_FILE}"
-    trap - RETURN
-    rm -f "${tmp_env}"
-
-    maybe_systemctl_daemon_reload
-
-    # ==== Controle seguro do youtube-fallback.service ====
-    : "${TOUCH_YT_FALLBACK:=0}"          # 0 = não mexer (default)
-    : "${YT_FALLBACK_ACTION:=none}"      # none|restart|stop|start
-    local svc="youtube-fallback.service"
-
-    if [[ "${TOUCH_YT_FALLBACK}" == "1" ]]; then
-        case "${YT_FALLBACK_ACTION}" in
-            restart)
-                systemctl enable "${svc}" || true
-                systemctl restart "${svc}" || true
-                ;;
-            start)
-                systemctl enable "${svc}" || true
-                systemctl start "${svc}" || true
-                ;;
-            stop)
-                systemctl stop "${svc}" || true
-                ;;
-            none|*)
-                ;;
-        esac
-    fi
-
-    systemctl enable --now ensure-broadcast.timer
-
-    setup_youtube_fallback_watcher "${secondary_dir}"
-
-    setup_status_monitor "${secondary_dir}"
-
-    log "youtube-fallback atualizado e env sincronizado."
-
-    log "Preparando backend do ytc-web via secondary-droplet/bin/ytc_web_backend_setup.sh..."
-    ensure_python_venv
-    bash "${secondary_dir}/bin/ytc_web_backend_setup.sh"
-
-    ensure_swap
-
-    log "Operação concluída."
-    print_available_scripts
-
-    if command -v deactivate >/dev/null 2>&1; then
-        deactivate
-    fi
+    install_yt_restapi_sudoers
 }
 
-ensure_yt_restapi_sudoers() {
+install_yt_restapi_sudoers() {
     local sudoers_file="/etc/sudoers.d/yt-restapi"
     local tmp
-    tmp=$(mktemp)
+    tmp="$(mktemp)"
 
-    cat <<'SUDOEOF' >"${tmp}"
+    cat <<'SUDOEOF' > "${tmp}"
 yt-restapi ALL=(root) NOPASSWD: /bin/systemctl start youtube-fallback.service, /bin/systemctl stop youtube-fallback.service, /bin/systemctl status youtube-fallback.service
 SUDOEOF
 
-    install -m 440 -o root -g root "${tmp}" "${sudoers_file}"
+    sync_file "${tmp}" "${sudoers_file}" 440
+    local sudoers_changed=$(( SYNC_LAST_CHANGED ))
     rm -f "${tmp}"
 
-    if command -v visudo >/dev/null 2>&1; then
-        if ! visudo -cf "${sudoers_file}" >/dev/null; then
-            rm -f "${sudoers_file}"
-            log "Erro: validação de ${sudoers_file} falhou via visudo"
-            exit 1
+    if (( sudoers_changed )); then
+        if command -v visudo >/dev/null 2>&1; then
+            if ! visudo -cf "${sudoers_file}" >/dev/null; then
+                rm -f "${sudoers_file}"
+                log "Erro: validação de ${sudoers_file} falhou"
+                exit 1
+            fi
+        else
+            log "Aviso: visudo não encontrado; sudoers não foi validado automaticamente."
         fi
-        log "yt-restapi sudoers applied (systemctl start/stop/status youtube-fallback.service)"
-    else
-        log "Aviso: visudo não encontrado; não foi possível validar ${sudoers_file}"
+        record_info "/etc/sudoers.d/yt-restapi atualizado."
     fi
+}
+
+install_watcher() {
+    log "Instalando watcher de fallback do YouTube"
+    sync_file "${SECONDARY_DIR}/bin/youtube_fallback_watcher.py" /usr/local/bin/youtube_fallback_watcher.py 755
+    if (( SYNC_LAST_CHANGED )); then
+        RESTART_WATCHER=1
+        record_info "/usr/local/bin/youtube_fallback_watcher.py atualizado."
+    fi
+
+    sync_file "${SECONDARY_DIR}/systemd/youtube-fallback-watcher.service" /etc/systemd/system/youtube-fallback-watcher.service 644
+    if (( SYNC_LAST_CHANGED )); then
+        NEED_SYSTEMD_RELOAD=1
+        RESTART_WATCHER=1
+        record_info "/etc/systemd/system/youtube-fallback-watcher.service atualizado."
+    fi
+
+    local config_file="/etc/youtube-fallback-watcher.conf"
+    if [[ ! -f "${config_file}" ]]; then
+        sync_file "${SECONDARY_DIR}/config/youtube-fallback-watcher.conf" "${config_file}" 644
+        log "Configuração padrão criada em ${config_file}"
+        record_info "/etc/youtube-fallback-watcher.conf criado."
+    fi
+}
+
+update_backend() {
+    local backend_dir="${SECONDARY_DIR}/ytc-web-backend"
+    local state_file="${STATE_DIR}/ytc_web_backend.sha256"
+
+    local current_hash
+    if ! current_hash=$(directory_hash "${backend_dir}"); then
+        log "Aviso: diretório ${backend_dir} inexistente; configuração ignorada."
+        return
+    fi
+
+    local previous_hash=""
+    if [[ -f "${state_file}" ]]; then
+        previous_hash=$(cat "${state_file}")
+    fi
+
+    if [[ "${current_hash}" == "${previous_hash}" ]]; then
+        log "Backend do ytc-web sem alterações; configuração ignorada."
+        return
+    fi
+
+    log "Preparando backend do ytc-web"
+    bash "${SECONDARY_DIR}/bin/ytc_web_backend_setup.sh"
+    printf '%s' "${current_hash}" > "${state_file}"
+    log "Configuração do backend do ytc-web atualizada."
+    record_info "Backend do ytc-web atualizado."
+}
+
+apply_systemd_changes() {
+    if (( NEED_SYSTEMD_RELOAD )); then
+        systemd_reload
+    fi
+
+    ensure_service_if_needed youtube-fallback.service ${RESTART_YOUTUBE_FALLBACK}
+    ensure_service_if_needed ensure-broadcast.timer ${RESTART_ENSURE_BROADCAST}
+    ensure_service_if_needed yt-restapi.service ${RESTART_STATUS_MONITOR}
+
+    if ! systemctl_available; then
+        return
+    fi
+
+    if (( RESTART_YOUTUBE_FALLBACK )); then
+        restart_if_running youtube-fallback.service
+    fi
+
+    if (( RESTART_ENSURE_BROADCAST )); then
+        restart_if_running ensure-broadcast.timer
+    fi
+
+    if (( RESTART_STATUS_MONITOR )); then
+        restart_if_running yt-restapi.service
+    fi
+
+    if (( RESTART_WATCHER )); then
+        if systemctl is-enabled --quiet youtube-fallback-watcher.service; then
+            restart_if_running youtube-fallback-watcher.service
+        else
+            log "Watcher youtube-fallback-watcher.service atualizado; ative manualmente se necessário."
+            record_user_action "Ativar youtube-fallback-watcher.service caso pretenda executar o watcher automaticamente."
+        fi
+    fi
+}
+
+print_summary_block() {
+    local title=$1
+    shift || true
+
+    echo
+    echo "${title}"
+    local underline=""
+    local title_len=${#title}
+    for ((i = 0; i < title_len; i++)); do
+        underline+='='
+    done
+    printf '%s\n' "${underline}"
+
+    if (($# == 0)); then
+        if [[ "${title}" == "BLOCO INFORMATIVO" ]]; then
+            echo "- Nenhuma alteração aplicada nesta execução."
+        else
+            echo "- Nenhuma ação pendente para o utilizador."
+        fi
+        return
+    fi
+
+    local item
+    for item in "$@"; do
+        echo "- ${item}"
+    done
+}
+
+print_summary_blocks() {
+    print_summary_block "BLOCO INFORMATIVO" "${INFO_ITEMS[@]}"
+    print_summary_block "ACÇÕES A TOMAR POR PARTE DO UTILIZADOR:" "${USER_ACTIONS[@]}"
+}
+
+main() {
+    log "Registando saída em ${LOG_FILE}"
+
+    install_python_dependencies
+    install_secondary_services
+    install_utilities
+    update_fallback_env
+    install_status_monitor
+    install_watcher
+    update_backend
+
+    apply_systemd_changes
+
+    log "Atualização concluída."
+    print_summary_blocks
 }
 
 main "$@"
