@@ -1,6 +1,7 @@
 import importlib.util
 import signal
 import sys
+import json
 import threading
 import time
 import types
@@ -137,3 +138,40 @@ def test_stop_streaming_instance_waits_for_orderly_shutdown(tmp_path, monkeypatc
             runner.join(timeout=1.0)
         module._ACTIVE_WORKER = None
         module._clear_stop_request()
+
+
+def test_camera_signal_monitor_success(monkeypatch):
+    monitor = module.CameraSignalMonitor(
+        "ffprobe", ["-i", "dummy"], interval=5.0, timeout=2.0, required=True
+    )
+
+    def fake_run(*_args, **_kwargs):
+        return types.SimpleNamespace(
+            returncode=0,
+            stdout=json.dumps({"streams": [{"codec_type": "video"}]}),
+            stderr="",
+        )
+
+    monkeypatch.setattr(module.subprocess, "run", fake_run)
+
+    assert monitor.confirm_signal(force=True) is True
+    snapshot = monitor.snapshot()
+    assert snapshot["present"] is True
+    assert snapshot["consecutive_failures"] == 0
+
+
+def test_camera_signal_monitor_failure(monkeypatch):
+    monitor = module.CameraSignalMonitor(
+        "ffprobe", ["-i", "dummy"], interval=5.0, timeout=2.0, required=True
+    )
+
+    def fake_run(*_args, **_kwargs):
+        return types.SimpleNamespace(returncode=1, stdout="", stderr="no video")
+
+    monkeypatch.setattr(module.subprocess, "run", fake_run)
+
+    assert monitor.confirm_signal(force=True) is False
+    snapshot = monitor.snapshot()
+    assert snapshot["present"] is False
+    assert snapshot["consecutive_failures"] == 1
+    assert snapshot["last_error"]

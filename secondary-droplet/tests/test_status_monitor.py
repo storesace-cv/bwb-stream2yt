@@ -7,6 +7,7 @@ import sys
 import threading
 from types import SimpleNamespace
 from pathlib import Path
+from typing import Dict, Optional
 
 import pytest
 
@@ -48,13 +49,18 @@ def monitor(tmp_path: Path) -> StatusMonitor:
         missed_threshold=2,
         check_interval=1,
         log_file=tmp_path / "monitor.log",
+        mode_file=tmp_path / "fallback.mode",
     )
     return StatusMonitor(settings=settings, service_manager=DummyServiceManager())
 
 
-def make_entry(machine: str = "pc-1") -> StatusEntry:
+def make_entry(
+    machine: str = "pc-1", camera_signal: Optional[Dict[str, object]] = None
+) -> StatusEntry:
     now = utc_now()
     payload = {"machine_id": machine, "status": {"ffmpeg_running": True}}
+    if camera_signal is not None:
+        payload["status"]["camera_signal"] = camera_signal
     return StatusEntry(
         timestamp=now,
         machine_id=machine,
@@ -73,6 +79,8 @@ def test_triggers_fallback_after_threshold(monitor: StatusMonitor) -> None:
 
     assert service.start_calls == 1
     assert monitor.fallback_active is True
+    assert monitor.snapshot()["fallback_reason"] == "no_heartbeats"
+    assert monitor.settings.mode_file.read_text(encoding="utf-8").strip() == "life"
 
 
 def test_stops_fallback_after_single_heartbeat(monitor: StatusMonitor) -> None:
@@ -83,9 +91,36 @@ def test_stops_fallback_after_single_heartbeat(monitor: StatusMonitor) -> None:
     assert monitor.fallback_active is True
     assert service.start_calls == 1
 
-    monitor.record_status(make_entry())
+    monitor.record_status(make_entry(camera_signal={"present": True}))
     assert monitor.fallback_active is False
     assert service.stop_calls == 1
+    assert monitor.settings.mode_file.read_text(encoding="utf-8").strip() == "life"
+
+
+def test_camera_absence_triggers_smpte(monitor: StatusMonitor) -> None:
+    monitor.record_status(
+        make_entry(camera_signal={"present": False, "last_error": "timeout"})
+    )
+
+    assert monitor.fallback_active is True
+    snapshot = monitor.snapshot()
+    assert snapshot["fallback_reason"] == "no_camera_signal"
+    assert snapshot["last_camera_signal"]["present"] is False
+    assert (
+        monitor.settings.mode_file.read_text(encoding="utf-8").strip()
+        == "smptehdbars"
+    )
+
+
+def test_camera_recovery_stops_fallback(monitor: StatusMonitor) -> None:
+    monitor.record_status(make_entry(camera_signal={"present": False}))
+    assert monitor.fallback_active is True
+
+    monitor.record_status(make_entry(camera_signal={"present": True}))
+    assert monitor.fallback_active is False
+    snapshot = monitor.snapshot()
+    assert snapshot["fallback_reason"] is None
+    assert monitor.settings.mode_file.read_text(encoding="utf-8").strip() == "life"
 
 
 def test_run_server_handles_address_in_use(tmp_path: Path, monkeypatch, caplog):
@@ -97,6 +132,7 @@ def test_run_server_handles_address_in_use(tmp_path: Path, monkeypatch, caplog):
         missed_threshold=2,
         check_interval=1,
         log_file=tmp_path / "monitor.log",
+        mode_file=tmp_path / "fallback.mode",
     )
 
     args = SimpleNamespace(bind="127.0.0.1", port=9090, graceful_timeout=10)
@@ -119,6 +155,7 @@ def test_monitor_settings_accepts_ytr_env(monkeypatch):
     monkeypatch.setenv("YTR_REQUIRE_TOKEN", "1")
     monkeypatch.setenv("YTR_PORT", "9090")
     monkeypatch.setenv("YTR_SECONDARY_SERVICE", "custom.service")
+    monkeypatch.setenv("YTR_FALLBACK_MODE_FILE", "/tmp/custom.mode")
 
     settings = MonitorSettings.from_env()
 
@@ -126,6 +163,7 @@ def test_monitor_settings_accepts_ytr_env(monkeypatch):
     assert settings.require_token is True
     assert settings.port == 9090
     assert settings.secondary_service == "custom.service"
+    assert settings.mode_file == Path("/tmp/custom.mode")
 
 
 def test_post_requires_bearer_token(tmp_path: Path):
@@ -135,6 +173,7 @@ def test_post_requires_bearer_token(tmp_path: Path):
         log_file=tmp_path / "monitor.log",
         auth_token="topsecret",
         require_token=True,
+        mode_file=tmp_path / "fallback.mode",
     )
     monitor = StatusMonitor(settings=settings, service_manager=DummyServiceManager())
     server = status_monitor.StatusHTTPServer(

@@ -68,6 +68,15 @@ ENV_TEMPLATE_CONTENT = """# Configurações para stream_to_youtube.py
 # Caminho para o executável ffmpeg. Deixe vazio para usar o ffmpeg no PATH.
 #FFMPEG=C:\\caminho\\para\\ffmpeg.exe
 
+# Caminho para o executável ffprobe. Se vazio, o script tenta localizar
+# automaticamente na mesma pasta do ffmpeg.
+#FFPROBE=C:\\caminho\\para\\ffprobe.exe
+
+# Controla a verificação periódica do sinal da câmara (via ffprobe).
+#BWB_CAMERA_PROBE_INTERVAL=30
+#BWB_CAMERA_PROBE_TIMEOUT=7
+#BWB_CAMERA_SIGNAL_REQUIRED=1
+
 # Configurações do heartbeat/status para comunicar com a droplet secundária.
 #BWB_STATUS_ENABLED=1
 #BWB_STATUS_ENDPOINT=http://104.248.134.44:8080/status
@@ -152,6 +161,25 @@ def _resolve_custom_path(env_name: str, default_relative: str) -> Path:
         return candidate
 
     return (script_dir / default_relative).resolve()
+
+
+def _resolve_ffprobe_path(ffmpeg_path: str) -> str:
+    configured = os.environ.get("FFPROBE", "").strip()
+    if configured:
+        return configured
+
+    if ffmpeg_path:
+        candidate = Path(ffmpeg_path)
+        name = candidate.name.lower()
+        if name == "ffmpeg.exe":
+            return str(candidate.with_name("ffprobe.exe"))
+        if name == "ffmpeg":
+            return str(candidate.with_name("ffprobe"))
+        suffix = candidate.suffix.lower()
+        replacement = "ffprobe.exe" if suffix == ".exe" else "ffprobe"
+        return str(candidate.with_name(replacement))
+
+    return "ffprobe"
 
 
 LOG_DIR, LOG_STEM, LOG_SUFFIX = _resolve_log_target()
@@ -724,6 +752,14 @@ class HeartbeatConfig:
 
 
 @dataclass(frozen=True)
+class CameraProbeConfig:
+    ffprobe: str
+    interval: float
+    timeout: float
+    required: bool
+
+
+@dataclass(frozen=True)
 class StreamingConfig:
     yt_url: Optional[str]
     input_args: list[str]
@@ -739,6 +775,7 @@ class StreamingConfig:
     autotune_interval: float
     autotune_safety_margin: float
     heartbeat: HeartbeatConfig
+    camera_probe: CameraProbeConfig
 
 
 def _resolve_heartbeat_config(base_dir: Path) -> HeartbeatConfig:
@@ -892,12 +929,22 @@ def load_config(resolution: Optional[str] = None) -> StreamingConfig:
     elif safety_margin > 1.0:
         safety_margin = 1.0
 
+    ffmpeg_path = os.environ.get("FFMPEG", r"C:\bwb\ffmpeg\bin\ffmpeg.exe")
+    camera_interval = _env_float("BWB_CAMERA_PROBE_INTERVAL", 30.0)
+    if camera_interval < 5.0:
+        camera_interval = 5.0
+    camera_timeout = _env_float("BWB_CAMERA_PROBE_TIMEOUT", 7.0)
+    if camera_timeout < 1.0:
+        camera_timeout = 1.0
+    camera_required = _env_flag("BWB_CAMERA_SIGNAL_REQUIRED", True)
+    ffprobe_path = _resolve_ffprobe_path(ffmpeg_path)
+
     return StreamingConfig(
         yt_url=_resolve_yt_url(),
         input_args=input_args,
         output_args=output_args,
         resolution=resolved_resolution,
-        ffmpeg=os.environ.get("FFMPEG", r"C:\bwb\ffmpeg\bin\ffmpeg.exe"),
+        ffmpeg=ffmpeg_path,
         day_start_hour=int(os.environ.get("YT_DAY_START_HOUR", "8")),
         day_end_hour=int(os.environ.get("YT_DAY_END_HOUR", "19")),
         tz_offset_hours=int(os.environ.get("YT_TZ_OFFSET_HOURS", "1")),
@@ -907,6 +954,12 @@ def load_config(resolution: Optional[str] = None) -> StreamingConfig:
         autotune_interval=_env_float("YT_AUTOTUNE_INTERVAL", 8.0),
         autotune_safety_margin=safety_margin,
         heartbeat=_resolve_heartbeat_config(_script_base_dir()),
+        camera_probe=CameraProbeConfig(
+            ffprobe=ffprobe_path,
+            interval=camera_interval,
+            timeout=camera_timeout,
+            required=camera_required,
+        ),
     )
 
 
@@ -1131,6 +1184,221 @@ class HeartbeatReporter:
                 tmp_path.unlink()
 
 
+class CameraSignalMonitor:
+    """Probe the camera input with ffprobe and expose availability status."""
+
+    def __init__(
+        self,
+        ffprobe: str,
+        input_args: list[str],
+        interval: float,
+        timeout: float,
+        required: bool,
+        log_fn: Callable[[str, str], None] = log_event,
+    ) -> None:
+        self._ffprobe = ffprobe.strip() or "ffprobe"
+        self._input_args = list(input_args)
+        self._interval = interval if interval >= 5.0 else 5.0
+        self._timeout = timeout if timeout >= 1.0 else 1.0
+        self._required = required
+        self._log = log_fn
+        self._lock = threading.Lock()
+        self._last_result: Optional[bool] = None
+        self._last_checked: Optional[datetime.datetime] = None
+        self._last_success: Optional[datetime.datetime] = None
+        self._last_failure: Optional[datetime.datetime] = None
+        self._last_error: Optional[str] = None
+        self._consecutive_failures = 0
+        self._state_reported: Optional[bool] = None
+        self._ffprobe_available = bool(self._ffprobe)
+        self._ffprobe_warning_emitted = False
+
+    @staticmethod
+    def _utc_now() -> datetime.datetime:
+        return datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc)
+
+    @property
+    def retry_delay(self) -> float:
+        return self._interval
+
+    def confirm_signal(self, force: bool = False) -> bool:
+        result = self._probe_if_needed(force)
+        if result:
+            return True
+        return not self._required
+
+    def snapshot(self) -> Dict[str, Any]:
+        def _iso(ts: Optional[datetime.datetime]) -> Optional[str]:
+            return ts.isoformat() if ts else None
+
+        with self._lock:
+            present = self._last_result
+            return {
+                "present": present if isinstance(present, bool) else None,
+                "last_probe": _iso(self._last_checked),
+                "last_success": _iso(self._last_success),
+                "last_failure": _iso(self._last_failure),
+                "consecutive_failures": self._consecutive_failures,
+                "required": self._required,
+                "ffprobe": self._ffprobe,
+                "probe_interval_seconds": self._interval,
+                "probe_timeout_seconds": self._timeout,
+                "last_error": self._last_error,
+                "ffprobe_available": self._ffprobe_available,
+            }
+
+    def _probe_if_needed(self, force: bool) -> bool:
+        with self._lock:
+            last_checked = self._last_checked
+            interval = self._interval
+            last_result = self._last_result
+
+        if not force and last_checked is not None:
+            elapsed = (self._utc_now() - last_checked).total_seconds()
+            if elapsed < interval and last_result is not None:
+                return last_result
+
+        return self._probe_once()
+
+    def _probe_once(self) -> bool:
+        with self._lock:
+            ffprobe = self._ffprobe
+            timeout = self._timeout
+            input_args = list(self._input_args)
+
+        if not ffprobe:
+            timestamp = self._utc_now()
+            return self._update_state(True, timestamp, None)
+
+        cmd = [
+            ffprobe,
+            "-v",
+            "error",
+            *input_args,
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=codec_type",
+            "-of",
+            "json",
+        ]
+        timestamp = self._utc_now()
+        error_text: Optional[str] = None
+
+        try:
+            completed = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                check=False,
+            )
+        except FileNotFoundError as exc:
+            error_text = f"ffprobe não encontrado: {exc}"
+            self._handle_missing_ffprobe(error_text)
+            return True
+        except subprocess.TimeoutExpired:
+            error_text = f"ffprobe excedeu timeout de {timeout:.1f}s"
+            return self._update_state(False, timestamp, error_text)
+        except Exception as exc:  # noqa: BLE001
+            error_text = f"{exc.__class__.__name__}: {exc}"
+            return self._update_state(False, timestamp, error_text)
+
+        if completed.returncode != 0:
+            stderr = (completed.stderr or "").strip()
+            stdout = (completed.stdout or "").strip()
+            error_text = stderr or stdout or f"exit {completed.returncode}"
+            return self._update_state(False, timestamp, error_text)
+
+        try:
+            payload = json.loads(completed.stdout or "{}")
+        except json.JSONDecodeError as exc:
+            error_text = f"json inválido: {exc}"
+            return self._update_state(False, timestamp, error_text)
+
+        present = False
+        streams = payload.get("streams")
+        if isinstance(streams, list):
+            for stream in streams:
+                if isinstance(stream, dict) and stream.get("codec_type") == "video":
+                    present = True
+                    break
+
+        if not present:
+            error_text = "sem streams de vídeo reportadas"
+            return self._update_state(False, timestamp, error_text)
+
+        return self._update_state(True, timestamp, None)
+
+    def _handle_missing_ffprobe(self, error_text: str) -> None:
+        with self._lock:
+            self._ffprobe_available = False
+            if not self._ffprobe_warning_emitted:
+                message = (
+                    f"ffprobe ausente em {self._ffprobe}; desativando verificação do sinal da câmara."
+                )
+                self._ffprobe_warning_emitted = True
+            else:
+                message = ""
+            self._required = False
+            timestamp = self._utc_now()
+            self._last_checked = timestamp
+            self._last_success = timestamp
+            self._last_result = True
+            self._last_error = error_text
+
+        if message:
+            self._log("primary", message)
+            try:
+                print(f"[primary] {message}")
+            except Exception:  # noqa: BLE001
+                pass
+
+    def _update_state(
+        self, present: bool, timestamp: datetime.datetime, error_text: Optional[str]
+    ) -> bool:
+        with self._lock:
+            self._last_checked = timestamp
+            if present:
+                self._last_result = True
+                self._last_success = timestamp
+                self._consecutive_failures = 0
+                self._last_error = None
+            else:
+                self._last_result = False
+                self._last_failure = timestamp
+                self._consecutive_failures += 1
+                if error_text:
+                    self._last_error = error_text
+            last_error = self._last_error
+            previous = self._state_reported
+
+        if previous != present:
+            self._log_state_change(present, last_error)
+
+        return present
+
+    def _log_state_change(self, present: bool, error_text: Optional[str]) -> None:
+        if present:
+            message = (
+                "Sinal da câmara restabelecido; retomando transmissão principal assim que possível."
+            )
+        else:
+            detail = error_text or "sem vídeo detectado"
+            message = (
+                "Sinal da câmara indisponível (%s); aguardando antes de transmitir." % detail
+            )
+
+        self._log("primary", message)
+        try:
+            print(f"[primary] {message}")
+        except Exception:  # noqa: BLE001
+            pass
+
+        with self._lock:
+            self._state_reported = present
+
+
 class StreamingWorker:
     """Background controller that keeps ffmpeg alive while streaming."""
 
@@ -1151,6 +1419,13 @@ class StreamingWorker:
         self._last_launch_time: Optional[float] = None
         self._restart_count = 0
         self._last_exit_code: Optional[int] = None
+        self._camera_monitor = CameraSignalMonitor(
+            config.camera_probe.ffprobe,
+            config.input_args,
+            config.camera_probe.interval,
+            config.camera_probe.timeout,
+            config.camera_probe.required,
+        )
 
     def start(self) -> None:
         if self.is_running:
@@ -1220,6 +1495,7 @@ class StreamingWorker:
             "yt_url_present": bool(self._config.yt_url),
             "heartbeat_configured": self._config.heartbeat.enabled,
         }
+        snapshot["camera_signal"] = self._camera_monitor.snapshot()
         return snapshot
 
     def _run_loop(self) -> None:
@@ -1247,6 +1523,12 @@ class StreamingWorker:
                 if not in_day_window(self._config):
                     print("[primary] Night period — holding (no transmit).")
                     if self._stop_event.wait(30):
+                        break
+                    continue
+
+                if not self._camera_monitor.confirm_signal():
+                    wait_seconds = max(self._camera_monitor.retry_delay, 5.0)
+                    if self._stop_event.wait(wait_seconds):
                         break
                     continue
 

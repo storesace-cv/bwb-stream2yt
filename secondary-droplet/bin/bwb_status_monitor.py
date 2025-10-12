@@ -46,6 +46,7 @@ class MonitorSettings:
     secondary_service: str = "youtube-fallback.service"
     auth_token: Optional[str] = None
     require_token: bool = False
+    mode_file: Path = Path("/run/youtube-fallback.mode")
 
     @classmethod
     def from_env(cls) -> "MonitorSettings":
@@ -94,9 +95,16 @@ class MonitorSettings:
 
         log_override = _get_env("YTR_LOG_FILE", "BWB_STATUS_LOG_FILE")
         secondary_override = _get_env("YTR_SECONDARY_SERVICE", "BWB_STATUS_SECONDARY_SERVICE")
+        mode_override = _get_env(
+            "YTR_FALLBACK_MODE_FILE", "BWB_STATUS_FALLBACK_MODE_FILE"
+        )
 
         log_path = Path(log_override or cls.log_file.as_posix())
         secondary_service = secondary_override or cls.secondary_service
+        if mode_override:
+            mode_file = Path(mode_override).expanduser()
+        else:
+            mode_file = cls.mode_file
         token = _get_env("YTR_TOKEN", "BWB_STATUS_TOKEN")
 
         def _maybe_bool(name: str) -> Optional[bool]:
@@ -139,6 +147,7 @@ class MonitorSettings:
             secondary_service=secondary_service,
             auth_token=token if token else None,
             require_token=require_token,
+            mode_file=mode_file,
         )
 
 
@@ -244,6 +253,9 @@ class StatusMonitor:
         self._last_timestamp: Optional[dt.datetime] = None
         self._started_at = utc_now()
         self._fallback_active = False
+        self._fallback_reason: Optional[str] = None
+        self._last_camera_status: Optional[Dict[str, Any]] = None
+        self._mode_file = settings.mode_file
         self._stop_event = threading.Event()
         self._watcher_thread = threading.Thread(
             target=self._watchdog_loop, name="bwb-status-watchdog", daemon=True
@@ -274,36 +286,45 @@ class StatusMonitor:
             return self._fallback_active
 
     def record_status(self, entry: StatusEntry) -> None:
-        should_stop = False
+        camera_present, camera_snapshot = self._extract_camera_status(entry.payload)
+
         with self._lock:
             self._last_timestamp = entry.timestamp
-            if self._fallback_active:
-                should_stop = True
+            self._last_camera_status = camera_snapshot
+            fallback_active = self._fallback_active
+            fallback_reason = self._fallback_reason
 
-        if should_stop:
-            LOGGER.info("Heartbeat recebido; solicitando parada do fallback.")
-            if self._service_manager.ensure_stopped():
-                with self._lock:
-                    self._fallback_active = False
-            else:
-                LOGGER.warning(
-                    "Falha ao parar fallback; nova tentativa ocorrerá no próximo heartbeat."
-                )
-                with self._lock:
-                    self._fallback_active = True
+        if not camera_present:
+            self._ensure_camera_fallback(fallback_active, fallback_reason)
+            return
+
+        if fallback_active:
+            self._stop_fallback("Heartbeat recebido; solicitando parada do fallback.")
 
     def snapshot(self) -> Dict[str, Any]:
         with self._lock:
             reference = self._last_timestamp or self._started_at
             elapsed = (utc_now() - reference).total_seconds()
-            return {
-                "last_timestamp": (
-                    isoformat(self._last_timestamp) if self._last_timestamp else None
-                ),
-                "fallback_active": self._fallback_active,
-                "seconds_since_last_heartbeat": elapsed,
-                "missed_threshold": self._settings.missed_threshold,
-            }
+            camera_snapshot = (
+                dict(self._last_camera_status)
+                if isinstance(self._last_camera_status, dict)
+                else None
+            )
+            fallback_reason = self._fallback_reason
+            fallback_active = self._fallback_active
+            last_timestamp = (
+                isoformat(self._last_timestamp) if self._last_timestamp else None
+            )
+
+        return {
+            "last_timestamp": last_timestamp,
+            "fallback_active": fallback_active,
+            "seconds_since_last_heartbeat": elapsed,
+            "missed_threshold": self._settings.missed_threshold,
+            "fallback_reason": fallback_reason,
+            "mode_file": self._mode_file.as_posix(),
+            "last_camera_signal": camera_snapshot,
+        }
 
     def _watchdog_loop(self) -> None:
         while not self._stop_event.is_set():
@@ -311,34 +332,142 @@ class StatusMonitor:
             self._stop_event.wait(timeout=self._settings.check_interval)
 
     def _evaluate_threshold(self) -> None:
-        action = False
         with self._lock:
             reference = self._last_timestamp or self._started_at
             elapsed = (utc_now() - reference).total_seconds()
+            fallback_active = self._fallback_active
+            fallback_reason = self._fallback_reason
 
-            if elapsed >= self._settings.missed_threshold:
-                if not self._fallback_active:
-                    LOGGER.warning(
-                        "Sem heartbeats há %s segundos; solicitando fallback.",
-                        int(elapsed),
-                    )
-                    action = True
-            else:
-                LOGGER.debug(
-                    "Heartbeat recente ha %.1fs; fallback desnecessario", elapsed
+        if elapsed >= self._settings.missed_threshold:
+            if fallback_reason == "no_camera_signal":
+                return
+            if not fallback_active or fallback_reason != "no_heartbeats":
+                self._activate_missing_heartbeats(int(elapsed))
+        else:
+            LOGGER.debug(
+                "Heartbeat recente ha %.1fs; fallback desnecessario", elapsed
+            )
+
+    def _write_mode_file(self, mode: str) -> None:
+        path = self._mode_file
+        if not path:
+            return
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            LOGGER.warning(
+                "Não foi possível preparar diretório para %s: %s", path, exc
+            )
+            return
+        try:
+            path.write_text(f"{mode.strip().lower()}\n", encoding="utf-8")
+        except OSError as exc:
+            LOGGER.warning(
+                "Não foi possível escrever modo de fallback em %s: %s", path, exc
+            )
+
+    @staticmethod
+    def _extract_camera_status(payload: Dict[str, Any]) -> tuple[bool, Dict[str, Any]]:
+        status = payload.get("status")
+        present = True
+        snapshot: Dict[str, Any] = {}
+
+        if isinstance(status, dict):
+            camera_info = status.get("camera_signal")
+            if isinstance(camera_info, dict):
+                for key, value in camera_info.items():
+                    if isinstance(key, str):
+                        snapshot[key] = value
+                present_value = snapshot.get("present")
+                if isinstance(present_value, bool):
+                    present = present_value
+                else:
+                    snapshot["present"] = present
+            elif isinstance(camera_info, bool):
+                present = camera_info
+                snapshot["present"] = present
+
+        if "present" not in snapshot:
+            snapshot["present"] = present
+
+        return present, snapshot
+
+    def _stop_fallback(self, message: str) -> None:
+        LOGGER.info(message)
+        if self._service_manager.ensure_stopped():
+            with self._lock:
+                self._fallback_active = False
+                self._fallback_reason = None
+            self._write_mode_file("life")
+        else:
+            LOGGER.warning(
+                "Falha ao parar fallback; nova tentativa ocorrerá no próximo heartbeat."
+            )
+            with self._lock:
+                self._fallback_active = True
+
+    def _ensure_camera_fallback(
+        self, fallback_active: bool, fallback_reason: Optional[str]
+    ) -> None:
+        if fallback_active and fallback_reason == "no_camera_signal":
+            return
+
+        restart_required = fallback_active and fallback_reason != "no_camera_signal"
+        if restart_required:
+            LOGGER.info(
+                "Heartbeat indica ausência de sinal da câmara; reiniciando fallback em modo SMPTE."
+            )
+            if not self._service_manager.ensure_stopped():
+                LOGGER.warning(
+                    "Falha ao reiniciar fallback em modo SMPTE; nova tentativa ocorrerá no próximo heartbeat."
                 )
-
-        if action:
-            if self._service_manager.ensure_started():
                 with self._lock:
                     self._fallback_active = True
-                LOGGER.info("Fallback ativado por ausência de heartbeats.")
-            else:
-                with self._lock:
-                    self._fallback_active = False
-                LOGGER.warning(
-                    "Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir."
+                    self._fallback_reason = fallback_reason
+                return
+        else:
+            LOGGER.info(
+                "Heartbeat indica ausência de sinal da câmara; ativando fallback em modo SMPTE."
+            )
+
+        self._write_mode_file("smptehdbars")
+        if self._service_manager.ensure_started():
+            with self._lock:
+                self._fallback_active = True
+                self._fallback_reason = "no_camera_signal"
+            if restart_required:
+                LOGGER.info(
+                    "Fallback reiniciado em modo SMPTE devido à ausência de sinal da câmara."
                 )
+            else:
+                LOGGER.info(
+                    "Fallback ativado em modo SMPTE devido à ausência de sinal da câmara."
+                )
+        else:
+            LOGGER.warning(
+                "Não foi possível iniciar o fallback em modo SMPTE; nova tentativa ocorrerá no próximo heartbeat."
+            )
+            with self._lock:
+                self._fallback_active = False
+                self._fallback_reason = None
+
+    def _activate_missing_heartbeats(self, elapsed: int) -> None:
+        LOGGER.warning(
+            "Sem heartbeats há %s segundos; solicitando fallback.", elapsed
+        )
+        self._write_mode_file("life")
+        if self._service_manager.ensure_started():
+            with self._lock:
+                self._fallback_active = True
+                self._fallback_reason = "no_heartbeats"
+            LOGGER.info("Fallback ativado por ausência de heartbeats.")
+        else:
+            LOGGER.warning(
+                "Não foi possível iniciar o fallback; nova tentativa ocorrerá se o silêncio persistir."
+            )
+            with self._lock:
+                self._fallback_active = False
+                self._fallback_reason = None
 
 
 class StatusHTTPRequestHandler(BaseHTTPRequestHandler):

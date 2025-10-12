@@ -46,6 +46,50 @@ fi
 ENV_FILE="/etc/youtube-fallback.env"
 [ -r "$ENV_FILE" ] && . "$ENV_FILE"
 
+FALLBACK_MODE_FILE=${FALLBACK_MODE_FILE:-/run/youtube-fallback.mode}
+FALLBACK_DEFAULT_MODE=${FALLBACK_DEFAULT_MODE:-life}
+
+read_fallback_mode() {
+  local file="$1" default="$2" mode
+  mode="$default"
+  if [ -n "$file" ] && [ -r "$file" ]; then
+    mode=$(tr -d '\r\n\t' < "$file" 2>/dev/null)
+    mode=${mode,,}
+    mode=${mode%% *}
+  fi
+
+  case "$mode" in
+    smpte|smptehdbars)
+      printf '%s' "smptehdbars"
+      ;;
+    life|*)
+      printf '%s' "life"
+      ;;
+  esac
+}
+
+select_video_source() {
+  local mode="$1"
+  case "$mode" in
+    smptehdbars)
+      printf 'smptehdbars=size=%sx%s:rate=%s' \
+        "$FALLBACK_WIDTH" "$FALLBACK_HEIGHT" "$FALLBACK_FPS"
+      ;;
+    *)
+      local suffix=""
+      if [ -n "$FALLBACK_LIFE_ARGS" ]; then
+        suffix=":${FALLBACK_LIFE_ARGS}"
+      fi
+      printf 'life=s=%sx%s:rate=%s%s' \
+        "$FALLBACK_WIDTH" "$FALLBACK_HEIGHT" "$FALLBACK_FPS" "$suffix"
+      ;;
+  esac
+}
+
+FALLBACK_MODE=$(read_fallback_mode "$FALLBACK_MODE_FILE" "$FALLBACK_DEFAULT_MODE")
+FALLBACK_VIDEO_SOURCE=$(select_video_source "$FALLBACK_MODE")
+log_line "Modo de fallback selecionado: ${FALLBACK_MODE}"
+
 # Expand ${YT_KEY} if it leaked into URL
 : "${YT_KEY:=}"
 if [ -z "${YT_KEY:-}" ]; then
@@ -207,7 +251,7 @@ run_ffmpeg_once() {
 
   set +e
   ffmpeg -progress "$PROGRESS_FILE" -hide_banner -loglevel "${FALLBACK_LOGLEVEL}" -nostats \
-    -re -f lavfi -i "life=s=${FALLBACK_WIDTH}x${FALLBACK_HEIGHT}:rate=${FALLBACK_FPS}${FALLBACK_LIFE_ARGS:+:${FALLBACK_LIFE_ARGS}}" \
+    -re -f lavfi -i "${FALLBACK_VIDEO_SOURCE}" \
     -f lavfi -i "anullsrc=channel_layout=stereo:sample_rate=${FALLBACK_AR}" \
     -filter_complex "[0:v]scale=${FALLBACK_WIDTH}:${FALLBACK_HEIGHT}:force_original_aspect_ratio=decrease,pad=${FALLBACK_WIDTH}:${FALLBACK_HEIGHT}:(ow-iw)/2:(oh-ih)/2:color=black,format=yuv420p,setpts=PTS+${FALLBACK_DELAY_SEC}/TB,drawtext=fontfile=${FALLBACK_FONT}:text='${FALLBACK_SCROLL_TEXT}':fontsize=44:fontcolor=white:shadowcolor=black@0.85:shadowx=2:shadowy=2:x=w-mod(t*30*8\,w+text_w):y=H-120,drawtext=fontfile=${FALLBACK_FONT}:text='${FALLBACK_STATIC_TEXT}':fontsize=28:fontcolor=white:shadowcolor=black@0.85:shadowx=2:shadowy=2:x=(w-text_w)/2:y=(h-text_h)/2:enable='lt(mod(t\,1)\,0.5)'[vb];[1:a]asetpts=PTS+${FALLBACK_DELAY_SEC}/TB[ab]" \
     -map "[vb]" -map "[ab]" \
