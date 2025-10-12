@@ -185,6 +185,7 @@ def _resolve_ffprobe_path(ffmpeg_path: str) -> str:
 LOG_DIR, LOG_STEM, LOG_SUFFIX = _resolve_log_target()
 LOG_PATTERN = f"{LOG_STEM}-*.log"
 LOG_RETENTION_DAYS = 7
+_SHOW_ON_SCREEN = False
 
 _PID_FILE_NAME = "stream_to_youtube.pid"
 _STOP_SENTINEL_NAME = "stream_to_youtube.stop"
@@ -411,17 +412,26 @@ def log_event(component: str, message: str) -> None:
 
     prune_old_logs(active_file=log_file)
 
+    directory_ready = True
+
     try:
         log_file.parent.mkdir(parents=True, exist_ok=True)
     except OSError:
-        return
+        directory_ready = False
 
-    try:
-        with log_file.open("a", encoding="utf-8") as handle:
-            handle.write(line)
-    except OSError:
-        # Logging should never interrupt the streaming loop.
-        pass
+    if directory_ready:
+        try:
+            with log_file.open("a", encoding="utf-8") as handle:
+                handle.write(line)
+        except OSError:
+            # Logging should never interrupt the streaming loop.
+            pass
+
+    if _SHOW_ON_SCREEN:
+        try:
+            print(line.rstrip("\n"), flush=True)
+        except OSError:
+            pass
 
 
 def _load_env_template(base_dir: Path) -> str:
@@ -1879,57 +1889,82 @@ def _stop_streaming_instance(timeout: float = 30.0) -> int:
 
 
 def main() -> None:
-    _minimize_console_window()
-
     raw_args = sys.argv[1:]
-    normalized_args = []
+    normalized_pairs: list[tuple[str, str]] = []
     for arg in raw_args:
         lowered = arg.lower()
         if lowered.startswith("/"):
-            normalized_args.append(f"--{lowered[1:]}")
+            normalized = f"--{lowered[1:]}"
         elif lowered.startswith("--"):
-            normalized_args.append(lowered)
+            normalized = lowered
         else:
-            normalized_args.append(f"--{lowered}")
+            normalized = f"--{lowered}"
+        normalized_pairs.append((normalized, arg))
 
-    command = normalized_args[0] if normalized_args else "--start"
-    if command not in {"--start", "--stop"}:
-        message = f"Flag desconhecida: {raw_args[0]}"
+    command = "--start"
+    extra_pairs = normalized_pairs
+
+    if normalized_pairs and normalized_pairs[0][0] in {"--start", "--stop"}:
+        command = normalized_pairs[0][0]
+        extra_pairs = normalized_pairs[1:]
+    elif normalized_pairs and normalized_pairs[0][0] not in {"--showonscreen"}:
+        message = f"Flag desconhecida: {normalized_pairs[0][1]}"
         print(f"[primary] {message}", file=sys.stderr)
         log_event("primary", message)
         sys.exit(1)
 
+    show_on_screen = False
     resolution_arg: Optional[str] = None
 
     if command == "--stop":
-        if len(normalized_args) > 1:
+        if extra_pairs:
             message = "A flag --stop não aceita parâmetros adicionais."
             print(f"[primary] {message}", file=sys.stderr)
             log_event("primary", message)
             sys.exit(1)
+        _minimize_console_window()
         exit_code = _stop_streaming_instance()
         sys.exit(exit_code)
 
-    if len(normalized_args) > 2:
-        message = "Utilize no máximo uma flag extra para --start (--360p, --720p ou --1080p)."
-        print(f"[primary] {message}", file=sys.stderr)
-        log_event("primary", message)
-        sys.exit(1)
+    for normalized, raw in extra_pairs:
+        if normalized == "--showonscreen":
+            show_on_screen = True
+            continue
 
-    if len(normalized_args) == 2:
-        resolution_candidate = normalized_args[1]
-        if not resolution_candidate.startswith("--"):
-            message = f"Flag desconhecida: {raw_args[1]}"
+        if not normalized.startswith("--"):
+            message = f"Flag desconhecida: {raw}"
             print(f"[primary] {message}", file=sys.stderr)
             log_event("primary", message)
             sys.exit(1)
-        normalized_resolution = _normalize_resolution(resolution_candidate[2:])
+
+        normalized_resolution = _normalize_resolution(normalized[2:])
         if normalized_resolution is None:
-            message = f"Resolução desconhecida: {raw_args[1]}"
+            message = f"Resolução desconhecida: {raw}"
             print(f"[primary] {message}", file=sys.stderr)
             log_event("primary", message)
             sys.exit(1)
+
+        if resolution_arg is not None:
+            message = (
+                "Utilize no máximo uma flag de resolução junto com --start "
+                "(--360p, --720p ou --1080p)."
+            )
+            print(f"[primary] {message}", file=sys.stderr)
+            log_event("primary", message)
+            sys.exit(1)
+
         resolution_arg = normalized_resolution
+
+    global _SHOW_ON_SCREEN
+    _SHOW_ON_SCREEN = show_on_screen
+
+    if not show_on_screen:
+        _minimize_console_window()
+    else:
+        log_event(
+            "primary",
+            "Flag --showonscreen ativa; exibindo logs em tempo real no console.",
+        )
 
     exit_code = _start_streaming_instance(resolution=resolution_arg)
     sys.exit(exit_code)
