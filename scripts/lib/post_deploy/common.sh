@@ -225,6 +225,57 @@ ENVEOF
     log "Monitor de status ativo em ${state_dir}"
 }
 
+setup_youtube_fallback_watcher() {
+    local base_dir=$1
+
+    log "Instalando watcher de fallback do YouTube"
+
+    ensure_installed_file "${base_dir}/bin/youtube_fallback_watcher.py" \
+        /usr/local/bin/youtube_fallback_watcher.py 755
+
+    if [[ -f "/etc/youtube-fallback-watcher.conf" ]]; then
+        log "Configuração existente detectada em /etc/youtube-fallback-watcher.conf; mantendo ficheiro atual."
+    else
+        ensure_installed_file "${base_dir}/config/youtube-fallback-watcher.conf" \
+            /etc/youtube-fallback-watcher.conf 644
+    fi
+
+    ensure_installed_file "${base_dir}/systemd/youtube-fallback-watcher.service" \
+        /etc/systemd/system/youtube-fallback-watcher.service 644
+
+    maybe_systemctl_daemon_reload
+
+    if command -v systemctl >/dev/null 2>&1; then
+        if systemctl list-unit-files yt-comm-watcher.service >/dev/null 2>&1; then
+            log "Desativando watcher legado yt-comm-watcher.service"
+            systemctl disable --now yt-comm-watcher.service >/dev/null 2>&1 || true
+        fi
+
+        local config_file="/etc/youtube-fallback-watcher.conf"
+        local placeholder_url="https://SEU_ENDPOINT/status"
+        local api_url=""
+
+        if [[ -f "${config_file}" ]]; then
+            local api_line
+            api_line=$(grep -E '^API_URL=' "${config_file}" | tail -n1 || true)
+            api_url=${api_line#API_URL=}
+            api_url=${api_url//[[:space:]]/}
+        fi
+
+        if [[ -z "${api_url}" || "${api_url}" == "${placeholder_url}" ]]; then
+            log "API_URL não configurado (atual='${api_url:-<vazio>}'); watcher ficará instalado mas desativado."
+            systemctl disable --now youtube-fallback-watcher.service >/dev/null 2>&1 || true
+            log "Configure /etc/youtube-fallback-watcher.conf e ative manualmente com: sudo systemctl enable --now youtube-fallback-watcher.service"
+        else
+            if ! systemctl enable --now youtube-fallback-watcher.service; then
+                log "Aviso: não foi possível ativar/arrancar youtube-fallback-watcher.service; consultar journalctl para detalhes."
+            fi
+        fi
+    else
+        log "Aviso: systemctl indisponível; não foi possível ativar youtube-fallback-watcher.service"
+    fi
+}
+
 ensure_yt_restapi_sudoers() {
     local sudoers_file="/etc/sudoers.d/yt-restapi"
     local tmp
