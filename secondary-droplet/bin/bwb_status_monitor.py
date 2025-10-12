@@ -212,7 +212,16 @@ class ServiceManager:
             )
             active = status.returncode == 0 and status.stdout.strip() == "active"
             if active and not force:
-                LOGGER.debug("Serviço %s já está ativo", self.name)
+                LOGGER.debug(
+                    "Serviço %s já está ativo; enviando SIGHUP para aplicar configurações",
+                    self.name,
+                )
+                result = self._run_systemctl("kill", "--signal=HUP")
+                if result.returncode != 0:
+                    self._log_failure("enviar SIGHUP", result)
+                    return False
+
+                LOGGER.info("Sinal SIGHUP enviado para %s", self.name)
                 return True
 
             action = "restart" if active else "start"

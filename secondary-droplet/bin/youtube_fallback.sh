@@ -86,9 +86,10 @@ select_video_source() {
   esac
 }
 
-FALLBACK_MODE=$(read_fallback_mode "$FALLBACK_MODE_FILE" "$FALLBACK_DEFAULT_MODE")
-FALLBACK_VIDEO_SOURCE=$(select_video_source "$FALLBACK_MODE")
-log_line "Modo de fallback selecionado: ${FALLBACK_MODE}"
+FALLBACK_MODE=""
+FALLBACK_VIDEO_SOURCE=""
+
+RELOAD_REQUESTED=0
 
 # Expand ${YT_KEY} if it leaked into URL
 : "${YT_KEY:=}"
@@ -170,7 +171,17 @@ handle_signal() {
   kill -s "$sig" "$$"
 }
 
-trap 'handle_signal HUP' HUP
+request_reload() {
+  log_line "Recebido SIGHUP; solicitando recarga do modo de fallback"
+  RELOAD_REQUESTED=1
+
+  if [ -n "${FFMPEG_PID:-}" ] && kill -0 "$FFMPEG_PID" 2>/dev/null; then
+    log_line "Encerrando ffmpeg para aplicar novo modo de fallback"
+    kill -s TERM "$FFMPEG_PID" 2>/dev/null || true
+  fi
+}
+
+trap 'request_reload' HUP
 trap 'handle_signal INT' INT
 trap 'handle_signal QUIT' QUIT
 trap 'handle_signal PIPE' PIPE
@@ -303,9 +314,30 @@ if ! [[ "$FALLBACK_RETRY_DELAY" =~ ^[0-9]+$ ]] || (( FALLBACK_RETRY_DELAY < 0 ))
   FALLBACK_RETRY_DELAY=10
 fi
 
+update_fallback_selection() {
+  local mode
+  mode=$(read_fallback_mode "$FALLBACK_MODE_FILE" "$FALLBACK_DEFAULT_MODE")
+
+  if [ "$mode" != "$FALLBACK_MODE" ] || [ -z "$FALLBACK_VIDEO_SOURCE" ]; then
+    FALLBACK_MODE="$mode"
+    FALLBACK_VIDEO_SOURCE=$(select_video_source "$FALLBACK_MODE")
+    log_line "Modo de fallback selecionado: ${FALLBACK_MODE}"
+  fi
+}
+
+update_fallback_selection
+
 while true; do
+  update_fallback_selection
+
   run_ffmpeg_once
   status=$?
+
+  if (( RELOAD_REQUESTED )); then
+    log_line "ffmpeg reiniciado para aplicar modo de fallback ${FALLBACK_MODE}"
+    RELOAD_REQUESTED=0
+    continue
+  fi
 
   if [ "$status" -ge 128 ]; then
     exit "$status"
