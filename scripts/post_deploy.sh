@@ -142,8 +142,8 @@ else
         log "Swapfile ${swapfile} ativo."
     }
 
-ensure_python_venv() {
-    local python_bin=${PYTHON_BIN:-python3}
+    ensure_python_venv() {
+        local python_bin=${PYTHON_BIN:-python3}
         if "${python_bin}" -m ensurepip --help >/dev/null 2>&1; then
             log "python3 venv disponível; nenhum pacote adicional necessário."
             return
@@ -254,10 +254,7 @@ main() {
     pip3 install --no-cache-dir -r "${secondary_dir}/requirements.txt"
 
     ensure_installed_file "${secondary_dir}/bin/youtube_fallback.sh" /usr/local/bin/youtube_fallback.sh 755
-    ensure_installed_file "${secondary_dir}/bin/yt-fallback" /usr/local/bin/yt-fallback 755
-    ensure_installed_file "${secondary_dir}/bin/yt-comm-watcher.sh" /usr/local/bin/yt-comm-watcher.sh 755
     ensure_installed_file "${secondary_dir}/systemd/youtube-fallback.service" /etc/systemd/system/youtube-fallback.service 644
-    ensure_installed_file "${secondary_dir}/systemd/yt-comm-watcher.service" /etc/systemd/system/yt-comm-watcher.service 644
     ensure_installed_file "${secondary_dir}/bin/ensure_broadcast.py" /usr/local/bin/ensure_broadcast.py 755
     ensure_installed_file "${secondary_dir}/systemd/ensure-broadcast.service" /etc/systemd/system/ensure-broadcast.service 644
     ensure_installed_file "${secondary_dir}/systemd/ensure-broadcast.timer" /etc/systemd/system/ensure-broadcast.timer 644
@@ -267,7 +264,43 @@ main() {
     ensure_installed_file_optional "${SCRIPT_DIR}/reset_secondary_droplet.sh" /usr/local/bin/reset_secondary_droplet.sh 755
     ensure_installed_file_optional "${SCRIPT_DIR}/status-monitor-debug.sh" /usr/local/bin/status-monitor-debug.sh 755
 
-    prepare_fallback_env "${secondary_dir}"
+    local ENV_FILE="/etc/youtube-fallback.env"
+    local DEFAULTS_FILE="${secondary_dir}/config/youtube-fallback.defaults"
+
+    local existing_key=""
+    if [[ -f "${ENV_FILE}" ]]; then
+        while IFS= read -r line; do
+            case "${line}" in
+                YT_KEY=*)
+                    existing_key="${line#YT_KEY=}"
+                    ;;
+            esac
+        done < "${ENV_FILE}"
+    fi
+
+    if [[ -z "${existing_key}" ]]; then
+        existing_key='""'
+    fi
+
+    local tmp_env
+    tmp_env="$(mktemp)"
+    trap 'rm -f "${tmp_env}"' RETURN
+    {
+        echo "# /etc/youtube-fallback.env (managed by post_deploy.sh)"
+        echo "# Defaults live in /usr/local/config/youtube-fallback.defaults. Override only what you need here."
+        echo "YT_KEY=${existing_key}"
+        echo
+        echo "# Default parameters for reference:"
+        while IFS= read -r default_line; do
+            [[ -z "${default_line}" ]] && continue
+            [[ "${default_line}" =~ ^# ]] && continue
+            echo "#${default_line}"
+        done < "${DEFAULTS_FILE}"
+    } > "${tmp_env}"
+
+    install -m 644 -o root -g root "${tmp_env}" "${ENV_FILE}"
+    trap - RETURN
+    rm -f "${tmp_env}"
 
     maybe_systemctl_daemon_reload
 
@@ -312,161 +345,6 @@ main() {
     if command -v deactivate >/dev/null 2>&1; then
         deactivate
     fi
-}
-
-clean_env_value() {
-    local value="$1"
-    value="$(printf '%s' "$value" | tr -d '\r\n\t')"
-    value="${value#\"}"
-    value="${value%\"}"
-    value="${value#\'}"
-    value="${value%\'}"
-    echo "$value"
-}
-
-sanitize_stream_key() {
-    local key
-    key="$(clean_env_value "$1")"
-    key="${key// /}"
-    key="${key//\?backup=1\/}"
-    key="${key//backup=1\/}"
-    key="${key//\?backup=1/}"
-    key="${key##*live2/}"
-    key="${key##*/}"
-    key="${key%%\?*}"
-    echo "$key"
-}
-
-prepare_fallback_env() {
-    local secondary_dir="$1"
-    local env_file="/etc/youtube-fallback.env"
-    local template="${secondary_dir}/config/youtube-fallback.env"
-    local drop_in_dir="/etc/systemd/system/youtube-fallback.service.d"
-    local drop_in_file="${drop_in_dir}/override.conf"
-    local legacy_dir="/etc/youtube-fallback.d"
-    local existing_url=""
-    local existing_key=""
-    local existing_video_src=""
-    local existing_duration=""
-    local existing_scenes_txt=""
-    local default_url=""
-    local default_video_src=""
-
-    parse_env_file() {
-        local file="$1"
-        [[ -f "${file}" ]] || return 0
-        while IFS= read -r line; do
-            case "${line}" in
-                YT_URL=*)
-                    if [[ -z "${existing_url}" ]]; then
-                        existing_url="$(clean_env_value "${line#*=}")"
-                    fi
-                    ;;
-                YT_URL_BACKUP=*)
-                    if [[ -z "${existing_url}" ]]; then
-                        existing_url="$(clean_env_value "${line#*=}")"
-                    fi
-                    ;;
-                YT_KEY=*)
-                    if [[ -z "${existing_key}" ]]; then
-                        existing_key="$(clean_env_value "${line#*=}")"
-                    fi
-                    ;;
-                VIDEO_SRC=*)
-                    if [[ -z "${existing_video_src}" ]]; then
-                        existing_video_src="$(clean_env_value "${line#*=}")"
-                    fi
-                    ;;
-                DURATION_PER_SCENE=*)
-                    if [[ -z "${existing_duration}" ]]; then
-                        existing_duration="$(clean_env_value "${line#*=}")"
-                    fi
-                    ;;
-                SCENES_TXT=*)
-                    if [[ -z "${existing_scenes_txt}" ]]; then
-                        existing_scenes_txt="${line#*=}"
-                    fi
-                    ;;
-            esac
-        done < "${file}"
-    }
-
-    if [[ -f "${template}" ]]; then
-        while IFS='=' read -r key value; do
-            case "${key}" in
-                YT_URL)
-                    if [[ -z "${default_url}" ]]; then
-                        default_url="$(clean_env_value "${value}")"
-                    fi
-                    ;;
-                VIDEO_SRC)
-                    if [[ -z "${default_video_src}" ]]; then
-                        default_video_src="$(clean_env_value "${value}")"
-                    fi
-                    ;;
-            esac
-        done < "${template}"
-    fi
-
-    default_url="${default_url:-rtmp://a.rtmp.youtube.com/live2/f4ex-ztrk-vc4h-2pvc-2kg4}"
-    default_video_src="${default_video_src:-smptehdbars=s=1280x720:rate=30}"
-
-    parse_env_file "${env_file}"
-
-    if [[ -d "${legacy_dir}" ]]; then
-        for profile in "${legacy_dir}"/*.env; do
-            [[ -e "${profile}" ]] || continue
-            parse_env_file "${profile}"
-            if [[ -n "${existing_url}" ]]; then
-                break
-            fi
-        done
-    fi
-
-    if [[ -n "${existing_key}" && -z "${existing_url}" ]]; then
-        local sanitized
-        sanitized="$(sanitize_stream_key "${existing_key}")"
-        if [[ -n "${sanitized}" ]]; then
-            existing_url="rtmp://a.rtmp.youtube.com/live2/${sanitized}"
-        fi
-    fi
-
-    install -d -m 755 -o root -g root "${drop_in_dir}"
-    local tmp_drop
-    tmp_drop="$(mktemp)"
-    cat <<'DROPIN' >"${tmp_drop}"
-[Service]
-EnvironmentFile=
-EnvironmentFile=-/etc/youtube-fallback.env
-DROPIN
-    install -m 644 -o root -g root "${tmp_drop}" "${drop_in_file}"
-    rm -f "${tmp_drop}"
-
-    local tmp_env
-    tmp_env="$(mktemp)"
-    {
-        printf 'YT_URL=%s\n' "${existing_url:-${default_url}}"
-        printf 'VIDEO_SRC=%s\n' "${existing_video_src:-${default_video_src}}"
-        if [[ -n "${existing_duration}" ]]; then
-            printf 'DURATION_PER_SCENE=%s\n' "${existing_duration}"
-        fi
-        if [[ -n "${existing_scenes_txt}" ]]; then
-            printf 'SCENES_TXT=%s\n' "${existing_scenes_txt}"
-        fi
-    } >"${tmp_env}"
-
-    rm -f "${env_file}"
-    install -m 644 -o root -g root "${tmp_env}" "${env_file}"
-    rm -f "${tmp_env}"
-
-    if [[ -d "${legacy_dir}" ]]; then
-        local backup_dir
-        backup_dir="${legacy_dir}.legacy.$(date +%Y%m%d%H%M%S)"
-        mv "${legacy_dir}" "${backup_dir}"
-        log "Perfis legacy movidos para ${backup_dir}."
-    fi
-
-    log "youtube-fallback env atualizado em ${env_file}."
 }
 
 ensure_yt_restapi_sudoers() {

@@ -47,7 +47,6 @@ class MonitorSettings:
     auth_token: Optional[str] = None
     require_token: bool = False
     mode_file: Path = Path("/run/youtube-fallback.mode")
-    fallback_cli: Path = Path("/usr/local/bin/yt-fallback")
 
     @classmethod
     def from_env(cls) -> "MonitorSettings":
@@ -99,9 +98,6 @@ class MonitorSettings:
         mode_override = _get_env(
             "YTR_FALLBACK_MODE_FILE", "BWB_STATUS_FALLBACK_MODE_FILE"
         )
-        cli_override = _get_env(
-            "YTR_FALLBACK_CLI", "BWB_STATUS_FALLBACK_CLI"
-        )
 
         log_path = Path(log_override or cls.log_file.as_posix())
         secondary_service = secondary_override or cls.secondary_service
@@ -152,7 +148,6 @@ class MonitorSettings:
             auth_token=token if token else None,
             require_token=require_token,
             mode_file=mode_file,
-            fallback_cli=Path(cli_override).expanduser() if cli_override else cls.fallback_cli,
         )
 
 
@@ -174,22 +169,20 @@ class StatusEntry:
 
 
 @dataclass
-class FallbackController:
-    service: str
-    cli: Path
+class ServiceManager:
+    name: str
     _lock: threading.Lock = field(default_factory=threading.Lock)
 
-    def _cli_cmd(self, *args: str) -> list[str]:
-        base_cmd = [str(self.cli), *args]
+    def _systemctl_cmd(self, *args: str) -> list[str]:
+        base_cmd = ["/bin/systemctl", "--no-ask-password", *args, self.name]
         if os.geteuid() == 0:
             return base_cmd
         return ["/usr/bin/sudo", "-n", *base_cmd]
 
-    def _systemctl_cmd(self, *args: str) -> list[str]:
-        base_cmd = ["/bin/systemctl", "--no-ask-password", *args, self.service]
-        if os.geteuid() == 0:
-            return base_cmd
-        return ["/usr/bin/sudo", "-n", *base_cmd]
+    def _run_systemctl(self, *args: str) -> subprocess.CompletedProcess[str]:
+        cmd = self._systemctl_cmd(*args)
+        LOGGER.debug("Executando: %s", " ".join(cmd))
+        return subprocess.run(cmd, check=False, capture_output=True, text=True)
 
     @staticmethod
     def _systemctl_message(result: subprocess.CompletedProcess[str]) -> str:
@@ -198,43 +191,35 @@ class FallbackController:
             message = f"systemctl retornou código {result.returncode}"
         return message
 
-    def current_mode(self) -> Optional[str]:
-        cmd = self._cli_cmd("current")
-        LOGGER.debug("Executando: %s", " ".join(cmd))
-        result = subprocess.run(cmd, check=False, capture_output=True, text=True)
-        if result.returncode != 0:
-            message = result.stderr.strip() or result.stdout.strip()
-            LOGGER.warning(
-                "Falha ao obter modo atual do fallback (%s): %s",
-                self.cli,
-                message or f"retorno {result.returncode}",
+    def _log_failure(
+        self, action: str, result: subprocess.CompletedProcess[str]
+    ) -> None:
+        message = self._systemctl_message(result)
+        LOGGER.error("Falha ao %s %s: %s", action, self.name, message)
+        if "no new privileges" in message.lower():
+            LOGGER.error(
+                "A conta actual não consegue usar sudo devido a NoNewPrivileges=true; "
+                "revise a unit yt-restapi.service para permitir o fallback."
             )
-            return None
-        output = result.stdout.strip()
-        if not output:
-            return None
-        return output.split()[0].strip().lower()
 
-    def set_mode(self, mode: str, *, force: bool = False) -> bool:
-        normalized = mode.strip().lower()
+    def ensure_started(self) -> bool:
         with self._lock:
-            if not force:
-                current = self.current_mode()
-                if current == normalized:
-                    LOGGER.debug("Perfil %s já ativo; nenhuma ação necessária.", normalized)
-                    return True
-            cmd = self._cli_cmd("set", normalized)
-            LOGGER.info("Configurando fallback para modo %s", normalized)
-            result = subprocess.run(cmd, check=False, capture_output=True, text=True)
+            status = subprocess.run(
+                self._systemctl_cmd("is-active"),
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            if status.returncode == 0 and status.stdout.strip() == "active":
+                LOGGER.debug("Serviço %s já está ativo", self.name)
+                return True
+
+            result = self._run_systemctl("start")
             if result.returncode != 0:
-                message = result.stderr.strip() or result.stdout.strip()
-                LOGGER.error(
-                    "Falha ao definir modo %s via %s: %s",
-                    normalized,
-                    self.cli,
-                    message or f"retorno {result.returncode}",
-                )
+                self._log_failure("iniciar", result)
                 return False
+
+            LOGGER.info("Serviço %s iniciado", self.name)
             return True
 
     def ensure_stopped(self) -> bool:
@@ -246,30 +231,24 @@ class FallbackController:
                 text=True,
             )
             if status.returncode != 0 or status.stdout.strip() == "inactive":
-                LOGGER.debug("Serviço %s já está inativo", self.service)
+                LOGGER.debug("Serviço %s já está inativo", self.name)
                 return True
 
-            result = subprocess.run(
-                self._systemctl_cmd("stop"),
-                check=False,
-                capture_output=True,
-                text=True,
-            )
+            result = self._run_systemctl("stop")
             if result.returncode != 0:
-                message = self._systemctl_message(result)
-                LOGGER.error("Falha ao parar %s: %s", self.service, message)
+                self._log_failure("parar", result)
                 return False
 
-            LOGGER.info("Serviço %s parado", self.service)
+            LOGGER.info("Serviço %s parado", self.name)
             return True
 
 
 class StatusMonitor:
     def __init__(
-        self, settings: MonitorSettings, fallback_controller: FallbackController
+        self, settings: MonitorSettings, service_manager: ServiceManager
     ) -> None:
         self._settings = settings
-        self._fallback = fallback_controller
+        self._service_manager = service_manager
         self._lock = threading.Lock()
         self._last_timestamp: Optional[dt.datetime] = None
         self._started_at = utc_now()
@@ -415,7 +394,7 @@ class StatusMonitor:
 
     def _stop_fallback(self, message: str) -> None:
         LOGGER.info(message)
-        if self._fallback.ensure_stopped():
+        if self._service_manager.ensure_stopped():
             with self._lock:
                 self._fallback_active = False
                 self._fallback_reason = None
@@ -430,40 +409,29 @@ class StatusMonitor:
     def _ensure_camera_fallback(
         self, fallback_active: bool, fallback_reason: Optional[str]
     ) -> None:
-        restart_required = fallback_active and fallback_reason != "no_camera_signal"
-
-        mode_written = False
-
         if fallback_active and fallback_reason == "no_camera_signal":
-            self._write_mode_file("smptehdbars")
-            mode_written = True
-            if self._fallback.set_mode("bars", force=False):
-                LOGGER.debug(
-                    "Fallback SMPTE já ativo; confirmação do serviço concluída."
-                )
-                return
-
-            LOGGER.warning(
-                "Não foi possível confirmar o fallback em modo SMPTE; nova tentativa ocorrerá no próximo heartbeat."
-            )
-            with self._lock:
-                self._fallback_active = False
-                self._fallback_reason = None
             return
 
+        restart_required = fallback_active and fallback_reason != "no_camera_signal"
         if restart_required:
             LOGGER.info(
                 "Heartbeat indica ausência de sinal da câmara; reiniciando fallback em modo SMPTE."
             )
+            if not self._service_manager.ensure_stopped():
+                LOGGER.warning(
+                    "Falha ao reiniciar fallback em modo SMPTE; nova tentativa ocorrerá no próximo heartbeat."
+                )
+                with self._lock:
+                    self._fallback_active = True
+                    self._fallback_reason = fallback_reason
+                return
         else:
             LOGGER.info(
                 "Heartbeat indica ausência de sinal da câmara; ativando fallback em modo SMPTE."
             )
 
-        if not mode_written:
-            self._write_mode_file("smptehdbars")
-
-        if self._fallback.set_mode("bars", force=restart_required):
+        self._write_mode_file("smptehdbars")
+        if self._service_manager.ensure_started():
             with self._lock:
                 self._fallback_active = True
                 self._fallback_reason = "no_camera_signal"
@@ -488,7 +456,7 @@ class StatusMonitor:
             "Sem heartbeats há %s segundos; solicitando fallback.", elapsed
         )
         self._write_mode_file("life")
-        if self._fallback.set_mode("life"):
+        if self._service_manager.ensure_started():
             with self._lock:
                 self._fallback_active = True
                 self._fallback_reason = "no_heartbeats"
@@ -653,12 +621,8 @@ def run_server(settings: MonitorSettings, args: argparse.Namespace) -> None:
     elif settings.auth_token:
         LOGGER.info("Token Bearer definido; aceitando também requisições sem token")
 
-    fallback_controller = FallbackController(
-        service=settings.secondary_service,
-        cli=settings.fallback_cli,
-    )
     monitor = StatusMonitor(
-        settings=settings, fallback_controller=fallback_controller
+        settings=settings, service_manager=ServiceManager(settings.secondary_service)
     )
 
     try:

@@ -7,15 +7,12 @@ StartLimitBurst=10
 
 [Service]
 Type=simple
-EnvironmentFile=-/etc/youtube-fallback.env
+EnvironmentFile=/etc/youtube-fallback.env
 ExecStart=/usr/local/bin/youtube_fallback.sh
 Restart=always
 RestartSec=3
 Nice=5
 LimitNOFILE=1048576
-KillMode=control-group
-KillSignal=SIGTERM
-TimeoutStopSec=5
 
 [Install]
 WantedBy=multi-user.target
