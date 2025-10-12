@@ -31,6 +31,12 @@ DEFAULT_SCENE_LIFE = "life=size=1280x720:rate=30"
 DEFAULT_SCENE_BARS = "smptehdbars=s=1280x720:rate=30"
 DEFAULT_TIMEOUT = 3.0
 
+DEFAULT_STATUS_API_URL = "http://127.0.0.1:8080/status"
+PLACEHOLDER_API_URLS = {
+    "https://SEU_ENDPOINT/status",
+    "https://YOUR_ENDPOINT/status",
+}
+
 
 class Mode(Enum):
     """Operating modes for the fallback service."""
@@ -116,10 +122,22 @@ class WatcherConfig:
             return data.get(key)
 
         api_url = _override("API_URL", "YFW_API_URL", "YTR_API_URL")
-        if not api_url:
-            raise ValueError(
-                "API_URL não definido em /etc/youtube-fallback-watcher.conf nem em variáveis de ambiente"
+        placeholder_value = (api_url or "").strip()
+        if not placeholder_value:
+            LOGGER.warning(
+                "API_URL não definido; utilizando endpoint local por omissão (%s)",
+                DEFAULT_STATUS_API_URL,
             )
+            api_url = DEFAULT_STATUS_API_URL
+        elif placeholder_value in PLACEHOLDER_API_URLS:
+            LOGGER.warning(
+                "API_URL contém placeholder (%s); utilizando endpoint local (%s)",
+                placeholder_value,
+                DEFAULT_STATUS_API_URL,
+            )
+            api_url = DEFAULT_STATUS_API_URL
+        else:
+            api_url = placeholder_value
 
         check_interval_raw = _override("CHECK_INTERVAL", "YFW_CHECK_INTERVAL")
         stale_raw = _override("HEARTBEAT_STALE_SEC", "YFW_HEARTBEAT_STALE_SEC")
