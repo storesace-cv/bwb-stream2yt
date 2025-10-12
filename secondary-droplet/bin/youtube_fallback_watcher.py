@@ -31,6 +31,12 @@ DEFAULT_SCENE_LIFE = "life=size=1280x720:rate=30"
 DEFAULT_SCENE_BARS = "smptehdbars=s=1280x720:rate=30"
 DEFAULT_TIMEOUT = 3.0
 
+DEFAULT_STATUS_API_URL = "http://127.0.0.1:8080/status"
+PLACEHOLDER_API_URLS = {
+    "https://SEU_ENDPOINT/status",
+    "https://YOUR_ENDPOINT/status",
+}
+
 
 class Mode(Enum):
     """Operating modes for the fallback service."""
@@ -116,10 +122,23 @@ class WatcherConfig:
             return data.get(key)
 
         api_url = _override("API_URL", "YFW_API_URL", "YTR_API_URL")
-        if not api_url:
-            raise ValueError(
-                "API_URL não definido em /etc/youtube-fallback-watcher.conf nem em variáveis de ambiente"
+        placeholder_value = (api_url or "").strip()
+        if not placeholder_value:
+            LOGGER.warning(
+                "API_URL não definido; utilizando endpoint local por omissão (%s)",
+                DEFAULT_STATUS_API_URL,
             )
+            api_url = DEFAULT_STATUS_API_URL
+        elif placeholder_value in PLACEHOLDER_API_URLS:
+            LOGGER.info(
+                "API_URL contém placeholder conhecido (%s); utilizando endpoint local (%s)."
+                " Isto é esperado quando se usa a configuração padrão.",
+                placeholder_value,
+                DEFAULT_STATUS_API_URL,
+            )
+            api_url = DEFAULT_STATUS_API_URL
+        else:
+            api_url = placeholder_value
 
         check_interval_raw = _override("CHECK_INTERVAL", "YFW_CHECK_INTERVAL")
         stale_raw = _override("HEARTBEAT_STALE_SEC", "YFW_HEARTBEAT_STALE_SEC")
@@ -403,9 +422,41 @@ class APIWatcher:
                     return Mode.OFF, "camera_estado_desconhecido"
                 LOGGER.warning("API indica ausência de internet no emissor")
                 return Mode.LIFE, "internet_indisponivel"
-            LOGGER.warning(
-                "Payload inválido recebido: campo 'internet' não é booleano → %r", payload
-            )
+
+            fallback_active = payload.get("fallback_active")
+            if isinstance(fallback_active, bool):
+                self._last_success = now
+                fallback_reason = payload.get("fallback_reason")
+                camera_snapshot = payload.get("last_camera_signal")
+                camera_present = None
+                if isinstance(camera_snapshot, dict):
+                    present = camera_snapshot.get("present")
+                    if isinstance(present, bool):
+                        camera_present = present
+
+                if not fallback_active:
+                    return Mode.OFF, "api_fallback_desligado"
+
+                if fallback_reason == "no_camera_signal":
+                    return Mode.BARS, "api_camera_sem_sinal"
+
+                if camera_present is False:
+                    return Mode.BARS, "api_camera_snapshot_sem_sinal"
+
+                if fallback_reason == "no_heartbeats":
+                    return Mode.LIFE, "api_sem_heartbeats"
+
+                return Mode.LIFE, "api_fallback_ativo"
+
+            if internet is not None and not isinstance(internet, bool):
+                LOGGER.warning(
+                    "Payload inválido recebido: campo 'internet' não é booleano → %r",
+                    payload,
+                )
+            else:
+                LOGGER.warning(
+                    "Payload inválido recebido: estrutura desconhecida → %r", payload
+                )
         else:
             message = result.error or "resposta inválida"
             LOGGER.warning("Falha ao consultar API: %s", message)

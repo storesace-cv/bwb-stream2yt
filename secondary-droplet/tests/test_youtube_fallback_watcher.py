@@ -1,4 +1,5 @@
 import importlib.util
+import logging
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -172,3 +173,118 @@ def test_watcher_triggers_life_on_stale_api(config: WatcherConfig) -> None:
         == "SCENE=life=size=1280x720:rate=30"
     )
     assert bundle.mode.read_text(encoding="utf-8").strip() == "life"
+
+
+def test_watcher_understands_status_monitor_snapshot_off(
+    config: WatcherConfig,
+) -> None:
+    clock = FakeClock()
+    results = [
+        FetcherResult(
+            True,
+            {
+                "fallback_active": False,
+                "fallback_reason": None,
+                "last_camera_signal": {"present": True},
+            },
+        )
+    ]
+    bundle = make_watcher(config, results, clock)
+
+    assert bundle.watcher.process_once() is Mode.OFF
+    assert bundle.service.stop_calls == 1
+
+
+def test_watcher_understands_status_monitor_camera_loss(
+    config: WatcherConfig,
+) -> None:
+    clock = FakeClock()
+    results = [
+        FetcherResult(
+            True,
+            {
+                "fallback_active": True,
+                "fallback_reason": "no_camera_signal",
+                "last_camera_signal": {"present": False},
+            },
+        )
+    ]
+    bundle = make_watcher(config, results, clock)
+
+    assert bundle.watcher.process_once() is Mode.BARS
+    assert bundle.service.start_calls == 1
+
+
+def test_watcher_understands_status_monitor_no_heartbeats(
+    config: WatcherConfig,
+) -> None:
+    clock = FakeClock()
+    results = [
+        FetcherResult(
+            True,
+            {
+                "fallback_active": True,
+                "fallback_reason": "no_heartbeats",
+                "last_camera_signal": {"present": True},
+            },
+        )
+    ]
+    bundle = make_watcher(config, results, clock)
+
+    assert bundle.watcher.process_once() is Mode.LIFE
+    assert bundle.service.start_calls == 1
+
+
+def test_watcher_uses_camera_snapshot_when_reason_missing(
+    config: WatcherConfig,
+) -> None:
+    clock = FakeClock()
+    results = [
+        FetcherResult(
+            True,
+            {
+                "fallback_active": True,
+                "fallback_reason": None,
+                "last_camera_signal": {"present": False},
+            },
+        ),
+        FetcherResult(
+            True,
+            {
+                "fallback_active": True,
+                "fallback_reason": None,
+                "last_camera_signal": {"present": True},
+            },
+        ),
+    ]
+    bundle = make_watcher(config, results, clock)
+
+    assert bundle.watcher.process_once() is Mode.BARS
+    assert bundle.service.start_calls == 1
+
+    clock.advance(1)
+    assert bundle.watcher.process_once() is Mode.LIFE
+    assert bundle.service.restart_calls == 1
+
+
+def test_watcher_does_not_warn_when_snapshot_payload_has_string_internet(
+    config: WatcherConfig, caplog: pytest.LogCaptureFixture
+) -> None:
+    clock = FakeClock()
+    results = [
+        FetcherResult(
+            True,
+            {
+                "internet": "unknown",
+                "fallback_active": True,
+                "fallback_reason": None,
+                "last_camera_signal": {"present": True},
+            },
+        )
+    ]
+    bundle = make_watcher(config, results, clock)
+
+    caplog.set_level(logging.WARNING, logger="youtube_fallback_watcher")
+
+    assert bundle.watcher.process_once() is Mode.LIFE
+    assert "internet' não é booleano" not in caplog.text
