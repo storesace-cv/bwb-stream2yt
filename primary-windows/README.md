@@ -15,7 +15,7 @@ Ferramenta oficial para enviar o feed (RTSP/DirectShow) para a URL **primária**
 
 - Siga o [guia de instalação](../docs/primary-windows-instalacao.md#2-executável-distribuído) para posicionar o `stream_to_youtube.exe` em `C:\myapps\`. A primeira execução gera automaticamente o `.env` ao lado do binário; edite-o em seguida para informar `YT_KEY`/`YT_URL`. Caso deixe `YT_INPUT_ARGS` em branco, basta preencher `RTSP_HOST`/`RTSP_PORT`/`RTSP_PATH` (e, se necessário, `RTSP_USERNAME`/`RTSP_PASSWORD`) para que o script monte o endereço RTSP automaticamente. O valor padrão de `FFMPEG` aponta para `C:\bwb\ffmpeg\bin\ffmpeg.exe`, mas é possível sobrescrevê-lo nesse arquivo se desejar outro diretório.
 - A execução gera arquivos diários em `C:\myapps\logs\bwb_services-YYYY-MM-DD.log` (retenção automática de sete dias). Utilize-os para homologar a conexão com o YouTube.
-- O controle é feito diretamente via flags: execute `stream_to_youtube.exe /start` (ou apenas `stream_to_youtube.exe`) para iniciar o worker e `stream_to_youtube.exe /stop` para interromper. Ao iniciar, é possível informar a resolução desejada — `stream_to_youtube.exe /start 360p`, `stream_to_youtube.exe /start 720p` ou `stream_to_youtube.exe /start 1080p`. O aplicativo mantém `stream_to_youtube.pid` com o PID ativo e usa a sentinela `stream_to_youtube.stop` para sinalizar a parada; ambos ficam no mesmo diretório do executável.
+- O controle é feito diretamente via flags: execute `stream_to_youtube.exe --start` (ou apenas `stream_to_youtube.exe`) para iniciar o worker e `stream_to_youtube.exe --stop` para interromper. Ao iniciar, é possível informar a resolução desejada — `stream_to_youtube.exe --start --360p`, `stream_to_youtube.exe --start --720p` ou `stream_to_youtube.exe --start --1080p`. O aplicativo mantém `stream_to_youtube.pid` com o PID ativo e usa a sentinela `stream_to_youtube.stop` para sinalizar a parada; ambos ficam no mesmo diretório do executável.
 
 ### Código-fonte (desenvolvimento)
 
@@ -35,7 +35,7 @@ Ferramenta oficial para enviar o feed (RTSP/DirectShow) para a URL **primária**
 
 - `YT_DAY_START_HOUR`, `YT_DAY_END_HOUR` e `YT_TZ_OFFSET_HOURS` controlam a janela de transmissão.
 - `YT_INPUT_ARGS` / `YT_OUTPUT_ARGS` permitem ajustar os argumentos do ffmpeg. Se `YT_INPUT_ARGS` ficar vazio, o script tenta montar a URL RTSP com `RTSP_HOST`, `RTSP_PORT`, `RTSP_PATH` e, opcionalmente, `RTSP_USERNAME`/`RTSP_PASSWORD`.
-- `YT_RESOLUTION` define a resolução padrão aplicada aos parâmetros de saída (`360p`, `720p` ou `1080p`). O valor pode ser sobrescrito ao iniciar o executável com `/start <resolução>`.
+- `YT_RESOLUTION` define a resolução padrão aplicada aos parâmetros de saída (`360p`, `720p` ou `1080p`). O valor pode ser sobrescrito ao iniciar o executável com `--start --<resolução>`.
 - `FFMPEG` aponta para o executável do ffmpeg (por omissão `C:\bwb\ffmpeg\bin\ffmpeg.exe`; defina outro caminho no `.env` se preferir).
 - `BWB_LOG_FILE` define o caminho base dos logs. Gravamos arquivos diários no formato
   `<nome>-YYYY-MM-DD.log` e mantemos automaticamente somente os últimos sete dias.
