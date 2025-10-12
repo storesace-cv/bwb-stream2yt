@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ENV_DIR="/etc/youtube-fallback.d"
-ENV_LINK="/etc/youtube-fallback.env"
+ENV_FILE="/etc/youtube-fallback.env"
+PROGRESS_FILE="${PROGRESS_FILE:-/run/youtube-fallback.progress}"
 UNIT="youtube-fallback.service"
 CLI_NAME="yt-fallback"
 
 usage() {
   cat <<USAGE
-uso: ${CLI_NAME} set {life|bars} | current | status
+uso: ${CLI_NAME} {status|restart|info|cat|progress}
 USAGE
   exit 1
 }
@@ -24,14 +24,6 @@ need_sudo() {
   return 0
 }
 
-run_ln() {
-  if need_sudo; then
-    sudo -n ln "$@"
-  else
-    ln "$@"
-  fi
-}
-
 run_systemctl() {
   local args=("$@")
   if need_sudo; then
@@ -41,63 +33,107 @@ run_systemctl() {
   fi
 }
 
-ensure_env_dir() {
-  if [[ ! -d "${ENV_DIR}" ]]; then
-    echo "${CLI_NAME}: directório ${ENV_DIR} não encontrado." >&2
-    exit 1
+print_env_info() {
+  if [[ ! -f "${ENV_FILE}" ]]; then
+    echo "${CLI_NAME}: ficheiro ${ENV_FILE} inexistente." >&2
+    return 1
   fi
+  python3 <<'PY' "${ENV_FILE}" "${PROGRESS_FILE}"
+import sys
+from pathlib import Path
+
+env_path = Path(sys.argv[1])
+progress_path = Path(sys.argv[2])
+content = env_path.read_text(encoding="utf-8")
+print(f"--- {env_path} ---")
+print(content.rstrip() or "<vazio>")
+print()
+
+parsed = {}
+for raw_line in content.splitlines():
+    line = raw_line.strip()
+    if not line or line.startswith("#") or "=" not in line:
+        continue
+    key, value = line.split("=", 1)
+    parsed[key.strip()] = value.strip()
+
+print("Resumo:")
+print(f"  YT_URL: {parsed.get('YT_URL', '<indefinido>')}")
+print(f"  VIDEO_SRC: {parsed.get('VIDEO_SRC', '<indefinido>')}")
+print(f"  DURATION_PER_SCENE: {parsed.get('DURATION_PER_SCENE', '30 (padrão)')}")
+scenes_raw = parsed.get("SCENES_TXT")
+if scenes_raw:
+    normalized = scenes_raw
+    if normalized.startswith("$'") and normalized.endswith("'"):
+        normalized = normalized[2:-1]
+        try:
+            normalized = normalized.encode("utf-8").decode("unicode_escape")
+        except UnicodeDecodeError:
+            pass
+    elif (normalized.startswith("\"") and normalized.endswith("\"")) or (
+        normalized.startswith("'") and normalized.endswith("'")
+    ):
+        normalized = normalized[1:-1]
+    expanded = normalized.replace("\\r", "").replace("\\n", "\n")
+    scenes = [entry for entry in expanded.splitlines() if entry]
+    print("  SCENES_TXT (expandido):")
+    for idx, scene in enumerate(scenes, start=1):
+        print(f"    [{idx}] {scene}")
+else:
+    print("  SCENES_TXT: <não definido>")
+
+if progress_path.exists():
+    try:
+        last = progress_path.read_text(encoding="utf-8").splitlines()[-1]
+    except Exception as exc:  # noqa: BLE001
+        print(f"  Progresso: erro ao ler {progress_path}: {exc}")
+    else:
+        print(f"  Progresso: {last}")
+else:
+    print(f"  Progresso: {progress_path} não encontrado")
+PY
 }
 
-set_profile() {
-  local profile="$1"
-  ensure_env_dir
-  local target="${ENV_DIR}/${profile}.env"
-  if [[ ! -f "${target}" ]]; then
-    echo "${CLI_NAME}: perfil desconhecido: ${profile}" >&2
-    exit 2
+show_env_file() {
+  if [[ ! -f "${ENV_FILE}" ]]; then
+    echo "${CLI_NAME}: ficheiro ${ENV_FILE} inexistente." >&2
+    return 1
   fi
-
-  run_ln -sfn "${target}" "${ENV_LINK}"
-  run_systemctl restart "${UNIT}"
-  echo "ok: perfil ativo = ${profile}"
+  cat "${ENV_FILE}"
 }
 
-current_profile() {
-  local target
-  if [[ -L "${ENV_LINK}" ]]; then
-    target="$(readlink -f "${ENV_LINK}" || true)"
-  elif [[ -f "${ENV_LINK}" ]]; then
-    target="${ENV_LINK}"
+show_progress() {
+  if [[ -f "${PROGRESS_FILE}" ]]; then
+    tail -n 20 "${PROGRESS_FILE}"
   else
-    echo "desconhecido"
-    return 0
+    echo "${CLI_NAME}: ficheiro ${PROGRESS_FILE} não encontrado." >&2
+    return 1
   fi
-
-  case "${target}" in
-    "${ENV_DIR}/life.env")
-      echo "life"
-      ;;
-    "${ENV_DIR}/bars.env")
-      echo "bars"
-      ;;
-    *)
-      echo "desconhecido (${target})"
-      ;;
-  esac
 }
 
 cmd="${1:-}"; shift || true
 case "${cmd}" in
-  set)
-    profile="${1:-}"; shift || true
-    [[ -n "${profile}" ]] || usage
-    set_profile "${profile}"
-    ;;
-  current)
-    current_profile
-    ;;
   status)
     run_systemctl status "${UNIT}" --no-pager
+    ;;
+  restart)
+    run_systemctl restart "${UNIT}"
+    ;;
+  info)
+    print_env_info
+    ;;
+  cat)
+    show_env_file
+    ;;
+  progress)
+    show_progress
+    ;;
+  set)
+    echo "${CLI_NAME}: perfis legacy removidos. Edite ${ENV_FILE} para ajustar parâmetros." >&2
+    exit 2
+    ;;
+  "")
+    usage
     ;;
   *)
     usage
