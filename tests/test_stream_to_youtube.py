@@ -7,6 +7,8 @@ import time
 import types
 from pathlib import Path
 
+import pytest
+
 MODULE_PATH = Path(__file__).resolve().parents[1] / "primary-windows" / "src" / "stream_to_youtube.py"
 SPEC = importlib.util.spec_from_file_location("_stream_to_youtube_test", MODULE_PATH)
 assert SPEC and SPEC.loader
@@ -175,3 +177,104 @@ def test_camera_signal_monitor_failure(monkeypatch):
     assert snapshot["present"] is False
     assert snapshot["consecutive_failures"] == 1
     assert snapshot["last_error"]
+
+
+def test_write_full_diagnostics_creates_file(tmp_path, monkeypatch):
+    class DummyMonitor:
+        def __init__(
+            self,
+            ffprobe: str,
+            input_args,
+            interval: float,
+            timeout: float,
+            required: bool,
+            log_fn=None,
+        ) -> None:
+            self.snapshot_data = {
+                "present": True,
+                "last_success": "2025-01-01T00:00:00",
+                "last_failure": None,
+                "consecutive_failures": 0,
+                "required": required,
+                "ffprobe": ffprobe,
+                "probe_interval_seconds": interval,
+                "probe_timeout_seconds": timeout,
+                "last_error": None,
+                "ffprobe_available": True,
+            }
+
+        def confirm_signal(self, force: bool = False):  # noqa: D401 - signature matches real monitor
+            return True
+
+        def snapshot(self):
+            return dict(self.snapshot_data)
+
+    heartbeat = module.HeartbeatConfig(
+        enabled=True,
+        endpoint="http://example.test/status",
+        interval=20.0,
+        timeout=5.0,
+        machine_id="TEST-NODE",
+        token=None,
+        log_path=tmp_path / "hb.jsonl",
+        log_retention_seconds=3600,
+    )
+
+    config = module.StreamingConfig(
+        yt_url="rtmps://a.rtmps.youtube.com/live2/KEY",
+        input_args=["-i", "rtsp://user:pass@camera/stream"],
+        output_args=["-c:v", "libx264", "-b:v", "4500k"],
+        resolution="720p",
+        ffmpeg="ffmpeg",
+        day_start_hour=8,
+        day_end_hour=20,
+        tz_offset_hours=0,
+        autotune_enabled=True,
+        bitrate_min_kbps=3000,
+        bitrate_max_kbps=4500,
+        autotune_interval=8.0,
+        autotune_safety_margin=0.75,
+        heartbeat=heartbeat,
+        camera_probe=module.CameraProbeConfig(
+            ffprobe="ffprobe",
+            interval=10.0,
+            timeout=5.0,
+            required=True,
+        ),
+    )
+
+    monkeypatch.setattr(module, "_script_base_dir", lambda: tmp_path)
+    monkeypatch.setattr(module, "CameraSignalMonitor", DummyMonitor)
+    monkeypatch.setattr(module, "log_event", lambda *args, **kwargs: None)
+
+    module._write_full_diagnostics(config)
+
+    diagnostics_path = tmp_path / "stream2yt-diags.txt"
+    assert diagnostics_path.exists()
+    content = diagnostics_path.read_text(encoding="utf-8")
+    assert "Diagnóstico stream_to_youtube" in content
+    assert "Sinal da câmara" in content
+    assert "rtsp://user:***@camera/stream" in content
+
+
+def test_main_accepts_fulldiags_flag(monkeypatch):
+    calls = []
+
+    def fake_start(*, resolution=None, full_diagnostics=False):
+        calls.append((resolution, full_diagnostics))
+        return 0
+
+    monkeypatch.setattr(module, "_minimize_console_window", lambda: None)
+    monkeypatch.setattr(module, "log_event", lambda *args, **kwargs: None)
+    monkeypatch.setattr(module, "_start_streaming_instance", fake_start)
+
+    original_argv = sys.argv
+    sys.argv = ["stream_to_youtube.py", "--fulldiags"]
+    try:
+        with pytest.raises(SystemExit) as exc:
+            module.main()
+    finally:
+        sys.argv = original_argv
+
+    assert exc.value.code == 0
+    assert calls == [(None, True)]
