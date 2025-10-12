@@ -443,4 +443,40 @@ main() {
     log "Atualização concluída."
 }
 
+update_backend() {
+    log "Preparando backend do ytc-web"
+    bash "${SECONDARY_DIR}/bin/ytc_web_backend_setup.sh"
+}
+
+apply_systemd_changes() {
+    systemd_reload
+    enable_service youtube-fallback.service
+    enable_service ensure-broadcast.timer
+    enable_service yt-restapi.service
+
+    if systemctl_available; then
+        if systemctl is-enabled --quiet youtube-fallback-watcher.service; then
+            restart_if_running youtube-fallback-watcher.service
+        else
+            log "Watcher youtube-fallback-watcher.service instalado; ative manualmente se necessário."
+        fi
+    fi
+}
+
+main() {
+    log "Registando saída em ${LOG_FILE}"
+
+    install_python_dependencies
+    install_secondary_services
+    install_utilities
+    update_fallback_env
+    install_status_monitor
+    install_watcher
+    update_backend
+
+    apply_systemd_changes
+
+    log "Atualização concluída."
+}
+
 main "$@"
