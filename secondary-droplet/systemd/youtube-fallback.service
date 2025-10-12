@@ -13,6 +13,9 @@ Restart=always
 RestartSec=3
 Nice=5
 LimitNOFILE=1048576
+KillMode=control-group
+KillSignal=SIGTERM
+TimeoutStopSec=5
 
 [Install]
 WantedBy=multi-user.target

@@ -13,9 +13,9 @@
 - Rodar manualmente se necessário: `logrotate -f /etc/logrotate.d/bwb-services`.
 
 ## If backup URL reuses `${YT_KEY}` literal
-- Confirm `/usr/local/config/youtube-fallback.defaults` matches the expected slate defaults (managed via deploy).
-- Confirm `/etc/youtube-fallback.env` preserva `YT_KEY="..."` e mostra as linhas comentadas com os defaults atuais.
-- Ensure **no** `YT_URL_BACKUP` line remains stale.
+- Confirmar que `/etc/youtube-fallback.d/life.env` e `bars.env` contêm a URL correta (`YT_URL="rtmp://.../CHAVE"`).
+- `yt-fallback current` deve indicar o perfil ativo; use `yt-fallback set life|bars` conforme necessário.
+- Garantir que `/etc/youtube-fallback.env` é um symlink válido para o perfil pretendido.
 - `systemctl daemon-reload && systemctl restart youtube-fallback`
 
 ## Night/Day behaviour
