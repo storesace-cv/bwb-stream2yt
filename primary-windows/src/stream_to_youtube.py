@@ -250,7 +250,7 @@ def _claim_pid_file() -> None:
     existing_pid = _read_pid_file(path)
     if existing_pid and _is_pid_running(existing_pid):
         raise RuntimeError(
-            f"Já existe uma instância ativa (PID {existing_pid}). Utilize /stop antes de reiniciar."
+            f"Já existe uma instância ativa (PID {existing_pid}). Utilize --stop antes de reiniciar."
         )
 
     with suppress(OSError):
@@ -1882,10 +1882,18 @@ def main() -> None:
     _minimize_console_window()
 
     raw_args = sys.argv[1:]
-    normalized_args = [arg.lower() for arg in raw_args]
+    normalized_args = []
+    for arg in raw_args:
+        lowered = arg.lower()
+        if lowered.startswith("/"):
+            normalized_args.append(f"--{lowered[1:]}")
+        elif lowered.startswith("--"):
+            normalized_args.append(lowered)
+        else:
+            normalized_args.append(f"--{lowered}")
 
-    command = normalized_args[0] if normalized_args else "/start"
-    if command not in {"/start", "/stop"}:
+    command = normalized_args[0] if normalized_args else "--start"
+    if command not in {"--start", "--stop"}:
         message = f"Flag desconhecida: {raw_args[0]}"
         print(f"[primary] {message}", file=sys.stderr)
         log_event("primary", message)
@@ -1893,9 +1901,9 @@ def main() -> None:
 
     resolution_arg: Optional[str] = None
 
-    if command == "/stop":
+    if command == "--stop":
         if len(normalized_args) > 1:
-            message = "A flag /stop não aceita parâmetros adicionais."
+            message = "A flag --stop não aceita parâmetros adicionais."
             print(f"[primary] {message}", file=sys.stderr)
             log_event("primary", message)
             sys.exit(1)
@@ -1903,14 +1911,19 @@ def main() -> None:
         sys.exit(exit_code)
 
     if len(normalized_args) > 2:
-        message = "Utilize no máximo um parâmetro para /start (360p, 720p ou 1080p)."
+        message = "Utilize no máximo uma flag extra para --start (--360p, --720p ou --1080p)."
         print(f"[primary] {message}", file=sys.stderr)
         log_event("primary", message)
         sys.exit(1)
 
     if len(normalized_args) == 2:
         resolution_candidate = normalized_args[1]
-        normalized_resolution = _normalize_resolution(resolution_candidate)
+        if not resolution_candidate.startswith("--"):
+            message = f"Flag desconhecida: {raw_args[1]}"
+            print(f"[primary] {message}", file=sys.stderr)
+            log_event("primary", message)
+            sys.exit(1)
+        normalized_resolution = _normalize_resolution(resolution_candidate[2:])
         if normalized_resolution is None:
             message = f"Resolução desconhecida: {raw_args[1]}"
             print(f"[primary] {message}", file=sys.stderr)
