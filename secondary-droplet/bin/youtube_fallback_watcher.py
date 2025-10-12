@@ -131,7 +131,8 @@ class WatcherConfig:
             api_url = DEFAULT_STATUS_API_URL
         elif placeholder_value in PLACEHOLDER_API_URLS:
             LOGGER.info(
-                "API_URL contém placeholder conhecido (%s); utilizando endpoint local (%s)",
+                "API_URL contém placeholder conhecido (%s); utilizando endpoint local (%s)."
+                " Isto é esperado quando se usa a configuração padrão.",
                 placeholder_value,
                 DEFAULT_STATUS_API_URL,
             )
@@ -447,7 +448,7 @@ class APIWatcher:
 
                 return Mode.LIFE, "api_fallback_ativo"
 
-            if internet is not None:
+            if internet is not None and not isinstance(internet, bool):
                 LOGGER.warning(
                     "Payload inválido recebido: campo 'internet' não é booleano → %r",
                     payload,

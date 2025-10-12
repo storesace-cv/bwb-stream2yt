@@ -1,4 +1,5 @@
 import importlib.util
+import logging
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -264,3 +265,26 @@ def test_watcher_uses_camera_snapshot_when_reason_missing(
     clock.advance(1)
     assert bundle.watcher.process_once() is Mode.LIFE
     assert bundle.service.restart_calls == 1
+
+
+def test_watcher_does_not_warn_when_snapshot_payload_has_string_internet(
+    config: WatcherConfig, caplog: pytest.LogCaptureFixture
+) -> None:
+    clock = FakeClock()
+    results = [
+        FetcherResult(
+            True,
+            {
+                "internet": "unknown",
+                "fallback_active": True,
+                "fallback_reason": None,
+                "last_camera_signal": {"present": True},
+            },
+        )
+    ]
+    bundle = make_watcher(config, results, clock)
+
+    caplog.set_level(logging.WARNING, logger="youtube_fallback_watcher")
+
+    assert bundle.watcher.process_once() is Mode.LIFE
+    assert "internet' não é booleano" not in caplog.text
