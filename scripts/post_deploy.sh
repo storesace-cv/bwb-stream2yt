@@ -303,8 +303,30 @@ main() {
     rm -f "${tmp_env}"
 
     maybe_systemctl_daemon_reload
-    systemctl stop youtube-fallback.service || true
-    systemctl disable youtube-fallback.service || true
+
+    # ==== Controle seguro do youtube-fallback.service ====
+    : "${TOUCH_YT_FALLBACK:=0}"          # 0 = não mexer (default)
+    : "${YT_FALLBACK_ACTION:=none}"      # none|restart|stop|start
+    local svc="youtube-fallback.service"
+
+    if [[ "${TOUCH_YT_FALLBACK}" == "1" ]]; then
+        case "${YT_FALLBACK_ACTION}" in
+            restart)
+                systemctl enable "${svc}" || true
+                systemctl restart "${svc}" || true
+                ;;
+            start)
+                systemctl enable "${svc}" || true
+                systemctl start "${svc}" || true
+                ;;
+            stop)
+                systemctl stop "${svc}" || true
+                ;;
+            none|*)
+                ;;
+        esac
+    fi
+
     systemctl enable --now ensure-broadcast.timer
 
     setup_status_monitor "${secondary_dir}"
