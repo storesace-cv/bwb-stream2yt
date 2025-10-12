@@ -251,8 +251,25 @@ setup_youtube_fallback_watcher() {
             systemctl disable --now yt-comm-watcher.service >/dev/null 2>&1 || true
         fi
 
-        if ! systemctl enable --now youtube-fallback-watcher.service; then
-            log "Aviso: não foi possível ativar/arrancar youtube-fallback-watcher.service; consultar journalctl para detalhes."
+        local config_file="/etc/youtube-fallback-watcher.conf"
+        local placeholder_url="https://SEU_ENDPOINT/status"
+        local api_url=""
+
+        if [[ -f "${config_file}" ]]; then
+            local api_line
+            api_line=$(grep -E '^API_URL=' "${config_file}" | tail -n1 || true)
+            api_url=${api_line#API_URL=}
+            api_url=${api_url//[[:space:]]/}
+        fi
+
+        if [[ -z "${api_url}" || "${api_url}" == "${placeholder_url}" ]]; then
+            log "API_URL não configurado (atual='${api_url:-<vazio>}'); watcher ficará instalado mas desativado."
+            systemctl disable --now youtube-fallback-watcher.service >/dev/null 2>&1 || true
+            log "Configure /etc/youtube-fallback-watcher.conf e ative manualmente com: sudo systemctl enable --now youtube-fallback-watcher.service"
+        else
+            if ! systemctl enable --now youtube-fallback-watcher.service; then
+                log "Aviso: não foi possível ativar/arrancar youtube-fallback-watcher.service; consultar journalctl para detalhes."
+            fi
         fi
     else
         log "Aviso: systemctl indisponível; não foi possível ativar youtube-fallback-watcher.service"
