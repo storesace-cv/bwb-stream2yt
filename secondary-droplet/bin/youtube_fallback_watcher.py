@@ -130,8 +130,8 @@ class WatcherConfig:
             )
             api_url = DEFAULT_STATUS_API_URL
         elif placeholder_value in PLACEHOLDER_API_URLS:
-            LOGGER.warning(
-                "API_URL contém placeholder (%s); utilizando endpoint local (%s)",
+            LOGGER.info(
+                "API_URL contém placeholder conhecido (%s); utilizando endpoint local (%s)",
                 placeholder_value,
                 DEFAULT_STATUS_API_URL,
             )
