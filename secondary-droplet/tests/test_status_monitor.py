@@ -112,6 +112,18 @@ def test_camera_absence_triggers_smpte(monitor: StatusMonitor) -> None:
     )
 
 
+def test_camera_absence_keeps_service_confirmed(monitor: StatusMonitor) -> None:
+    monitor.record_status(make_entry(camera_signal={"present": False}))
+
+    service = monitor._service_manager  # type: ignore[attr-defined]  # noqa: SLF001
+    first_call_count = service.start_calls
+
+    monitor.record_status(make_entry(camera_signal={"present": False}))
+
+    assert monitor.fallback_active is True
+    assert service.start_calls == first_call_count + 1
+
+
 def test_camera_recovery_stops_fallback(monitor: StatusMonitor) -> None:
     monitor.record_status(make_entry(camera_signal={"present": False}))
     assert monitor.fallback_active is True

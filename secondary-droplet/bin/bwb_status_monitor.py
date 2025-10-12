@@ -410,6 +410,21 @@ class StatusMonitor:
         self, fallback_active: bool, fallback_reason: Optional[str]
     ) -> None:
         if fallback_active and fallback_reason == "no_camera_signal":
+            # Garantir que o serviço permaneça ativo em modo SMPTE mesmo que tenha
+            # sido reiniciado externamente ou tenha falhado desde a última sonda.
+            self._write_mode_file("smptehdbars")
+            if self._service_manager.ensure_started():
+                LOGGER.debug(
+                    "Fallback SMPTE já ativo; confirmação do serviço concluída."
+                )
+                return
+
+            LOGGER.warning(
+                "Não foi possível confirmar o fallback em modo SMPTE; nova tentativa ocorrerá no próximo heartbeat."
+            )
+            with self._lock:
+                self._fallback_active = False
+                self._fallback_reason = None
             return
 
         restart_required = fallback_active and fallback_reason != "no_camera_signal"
