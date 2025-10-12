@@ -20,7 +20,7 @@ This repository contains **two logical modules**:
 - Monitor HTTP: `/usr/local/bin/bwb_status_monitor.py`
 - Fallback sender: `/usr/local/bin/youtube_fallback.sh`
 - Fallback CLI: `/usr/local/bin/yt-fallback`
-- Perfis fallback: `/etc/youtube-fallback.d/` (life/bars) com symlink ativo em `/etc/youtube-fallback.env`
+- Fallback: `/etc/youtube-fallback.env` (ficheiro único) gerido pelo deploy + drop-in systemd
 - Unit files: `/etc/systemd/system/*.service`
 - Log centralizado: `/root/bwb_services.log`
 

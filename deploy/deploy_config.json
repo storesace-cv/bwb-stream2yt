@@ -4,7 +4,7 @@
   "ssh_port": 2202,
   "ssh_key": "~/.ssh/id_rsa",
   "remote_prefix": "/",
-  "post_deploy_notes": "post_deploy.sh cria perfis em /etc/youtube-fallback.d e gere o symlink /etc/youtube-fallback.env via yt-fallback.",
+  "post_deploy_notes": "post_deploy.sh aplica /etc/youtube-fallback.env e o override do youtube-fallback.service.",
   "sync_map": [
     {
       "local": "secondary-droplet/bin/youtube_fallback.sh",

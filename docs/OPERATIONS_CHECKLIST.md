@@ -13,9 +13,9 @@
 - Rodar manualmente se necessário: `logrotate -f /etc/logrotate.d/bwb-services`.
 
 ## If backup URL reuses `${YT_KEY}` literal
-- Confirmar que `/etc/youtube-fallback.d/life.env` e `bars.env` contêm a URL correta (`YT_URL="rtmp://.../CHAVE"`).
-- `yt-fallback current` deve indicar o perfil ativo; use `yt-fallback set life|bars` conforme necessário.
-- Garantir que `/etc/youtube-fallback.env` é um symlink válido para o perfil pretendido.
+- Executar `yt-fallback info` e confirmar que `YT_URL` aponta para a chave correcta e que as cenas configuradas fazem sentido.
+- Usar `yt-fallback progress` para verificar que o ffmpeg está a avançar (frame/time actualizados).
+- Validar que `/etc/youtube-fallback.env` existe (ficheiro normal) e que o drop-in `/etc/systemd/system/youtube-fallback.service.d/override.conf` está presente.
 - `systemctl daemon-reload && systemctl restart youtube-fallback`
 
 ## Night/Day behaviour
