@@ -421,9 +421,41 @@ class APIWatcher:
                     return Mode.OFF, "camera_estado_desconhecido"
                 LOGGER.warning("API indica ausência de internet no emissor")
                 return Mode.LIFE, "internet_indisponivel"
-            LOGGER.warning(
-                "Payload inválido recebido: campo 'internet' não é booleano → %r", payload
-            )
+
+            fallback_active = payload.get("fallback_active")
+            if isinstance(fallback_active, bool):
+                self._last_success = now
+                fallback_reason = payload.get("fallback_reason")
+                camera_snapshot = payload.get("last_camera_signal")
+                camera_present = None
+                if isinstance(camera_snapshot, dict):
+                    present = camera_snapshot.get("present")
+                    if isinstance(present, bool):
+                        camera_present = present
+
+                if not fallback_active:
+                    return Mode.OFF, "api_fallback_desligado"
+
+                if fallback_reason == "no_camera_signal":
+                    return Mode.BARS, "api_camera_sem_sinal"
+
+                if camera_present is False:
+                    return Mode.BARS, "api_camera_snapshot_sem_sinal"
+
+                if fallback_reason == "no_heartbeats":
+                    return Mode.LIFE, "api_sem_heartbeats"
+
+                return Mode.LIFE, "api_fallback_ativo"
+
+            if internet is not None:
+                LOGGER.warning(
+                    "Payload inválido recebido: campo 'internet' não é booleano → %r",
+                    payload,
+                )
+            else:
+                LOGGER.warning(
+                    "Payload inválido recebido: estrutura desconhecida → %r", payload
+                )
         else:
             message = result.error or "resposta inválida"
             LOGGER.warning("Falha ao consultar API: %s", message)
