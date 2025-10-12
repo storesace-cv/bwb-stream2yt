@@ -396,6 +396,7 @@ setup_youtube_fallback_watcher() {
 
         local config_file="/etc/youtube-fallback-watcher.conf"
         local placeholder_url="https://SEU_ENDPOINT/status"
+        local default_api_url="http://127.0.0.1:8080/status"
         local api_url=""
 
         if [[ -f "${config_file}" ]]; then
@@ -403,6 +404,28 @@ setup_youtube_fallback_watcher() {
             api_line=$(grep -E '^API_URL=' "${config_file}" | tail -n1 || true)
             api_url=${api_line#API_URL=}
             api_url=${api_url//[[:space:]]/}
+        fi
+
+        if [[ -z "${api_url}" || "${api_url}" == "${placeholder_url}" ]]; then
+            if [[ -w "${config_file}" ]]; then
+                if grep -qE '^API_URL=' "${config_file}"; then
+                    if sed -i "s#^[[:space:]]*API_URL=.*#API_URL=${default_api_url}#" "${config_file}"; then
+                        log "API_URL placeholder detectado; atualizado para ${default_api_url}."
+                        api_url="${default_api_url}"
+                    else
+                        log "Aviso: falha ao atualizar API_URL em ${config_file}; configure manualmente."
+                    fi
+                else
+                    if printf '\nAPI_URL=%s\n' "${default_api_url}" >>"${config_file}"; then
+                        log "API_URL ausente; definido para ${default_api_url}."
+                        api_url="${default_api_url}"
+                    else
+                        log "Aviso: não foi possível acrescentar API_URL a ${config_file}; configure manualmente."
+                    fi
+                fi
+            else
+                log "Aviso: ${config_file} não é gravável; configure manualmente o API_URL."
+            fi
         fi
 
         if [[ -z "${api_url}" || "${api_url}" == "${placeholder_url}" ]]; then
