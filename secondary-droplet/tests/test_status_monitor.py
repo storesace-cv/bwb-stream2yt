@@ -31,9 +31,11 @@ class DummyServiceManager:
         self.start_calls = 0
         self.stop_calls = 0
         self.active = False
+        self.force_flags = []
 
-    def ensure_started(self) -> bool:
+    def ensure_started(self, *, force: bool = False) -> bool:
         self.start_calls += 1
+        self.force_flags.append(force)
         self.active = True
         return True
 
@@ -110,6 +112,23 @@ def test_camera_absence_triggers_smpte(monitor: StatusMonitor) -> None:
         monitor.settings.mode_file.read_text(encoding="utf-8").strip()
         == "smptehdbars"
     )
+
+
+def test_camera_absence_forces_restart_after_connection_loss(monitor: StatusMonitor) -> None:
+    monitor._fallback_active = True  # noqa: SLF001
+    monitor._fallback_reason = "no_heartbeats"  # noqa: SLF001
+    monitor.settings.mode_file.write_text("life\n", encoding="utf-8")
+
+    monitor.record_status(make_entry(camera_signal={"present": False}))
+
+    service = monitor._service_manager  # type: ignore[attr-defined]  # noqa: SLF001
+    assert service.force_flags[-1] is True
+    assert monitor.fallback_active is True
+    assert (
+        monitor.settings.mode_file.read_text(encoding="utf-8").strip()
+        == "smptehdbars"
+    )
+    assert monitor.snapshot()["fallback_reason"] == "no_camera_signal"
 
 
 def test_camera_absence_keeps_service_confirmed(monitor: StatusMonitor) -> None:

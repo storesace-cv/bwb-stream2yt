@@ -202,7 +202,7 @@ class ServiceManager:
                 "revise a unit yt-restapi.service para permitir o fallback."
             )
 
-    def ensure_started(self) -> bool:
+    def ensure_started(self, *, force: bool = False) -> bool:
         with self._lock:
             status = subprocess.run(
                 self._systemctl_cmd("is-active"),
@@ -210,16 +210,22 @@ class ServiceManager:
                 capture_output=True,
                 text=True,
             )
-            if status.returncode == 0 and status.stdout.strip() == "active":
+            active = status.returncode == 0 and status.stdout.strip() == "active"
+            if active and not force:
                 LOGGER.debug("Serviço %s já está ativo", self.name)
                 return True
 
-            result = self._run_systemctl("start")
+            action = "restart" if active else "start"
+            result = self._run_systemctl(action)
             if result.returncode != 0:
-                self._log_failure("iniciar", result)
+                verb = "reiniciar" if active else "iniciar"
+                self._log_failure(verb, result)
                 return False
 
-            LOGGER.info("Serviço %s iniciado", self.name)
+            if active:
+                LOGGER.info("Serviço %s reiniciado", self.name)
+            else:
+                LOGGER.info("Serviço %s iniciado", self.name)
             return True
 
     def ensure_stopped(self) -> bool:
@@ -409,11 +415,13 @@ class StatusMonitor:
     def _ensure_camera_fallback(
         self, fallback_active: bool, fallback_reason: Optional[str]
     ) -> None:
+        restart_required = fallback_active and fallback_reason != "no_camera_signal"
+
         if fallback_active and fallback_reason == "no_camera_signal":
             # Garantir que o serviço permaneça ativo em modo SMPTE mesmo que tenha
             # sido reiniciado externamente ou tenha falhado desde a última sonda.
             self._write_mode_file("smptehdbars")
-            if self._service_manager.ensure_started():
+            if self._service_manager.ensure_started(force=restart_required):
                 LOGGER.debug(
                     "Fallback SMPTE já ativo; confirmação do serviço concluída."
                 )
@@ -427,7 +435,6 @@ class StatusMonitor:
                 self._fallback_reason = None
             return
 
-        restart_required = fallback_active and fallback_reason != "no_camera_signal"
         if restart_required:
             LOGGER.info(
                 "Heartbeat indica ausência de sinal da câmara; reiniciando fallback em modo SMPTE."
@@ -446,7 +453,7 @@ class StatusMonitor:
             )
 
         self._write_mode_file("smptehdbars")
-        if self._service_manager.ensure_started():
+        if self._service_manager.ensure_started(force=restart_required):
             with self._lock:
                 self._fallback_active = True
                 self._fallback_reason = "no_camera_signal"
