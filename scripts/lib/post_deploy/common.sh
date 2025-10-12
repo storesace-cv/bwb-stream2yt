@@ -3,6 +3,8 @@
 
 POST_DEPLOY_PREFIX="[post_deploy]"
 
+PD_LAST_SYNC_CHANGED=0
+
 log() {
     echo "${POST_DEPLOY_PREFIX} $*"
 }
@@ -11,6 +13,147 @@ warn_missing() {
     local label=$1
     local path=$2
     log "Aviso: ${label} não encontrado em ${path}; instalação ignorada."
+}
+
+pd_reset_last_sync() {
+    PD_LAST_SYNC_CHANGED=0
+}
+
+pd_sync_file() {
+    local source=$1
+    local destination=$2
+    local mode=$3
+    local owner=${4:-root}
+    local group=${5:-root}
+
+    pd_reset_last_sync
+
+    if [[ ! -e "${source}" ]]; then
+        warn_missing "${source##*/}" "${source}"
+        return 0
+    fi
+
+    local needs_update=0
+    if [[ ! -e "${destination}" ]]; then
+        needs_update=1
+    else
+        if ! cmp -s "${source}" "${destination}"; then
+            needs_update=1
+        else
+            local current_mode owner_name group_name
+            current_mode=$(stat -c '%a' "${destination}")
+            owner_name=$(stat -c '%U' "${destination}")
+            group_name=$(stat -c '%G' "${destination}")
+            if [[ "${current_mode}" != "${mode}" || "${owner_name}" != "${owner}" || "${group_name}" != "${group}" ]]; then
+                needs_update=1
+            fi
+        fi
+    fi
+
+    if (( needs_update )); then
+        install -m "${mode}" -o "${owner}" -g "${group}" "${source}" "${destination}"
+        log "Atualizado ${destination}"
+        PD_LAST_SYNC_CHANGED=1
+    else
+        log "Sem alterações em ${destination}"
+    fi
+}
+
+pd_sync_optional_file() {
+    local source=$1
+    if [[ -e "${source}" ]]; then
+        pd_sync_file "$@"
+        return
+    fi
+
+    pd_reset_last_sync
+    log "Opcional ${source##*/} ausente; ignorado."
+}
+
+pd_directory_hash() {
+    local dir=$1
+    if [[ ! -d "${dir}" ]]; then
+        return 1
+    fi
+
+    find "${dir}" -type f -print0 | sort -z | xargs -0 --no-run-if-empty sha256sum | sha256sum | awk '{print $1}'
+}
+
+pd_systemctl_available() {
+    command -v systemctl >/dev/null 2>&1
+}
+
+pd_systemd_reload() {
+    if pd_systemctl_available; then
+        systemctl daemon-reload
+    else
+        log "Aviso: systemctl indisponível; a ignorar daemon-reload."
+    fi
+}
+
+pd_enable_service() {
+    local unit=$1
+    if ! pd_systemctl_available; then
+        log "Aviso: systemctl indisponível; ${unit} não foi ativado."
+        return 1
+    fi
+
+    if systemctl is-enabled --quiet "${unit}"; then
+        if systemctl is-active --quiet "${unit}"; then
+            log "Serviço ${unit} já ativo; nenhuma alteração."
+        else
+            if systemctl start "${unit}"; then
+                log "Serviço ${unit} iniciado."
+            else
+                log "Aviso: falha ao iniciar ${unit}; ver journalctl para detalhes."
+            fi
+        fi
+        return 0
+    fi
+
+    if systemctl enable --now "${unit}"; then
+        log "Serviço ${unit} ativado."
+        return 0
+    fi
+
+    log "Aviso: não foi possível ativar ${unit}; ver journalctl para detalhes."
+    return 1
+}
+
+pd_ensure_service_if_needed() {
+    local unit=$1
+    local requested=${2:-0}
+
+    if ! pd_systemctl_available; then
+        return
+    fi
+
+    local needs_action=${requested}
+    if ! systemctl is-enabled --quiet "${unit}"; then
+        needs_action=1
+    fi
+    if ! systemctl is-active --quiet "${unit}"; then
+        needs_action=1
+    fi
+
+    if (( needs_action )); then
+        pd_enable_service "${unit}"
+    fi
+}
+
+pd_restart_if_running() {
+    local unit=$1
+    if ! pd_systemctl_available; then
+        return
+    fi
+
+    if systemctl is-active --quiet "${unit}"; then
+        if systemctl restart "${unit}"; then
+            log "Serviço ${unit} reiniciado."
+        else
+            log "Aviso: falha ao reiniciar ${unit}."
+        fi
+    fi
 }
 
 ensure_installed_file() {
