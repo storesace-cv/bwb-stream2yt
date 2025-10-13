@@ -1,0 +1,42 @@
+name: Build primary Windows service
+
+on:
+  push:
+    paths:
+      - primary-windows/src/**
+      - primary-windows/via-windows/stream2yt_service.spec
+      - .github/workflows/build-primary-windows-service.yml
+  pull_request:
+    paths:
+      - primary-windows/src/**
+      - primary-windows/via-windows/stream2yt_service.spec
+      - .github/workflows/build-primary-windows-service.yml
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install build tooling
+        run: |
+          python -m pip install --upgrade pip wheel
+          python -m pip install pyinstaller==6.10 pywin32==306
+
+      - name: Build Windows service executable
+        run: |
+          python -m PyInstaller --clean primary-windows/via-windows/stream2yt_service.spec
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: primary-windows-service-exe
+          path: dist/stream2yt-service.exe
