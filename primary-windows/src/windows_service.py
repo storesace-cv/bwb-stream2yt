@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import os
+import sys
 import threading
+from pathlib import Path
 from typing import Optional
 
 from stream_to_youtube import (
@@ -17,6 +20,103 @@ DISPLAY_NAME = "stream2yt-service"
 DESCRIPTION = (
     "Windows service wrapper that keeps the BeachCam primary feed streaming to YouTube."
 )
+
+_CONFIG_FILENAME = "stream2yt-service.config.json"
+_KNOWN_SERVICE_COMMANDS = {
+    "install",
+    "update",
+    "remove",
+    "start",
+    "stop",
+    "restart",
+    "debug",
+    "status",
+}
+_RESOLUTION_TOKENS = {"360p", "720p", "1080p"}
+
+
+def _service_base_dir() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent
+
+
+def _service_config_path() -> Path:
+    return _service_base_dir() / _CONFIG_FILENAME
+
+
+def _persist_resolution_choice(resolution: str) -> None:
+    path = _service_config_path()
+    payload = {"resolution": resolution}
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(".tmp")
+    temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    temporary.replace(path)
+
+
+def _load_configured_resolution() -> tuple[Optional[str], Optional[str]]:
+    path = _service_config_path()
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return None, None
+    except OSError as exc:
+        return None, f"Falha ao ler configuração de resolução ({exc})."
+
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        return None, f"Arquivo de configuração inválido ({exc})."
+
+    value = data.get("resolution")
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized:
+            return normalized, None
+
+    return None, None
+
+
+def _normalize_resolution_token(token: str) -> Optional[str]:
+    normalized = token.strip().lower()
+    if not normalized:
+        return None
+
+    while normalized.startswith("-") or normalized.startswith("/"):
+        normalized = normalized[1:]
+
+    if normalized in _RESOLUTION_TOKENS:
+        return normalized
+
+    return None
+
+
+def _extract_resolution_argument(args: list[str]) -> tuple[list[str], Optional[str]]:
+    cleaned: list[str] = []
+    selected: Optional[str] = None
+
+    for token in args:
+        normalized = _normalize_resolution_token(token)
+        if normalized is None:
+            cleaned.append(token)
+            continue
+
+        if selected is not None and normalized != selected:
+            raise ValueError(
+                "Informe no máximo uma flag de resolução (--360p, --720p ou --1080p)."
+            )
+
+        selected = normalized
+
+    return cleaned, selected
+
+
+def _detect_service_command(args: list[str]) -> Optional[str]:
+    for token in args:
+        lowered = token.lower()
+        if lowered in _KNOWN_SERVICE_COMMANDS:
+            return lowered
+    return None
 
 
 if os.name == "nt":  # pragma: no cover - tested on Windows hosts
@@ -35,6 +135,7 @@ if os.name == "nt":  # pragma: no cover - tested on Windows hosts
             self.hWaitStop = win32event.CreateEvent(None, 0, 0, None)
             self._worker_thread: Optional[threading.Thread] = None
             self._exit_code: int = 0
+            self._configured_resolution: Optional[str] = None
 
         # --- lifecycle callbacks -------------------------------------------------
         def SvcDoRun(self) -> None:  # noqa: N802 - pywin32 naming convention
@@ -60,8 +161,25 @@ if os.name == "nt":  # pragma: no cover - tested on Windows hosts
 
         # --- worker helpers ------------------------------------------------------
         def _run_streaming_worker(self) -> None:
+            resolution, warning = _load_configured_resolution()
+            self._configured_resolution = resolution
+
+            if warning:
+                servicemanager.LogErrorMsg(f"{self._svc_name_} config warning: {warning}")
+                log_event("service", warning)
+
+            if resolution:
+                message = f"Resolução configurada para o serviço: {resolution}"
+                servicemanager.LogInfoMsg(f"{self._svc_name_} {message}")
+                log_event("service", message)
+            else:
+                log_event(
+                    "service",
+                    "Nenhuma resolução específica definida; aplicando padrão do aplicativo.",
+                )
+
             try:
-                self._exit_code = start_streaming_instance()
+                self._exit_code = start_streaming_instance(resolution=resolution)
             except Exception as exc:  # pragma: no cover - defensive logging
                 self._exit_code = 1
                 log_event("service", f"Exceção não tratada no worker do serviço: {exc}")
@@ -95,7 +213,41 @@ if os.name == "nt":  # pragma: no cover - tested on Windows hosts
     def main() -> None:
         """Entrypoint used by `python windows_service.py install/start` commands."""
 
-        win32serviceutil.HandleCommandLine(StreamToYouTubeService)
+        raw_args = sys.argv[1:]
+
+        try:
+            cleaned_args, resolution = _extract_resolution_argument(raw_args)
+        except ValueError as exc:
+            print(f"[service] {exc}", file=sys.stderr)
+            raise SystemExit(1) from exc
+
+        command = _detect_service_command(cleaned_args)
+
+        if resolution and command not in {"install", "update"}:
+            print(
+                "[service] A resolução só pode ser definida durante os comandos install/update.",
+                file=sys.stderr,
+            )
+            raise SystemExit(1)
+
+        if resolution:
+            try:
+                _persist_resolution_choice(resolution)
+            except OSError as exc:
+                print(
+                    f"[service] Falha ao gravar a configuração de resolução: {exc}",
+                    file=sys.stderr,
+                )
+                raise SystemExit(1) from exc
+            else:
+                print(f"[service] Resolução configurada para {resolution}.")
+
+        original_argv = sys.argv
+        try:
+            sys.argv = [sys.argv[0], *cleaned_args]
+            win32serviceutil.HandleCommandLine(StreamToYouTubeService)
+        finally:
+            sys.argv = original_argv
 
 
 else:  # pragma: no cover - module is Windows-only

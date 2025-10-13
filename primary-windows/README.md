@@ -25,7 +25,7 @@ O diretório `src/` inclui `windows_service.py`, um *launcher* dedicado que regi
 1. Abra um `PowerShell` com privilégios de administrador e navegue até `primary-windows\src`.
 2. Registre o serviço (adicione `--startup auto` se quiser *auto-start* após reboot):
    ```powershell
-   python windows_service.py install --startup auto
+   python windows_service.py install --startup auto --720p
    python windows_service.py start
    ```
 3. Para interromper/remover o serviço utilize:
@@ -37,6 +37,10 @@ O diretório `src/` inclui `windows_service.py`, um *launcher* dedicado que regi
 O wrapper regista o serviço como `stream2yt-service`, refletindo esse nome tanto no *Service Name* quanto no *Display Name* apresentados pelo SCM.
 
 > 💡 Use as flags padrão do `win32serviceutil` caso precise especificar outra conta (`--username`/`--password`).
+
+- Para selecionar antecipadamente a resolução aplicada em cada arranque do serviço, acrescente `--360p`, `--720p` ou `--1080p`
+  ao comando `install` (ou `update`). O valor é persistido em `stream2yt-service.config.json` junto ao executável e é reutilizado
+  sempre que o SCM inicializa o worker. Execute `python windows_service.py update --1080p` para voltar ao preset padrão.
 
 #### Configuração para o serviço
 
