@@ -1,0 +1,12 @@
+2025-10-13 15:35:08 [primary] Registrado PID 8380 em C:\bwb\apps\youtube\stream_to_youtube.pid
+2025-10-13 15:35:08 [primary] Resolução selecionada: 360p
+2025-10-13 15:35:08 [primary] Iniciando worker (PID 8380)
+2025-10-13 15:35:08 [primary-heartbeat] Heartbeat iniciado para http://104.248.134.44:8080/status  # valor padrão gerado automaticamente (intervalo 20.0s, timeout 5.0s).
+2025-10-13 15:35:08 [primary] Streaming loop started
+2025-10-13 15:35:08 [primary] ffprobe ausente em C:\caminho\para\ffprobe.exe  # valor padrão gerado automaticamente; desativando verificação do sinal da câmara.
+2025-10-13 15:35:08 [primary] Autotune indisponível ou falhou na medição; mantendo bitrate estático.
+2025-10-13 15:35:08 [primary] Launching ffmpeg process
+2025-10-13 15:35:08 [primary-heartbeat] Falha ao enviar status: InvalidURL: URL can't contain control characters. '/status  ' (found at least ' ')
+2025-10-13 15:35:28 [primary-heartbeat] Falha ao enviar status: InvalidURL: URL can't contain control characters. '/status  ' (found at least ' ')
+2025-10-13 15:35:48 [primary-heartbeat] Falha ao enviar status: InvalidURL: URL can't contain control characters. '/status  ' (found at least ' ')
+2025-10-13 15:36:08 [primary-heartbeat] Falha ao enviar status: InvalidURL: URL can't contain control characters. '/status  ' (found at least ' ')
