@@ -1,8 +1,0 @@
-2025-10-13 15:59:25 [primary] Registrado PID 9232 em C:\bwb\apps\youtube\stream_to_youtube.pid
-2025-10-13 15:59:25 [primary] Resolução selecionada: 360p
-2025-10-13 15:59:25 [primary] Iniciando worker (PID 9232)
-2025-10-13 15:59:25 [primary] Streaming loop started
-2025-10-13 15:59:25 [primary-heartbeat] Heartbeat iniciado para http://104.248.134.44:8080/status (intervalo 20.0s, timeout 5.0s).
-2025-10-13 15:59:27 [primary] Sinal da câmara restabelecido; retomando transmissão principal assim que possível.
-2025-10-13 15:59:27 [primary] Autotune indisponível ou falhou na medição; mantendo bitrate estático.
-2025-10-13 15:59:27 [primary] Launching ffmpeg process
