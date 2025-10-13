@@ -2,6 +2,8 @@
 
 Este índice centraliza a evolução das ferramentas criadas para recolher evidências na infraestrutura da URL secundária. Use-o como porta de entrada rápida antes de executar qualquer script: cada secção resume quando surgiu, o problema que motivou a criação e como o utilizar em produção.
 
+> 💡 **Novo:** para interpretar rapidamente o campo "Sinal da câmara" nos relatórios `stream2yt-diags-*.txt`, consulte [docs/diagnostics/primary-camera-signal.md](diagnostics/primary-camera-signal.md).
+
 ## 2025-10 — `status-monitor-debug.sh`
 **Objectivo:** capturar, numa única execução, o estado completo do serviço `yt-restapi` (logs, `systemctl`, `status.json`, ficheiro `.env` e resposta HTTP) para analisar falhas do mecanismo de heartbeats entre o emissor Windows e o fallback no droplet.
 
