@@ -95,6 +95,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         default=5,
         help="Número de deltas recentes a apresentar (default: 5)",
     )
+    parser.add_argument(
+        "--window-minutes",
+        type=int,
+        default=120,
+        help="Limita análise às últimas N minutos de registos (default: 120; usar 0 para considerar tudo)",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -102,8 +108,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     except OSError as exc:
         parser.error(f"Não foi possível ler {args.log_file}: {exc}")
 
-    ticks = iter_ticks(lines)
+    ticks = list(iter_ticks(lines))
+    original_total = len(ticks)
     timestamps = [ts for ts, _ in ticks]
+
+    if args.window_minutes > 0 and timestamps:
+        cutoff = timestamps[-1] - dt.timedelta(minutes=args.window_minutes)
+        ticks = [entry for entry in ticks if entry[0] >= cutoff]
+        timestamps = [ts for ts, _ in ticks]
+        trimmed = original_total - len(ticks)
+        if trimmed > 0:
+            print(
+                f"Janela de {args.window_minutes} minutos aplicada: {trimmed} entradas antigas descartadas"
+            )
     min_delta, avg_delta, max_delta = summarize_deltas(timestamps)
 
     print(f"Total de iterações analisadas: {len(ticks)}")
