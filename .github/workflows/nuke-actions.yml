@@ -1,0 +1,130 @@
+name: Nuke Actions (runs, artifacts, releases, tags)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: write     # apagar runs + artifacts
+  contents: write    # apagar releases + tags
+
+jobs:
+  nuke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete ALL artifacts (repo-wide)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            let deleted = 0;
+            for await (const page of github.paginate.iterator(
+              github.rest.actions.listArtifactsForRepo,
+              { owner: context.repo.owner, repo: context.repo.repo, per_page: 100 }
+            )) {
+              for (const art of page.data) {
+                try {
+                  await github.rest.actions.deleteArtifact({
+                    owner: context.repo.owner, repo: context.repo.repo, artifact_id: art.id
+                  });
+                  deleted++;
+                } catch (e) {
+                  core.warning(`Artifact ${art.id} (${art.name}): ${e.message}`);
+                }
+              }
+            }
+            core.summary.addHeading('Artifacts').addRaw(`Deleted: ${deleted}`).write();
+
+      - name: Delete ALL workflow runs on main (all workflows)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            let total = 0, ok = 0, fail = 0;
+            for await (const page of github.paginate.iterator(
+              github.rest.actions.listWorkflowRunsForRepo,
+              { owner: context.repo.owner, repo: context.repo.repo, branch: 'main', per_page: 100 }
+            )) {
+              for (const run of page.data) {
+                total++;
+                try {
+                  await github.rest.actions.deleteWorkflowRun({
+                    owner: context.repo.owner, repo: context.repo.repo, run_id: run.id
+                  });
+                  ok++;
+                } catch (e) {
+                  fail++;
+                  core.warning(`Run ${run.id}: ${e.message}`);
+                }
+              }
+            }
+            core.summary.addHeading('Runs (branch=main)')
+              .addRaw(`Total: ${total} | Deleted: ${ok} | Failed: ${fail}`).write();
+
+      - name: Delete releases (target_commitish=main or author=bot or tag starts with release-)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            let del = 0, fail = 0;
+            for await (const page of github.paginate.iterator(
+              github.rest.repos.listReleases,
+              { owner: context.repo.owner, repo: context.repo.repo, per_page: 100 }
+            )) {
+              for (const r of page.data) {
+                const fromMain = r.target_commitish === 'main';
+                const byBot = (r.author && r.author.login === 'github-actions[bot]');
+                const tagIsRelease = r.tag_name && r.tag_name.startsWith('release-');
+                if (fromMain || byBot || tagIsRelease) {
+                  try {
+                    await github.rest.repos.deleteRelease({
+                      owner: context.repo.owner, repo: context.repo.repo, release_id: r.id
+                    });
+                    del++;
+                  } catch (e) {
+                    fail++;
+                    core.warning(`Release ${r.id} (${r.tag_name}): ${e.message}`);
+                  }
+                }
+              }
+            }
+            core.summary.addHeading('Releases')
+              .addRaw(`Deleted: ${del} | Failed: ${fail}`).write();
+
+      - name: Delete tags with prefix release- (refs/tags/release-*)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            let del = 0, fail = 0;
+            // list matching refs (API returns up to 100 per page; no official paginate helper here)
+            async function listTagRefs(page = 1) {
+              try {
+                const res = await github.request('GET /repos/{owner}/{repo}/git/matching-refs/{ref}', {
+                  owner: context.repo.owner, repo: context.repo.repo, ref: 'tags/release-', per_page: 100, page
+                });
+                return res.data;
+              } catch (e) {
+                return [];
+              }
+            }
+            let page = 1, refs = [];
+            while (true) {
+              const batch = await listTagRefs(page);
+              if (!batch || batch.length === 0) break;
+              refs.push(...batch);
+              page++;
+            }
+            for (const ref of refs) {
+              const full = ref.ref; // e.g., "refs/tags/release-123"
+              try {
+                await github.request('DELETE /repos/{owner}/{repo}/git/refs/{ref}', {
+                  owner: context.repo.owner, repo: context.repo.repo, ref: full.replace('refs/','')
+                });
+                del++;
+              } catch (e) {
+                fail++;
+                core.warning(`Tag ${full}: ${e.message}`);
+              }
+            }
+            core.summary.addHeading('Tags release-*')
+              .addRaw(`Deleted: ${del} | Failed: ${fail}`).write();
+
+      - name: Print summary link
+        run: |
+          echo "👉 Abre o 'Summary' deste run para veres os totais e eventuais warnings."
