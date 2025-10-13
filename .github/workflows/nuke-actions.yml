@@ -1,4 +1,4 @@
-name: Nuke Actions (runs, artifacts, releases, tags) [autosleep]
+name: Nuke Actions (runs, artifacts, releases, tags) [autosleep + initial wait]
 
 on:
   workflow_dispatch:
@@ -23,9 +23,34 @@ permissions:
 jobs:
   nuke:
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    timeout-minutes: 420
+
     steps:
-      - name: Nuke repo artifacts/runs/releases/tags (com auto-wait)
+      # Espera 1 hora logo no arranque
+      - name: ⏳ Cooldown inicial (aguardar 1h)
+        run: |
+          echo "Starting with a hard 1-hour cooldown to clear rate limits…"
+          sleep 3660
+
+      # (opcional) se ainda estiver perto do limite, espera até ao reset real
+      - name: ⏳ Verificar rate limit e aguardar até reset se necessário
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+            const r = await github.request('GET /rate_limit');
+            const core = r.data.resources.core;
+            const now = Math.floor(Date.now()/1000);
+            const wait = Math.max(0, core.reset - now) + 5;
+            console.log(`Remaining=${core.remaining}/${core.limit} — reset=${new Date(core.reset*1000).toISOString()}`);
+            if (wait > 5) {
+              console.log(`Waiting ${wait}s until real reset…`);
+              await sleep(wait * 1000);
+            } else {
+              console.log('No extra wait needed.');
+            }
+
+      - name: 🧹 Nuke repo (artifacts/runs/releases/tags) com auto-wait
         uses: actions/github-script@v7
         with:
           script: |
@@ -34,21 +59,18 @@ jobs:
             const branch = core.getInput('branch') || 'main';
             const tagPrefix = core.getInput('tagPrefix') || 'release-';
             const NEAR_LIMIT = parseInt(core.getInput('nearLimitThreshold') || '50', 10);
-
-            const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+            const snooze = (ms) => new Promise(r => setTimeout(r, ms));
 
             async function getRate() {
               const r = await github.request('GET /rate_limit');
               return r.data.resources.core; // {limit, remaining, reset}
             }
-
             async function waitForReset(resetEpochSec) {
               const now = Math.floor(Date.now()/1000);
-              const waitSec = Math.max(0, resetEpochSec - now) + 5; // +5s margem
-              core.info(`⏳ A aguardar ${waitSec}s até ao reset de rate limit...`);
-              await sleep(waitSec*1000);
+              const waitSec = Math.max(0, resetEpochSec - now) + 5;
+              core.info(`⏳ A aguardar ${waitSec}s até ao reset…`);
+              await snooze(waitSec*1000);
             }
-
             async function ensureBudget() {
               const coreRate = await getRate();
               core.info(`🔋 Budget: remaining=${coreRate.remaining}/${coreRate.limit} (reset @ ${new Date(coreRate.reset*1000).toISOString()})`);
@@ -56,7 +78,6 @@ jobs:
                 await waitForReset(coreRate.reset);
               }
             }
-
             async function safeCall(fn, label) {
               for (let attempt=1; attempt<=5; attempt++) {
                 try {
@@ -67,23 +88,13 @@ jobs:
                   const msg = e.message || (e?.response?.data?.message);
                   const reset = Number(e?.response?.headers?.['x-ratelimit-reset'] || 0);
                   core.warning(`${label} → erro (attempt ${attempt}): ${status} ${msg || ''}`);
-
-                  // Se é rate limit, espera até ao reset e retenta
                   if (status === 403 && /rate limit/i.test(String(msg))) {
-                    if (reset) {
-                      await waitForReset(reset);
-                      continue;
-                    } else {
-                      await sleep(60_000);
-                      continue;
-                    }
+                    if (reset) { await waitForReset(reset); continue; }
+                    await snooze(60_000); continue;
                   }
-
-                  // Se não for rate limit, umas tentativas rápidas com backoff
-                  await sleep(attempt * 3000);
+                  await snooze(attempt * 3000);
                 }
               }
-              // Lançar de volta o último erro (irá aparecer como warning no summary)
               throw new Error(`${label} falhou após retries.`);
             }
 
@@ -169,20 +180,18 @@ jobs:
             let tagsDeleted = 0, tagsFailed = 0;
             core.startGroup(`🧹 Apagar tags com prefixo ${tagPrefix}`);
             async function listMatchingRefs(refPrefix, page=1) {
-              const res = await safeCall(
+              return (await safeCall(
                 () => github.request('GET /repos/{owner}/{repo}/git/matching-refs/{ref}', {
                   owner, repo, ref: `tags/${refPrefix}`, per_page: 100, page
                 }),
                 `listMatchingRefs page=${page}`
-              );
-              return res.data ?? [];
+              )).data ?? [];
             }
-            // Paginação manual para matching-refs
             for (let page=1;; page++) {
               const refs = await listMatchingRefs(tagPrefix, page);
               if (!refs.length) break;
               for (const ref of refs) {
-                const full = ref.ref;         // "refs/tags/<tag>"
+                const full = ref.ref; // "refs/tags/<tag>"
                 const shortRef = full.replace(/^refs\//,''); // "tags/<tag>"
                 try {
                   await safeCall(
@@ -202,7 +211,6 @@ jobs:
             core.summary.addHeading('Tags')
               .addTable([['Prefix','Deleted','Failed'],[tagPrefix, String(tagsDeleted), String(tagsFailed)]]);
 
-            // Summary final
             core.summary.addSeparator()
               .addRaw(`NEAR_LIMIT threshold: ${NEAR_LIMIT}\n`)
               .addLink('Ver rate limit atual', 'https://api.github.com/rate_limit')
