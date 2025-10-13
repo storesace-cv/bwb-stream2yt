@@ -6,6 +6,7 @@ import threading
 import time
 import types
 from pathlib import Path
+from typing import Optional
 
 import pytest
 
@@ -64,6 +65,42 @@ class DummyWorker:
         return self._running
 
 
+def _build_streaming_config(tmp_path: Path, yt_url: Optional[str] = "rtmp://example"):
+    heartbeat = module.HeartbeatConfig(
+        enabled=False,
+        endpoint=None,
+        interval=20.0,
+        timeout=5.0,
+        machine_id="TEST",
+        token=None,
+        log_path=tmp_path / "hb.jsonl",
+        log_retention_seconds=3600,
+    )
+    camera_probe = module.CameraProbeConfig(
+        ffprobe="ffprobe",
+        interval=5.0,
+        timeout=2.0,
+        required=False,
+    )
+    return module.StreamingConfig(
+        yt_url=yt_url,
+        input_args=[],
+        output_args=[],
+        resolution="720p",
+        ffmpeg="ffmpeg",
+        day_start_hour=0,
+        day_end_hour=24,
+        tz_offset_hours=0,
+        autotune_enabled=False,
+        bitrate_min_kbps=1000,
+        bitrate_max_kbps=2000,
+        autotune_interval=10.0,
+        autotune_safety_margin=0.2,
+        heartbeat=heartbeat,
+        camera_probe=camera_probe,
+    )
+
+
 def test_ctrl_c_ignored_by_signal_handlers():
     sigint = getattr(signal, "SIGINT", None)
     sigterm = getattr(signal, "SIGTERM", None)
@@ -108,6 +145,84 @@ def test_run_forever_stops_when_sentinel_tripped(tmp_path, monkeypatch):
             runner.join(timeout=1.0)
         module._ACTIVE_WORKER = None
         module._clear_stop_request()
+
+
+def test_clear_stale_stop_request_removes_obsolete_flag(tmp_path, monkeypatch):
+    sentinel = tmp_path / "stop.flag"
+    pid_path = tmp_path / "stream_to_youtube.pid"
+    sentinel.write_text("", encoding="utf-8")
+    pid_path.write_text("9999", encoding="utf-8")
+
+    events = []
+    monkeypatch.setattr(module, "log_event", lambda *args, **kwargs: events.append(args))
+    monkeypatch.setattr(module, "_stop_sentinel_path", lambda: sentinel)
+    monkeypatch.setattr(module, "_pid_file_path", lambda: pid_path)
+    monkeypatch.setattr(module, "_is_pid_running", lambda pid: False)
+
+    module._clear_stale_stop_request()
+
+    assert not sentinel.exists()
+    assert any("Sentinela de parada obsoleta" in message for _, message in events)
+
+
+def test_clear_stale_stop_request_keeps_flag_when_pid_active(tmp_path, monkeypatch):
+    sentinel = tmp_path / "stop.flag"
+    pid_path = tmp_path / "stream_to_youtube.pid"
+    sentinel.write_text("", encoding="utf-8")
+    pid_path.write_text("8888", encoding="utf-8")
+
+    monkeypatch.setattr(module, "log_event", lambda *args, **kwargs: None)
+    monkeypatch.setattr(module, "_stop_sentinel_path", lambda: sentinel)
+    monkeypatch.setattr(module, "_pid_file_path", lambda: pid_path)
+    monkeypatch.setattr(module, "_is_pid_running", lambda pid: True)
+
+    module._clear_stale_stop_request()
+
+    assert sentinel.exists()
+
+
+def test_startup_log_removed_after_successful_launch(tmp_path, monkeypatch):
+    startup_log = tmp_path / "startup.log"
+    sentinel = tmp_path / "stop.flag"
+    pid_path = tmp_path / "stream_to_youtube.pid"
+
+    monkeypatch.setenv("BWB_SERVICE_STARTUP_LOG", str(startup_log))
+    monkeypatch.setattr(module, "log_event", lambda *args, **kwargs: None)
+    monkeypatch.setattr(module, "_stop_sentinel_path", lambda: sentinel)
+    monkeypatch.setattr(module, "_pid_file_path", lambda: pid_path)
+    monkeypatch.setattr(module, "_clear_stale_stop_request", lambda: None)
+    monkeypatch.setattr(module, "_ensure_signal_handlers", lambda: None)
+    monkeypatch.setattr(module, "run_forever", lambda config: None)
+
+    config = _build_streaming_config(tmp_path)
+    monkeypatch.setattr(module, "load_config", lambda resolution=None: config)
+
+    exit_code = module._start_streaming_instance()
+    assert exit_code == 0
+    assert not startup_log.exists()
+    assert not pid_path.exists()
+
+
+def test_startup_log_preserved_when_credentials_missing(tmp_path, monkeypatch):
+    startup_log = tmp_path / "startup.log"
+    sentinel = tmp_path / "stop.flag"
+    pid_path = tmp_path / "stream_to_youtube.pid"
+
+    monkeypatch.setenv("BWB_SERVICE_STARTUP_LOG", str(startup_log))
+    monkeypatch.setattr(module, "log_event", lambda *args, **kwargs: None)
+    monkeypatch.setattr(module, "_stop_sentinel_path", lambda: sentinel)
+    monkeypatch.setattr(module, "_pid_file_path", lambda: pid_path)
+    monkeypatch.setattr(module, "_clear_stale_stop_request", lambda: None)
+    monkeypatch.setattr(module, "_ensure_signal_handlers", lambda: None)
+
+    config = _build_streaming_config(tmp_path, yt_url=None)
+    monkeypatch.setattr(module, "load_config", lambda resolution=None: config)
+
+    exit_code = module._start_streaming_instance()
+    assert exit_code == 2
+    assert startup_log.exists()
+    contents = startup_log.read_text(encoding="utf-8")
+    assert "Credenciais YT_URL/YT_KEY ausentes" in contents
 
 
 def test_stop_streaming_instance_waits_for_orderly_shutdown(tmp_path, monkeypatch):
