@@ -246,6 +246,16 @@ def test_write_full_diagnostics_creates_file(tmp_path, monkeypatch):
     monkeypatch.setattr(module, "_script_base_dir", lambda: tmp_path)
     monkeypatch.setattr(module, "CameraSignalMonitor", DummyMonitor)
     monkeypatch.setattr(module, "log_event", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        module,
+        "_collect_camera_ping_snapshot",
+        lambda host: {
+            "host": host,
+            "reachable": True,
+            "rtt_ms": 12.5,
+            "last_checked": "2025-01-01T00:00:00Z",
+        },
+    )
 
     module._write_full_diagnostics(config)
 
@@ -254,6 +264,7 @@ def test_write_full_diagnostics_creates_file(tmp_path, monkeypatch):
     content = diagnostics_path.read_text(encoding="utf-8")
     assert "Diagnóstico stream_to_youtube" in content
     assert "Sinal da câmara" in content
+    assert "Ping da câmara" in content
     assert "rtsp://user:***@camera/stream" in content
 
 
