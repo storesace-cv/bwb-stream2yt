@@ -915,6 +915,31 @@ def _load_env_files():
         Path.cwd() / ".env",
     ]
 
+    def _resolve_override(raw: str) -> Optional[Path]:
+        cleaned = raw.strip()
+        if not cleaned:
+            return None
+
+        expanded = os.path.expandvars(cleaned)
+        candidate = Path(expanded).expanduser()
+        if candidate.suffix:
+            return candidate
+        return candidate / ".env"
+
+    override_candidates: list[Path] = []
+    for env_name in ("BWB_ENV_FILE", "BWB_ENV_PATH"):
+        raw_value = os.environ.get(env_name, "")
+        candidate = _resolve_override(raw_value)
+        if candidate is not None:
+            override_candidates.append(candidate)
+
+    dir_override = os.environ.get("BWB_ENV_DIR", "").strip()
+    if dir_override:
+        expanded_dir = Path(os.path.expandvars(dir_override)).expanduser()
+        override_candidates.append(expanded_dir / ".env")
+
+    env_paths = override_candidates + env_paths
+
     seen = set()
     for path in env_paths:
         if path in seen or not path.is_file():
@@ -2273,6 +2298,16 @@ def _start_streaming_instance(
         _release_pid_file()
 
 
+def start_streaming_instance(
+    resolution: Optional[str] = None, full_diagnostics: bool = False
+) -> int:
+    """Public wrapper used by alternate launchers (e.g., Windows service)."""
+
+    return _start_streaming_instance(
+        resolution=resolution, full_diagnostics=full_diagnostics
+    )
+
+
 def _stop_streaming_instance(timeout: float = 30.0) -> int:
     path = _pid_file_path()
     pid = _read_pid_file(path)
@@ -2323,6 +2358,25 @@ def _stop_streaming_instance(timeout: float = 30.0) -> int:
     log_event("primary", message)
     _clear_stop_request()
     return 1
+
+
+def stop_streaming_instance(timeout: float = 30.0) -> int:
+    """Public wrapper for stopping instances via alternate launchers."""
+
+    return _stop_streaming_instance(timeout=timeout)
+
+
+def stop_active_worker(timeout: Optional[float] = 10.0) -> None:
+    """Signal the in-process worker loop to stop (used by the service wrapper)."""
+
+    worker = _ACTIVE_WORKER
+    if worker is None:
+        return
+
+    try:
+        worker.stop(timeout=timeout)
+    except Exception as exc:  # pragma: no cover - best-effort shutdown
+        log_event("primary", f"Erro ao parar worker ativo: {exc}")
 
 
 def main() -> None:

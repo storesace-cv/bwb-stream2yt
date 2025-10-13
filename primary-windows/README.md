@@ -17,6 +17,30 @@ Ferramenta oficial para enviar o feed (RTSP/DirectShow) para a URL **primária**
 - A execução gera arquivos diários em `C:\myapps\logs\bwb_services-YYYY-MM-DD.log` (retenção automática de sete dias). Utilize-os para homologar a conexão com o YouTube.
 - O controle é feito diretamente via flags: execute `stream_to_youtube.exe --start` (ou apenas `stream_to_youtube.exe`) para iniciar o worker e `stream_to_youtube.exe --stop` para interromper. Ao iniciar, é possível informar a resolução desejada — `stream_to_youtube.exe --start --360p`, `stream_to_youtube.exe --start --720p` ou `stream_to_youtube.exe --start --1080p`. O aplicativo mantém `stream_to_youtube.pid` com o PID ativo e usa a sentinela `stream_to_youtube.stop` para sinalizar a parada; ambos ficam no mesmo diretório do executável. Adicione a flag opcional `--showonscreen` (por exemplo, `stream_to_youtube.exe --start --showonscreen`) para impedir a minimização automática do console e acompanhar em tempo real cada log gravado durante a execução.
 
+### Execução como Serviço do Windows
+
+O diretório `src/` inclui `windows_service.py`, um *launcher* dedicado que registra o emissor como serviço do Windows, ocultando a janela de console e mantendo apenas um PID ativo (o *service host* do SCM).
+
+1. Abra um `PowerShell` com privilégios de administrador e navegue até `primary-windows\src`.
+2. Registre o serviço (adicione `--startup auto` se quiser *auto-start* após reboot):
+   ```powershell
+   python windows_service.py install --startup auto
+   python windows_service.py start
+   ```
+3. Para interromper/remover o serviço utilize:
+   ```powershell
+   python windows_service.py stop
+   python windows_service.py remove
+   ```
+
+> 💡 Use as flags padrão do `win32serviceutil` caso precise especificar outra conta (`--username`/`--password`).
+
+#### Configuração para o serviço
+
+- O serviço partilha o mesmo `.env` do executável. Caso pretenda manter os ficheiros de configuração em `%ProgramData%\BWBStream2YT`, defina `BWB_ENV_DIR=%ProgramData%\BWBStream2YT` antes de instalar o serviço (ou ajuste a variável de ambiente nas *System Properties*).
+- Como alternativa, use `BWB_ENV_FILE`/`BWB_ENV_PATH` apontando diretamente para o ficheiro `.env`. O wrapper carrega esse ficheiro antes dos demais caminhos padrão.
+- Os logs continuam a ser gravados em `logs/bwb_services-YYYY-MM-DD.log` junto ao executável ou no caminho definido por `BWB_LOG_FILE`, o que facilita a observabilidade em modo serviço.
+
 ### Código-fonte (desenvolvimento)
 
 1. Configure as variáveis de ambiente:
