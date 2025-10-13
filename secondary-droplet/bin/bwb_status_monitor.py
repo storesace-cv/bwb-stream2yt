@@ -11,7 +11,10 @@ import datetime as dt
 import errno
 import json
 import logging
+import math
 import os
+import re
+import shutil
 import signal
 import subprocess
 import threading
@@ -47,6 +50,11 @@ class MonitorSettings:
     auth_token: Optional[str] = None
     require_token: bool = False
     mode_file: Path = Path("/run/youtube-fallback.mode")
+    camera_ping_host: Optional[str] = None
+    camera_ping_interval: int = 30
+    camera_ping_count: int = 1
+    camera_ping_timeout: float = 1.2
+    camera_ping_command: Optional[str] = None
 
     @classmethod
     def from_env(cls) -> "MonitorSettings":
@@ -88,6 +96,37 @@ class MonitorSettings:
                 return default
             return value
 
+        def _float(names: tuple[str, ...], default: float) -> float:
+            source = None
+            raw = None
+            for name in names:
+                value = os.environ.get(name)
+                if value is not None:
+                    source = name
+                    raw = value
+                    break
+            if raw is None:
+                return default
+            try:
+                value = float(raw)
+            except (TypeError, ValueError):
+                LOGGER.warning(
+                    "Valor inválido em %s=%r; utilizando %s",
+                    source,
+                    raw,
+                    default,
+                )
+                return default
+            if value <= 0:
+                LOGGER.warning(
+                    "Valor não positivo em %s=%r; utilizando %s",
+                    source,
+                    raw,
+                    default,
+                )
+                return default
+            return value
+
         bind = _get_env("YTR_BIND", "BWB_STATUS_BIND") or "0.0.0.0"
         port = _int(("YTR_PORT", "BWB_STATUS_PORT"), 8080)
         missed_threshold = _int(("YTR_MISSED_THRESHOLD", "BWB_STATUS_MISSED_THRESHOLD"), 40)
@@ -106,6 +145,24 @@ class MonitorSettings:
         else:
             mode_file = cls.mode_file
         token = _get_env("YTR_TOKEN", "BWB_STATUS_TOKEN")
+        camera_ping_host = _get_env(
+            "YTR_CAMERA_PING_HOST", "BWB_STATUS_CAMERA_PING_HOST"
+        )
+        camera_ping_command = _get_env(
+            "YTR_CAMERA_PING_COMMAND", "BWB_STATUS_CAMERA_PING_COMMAND"
+        )
+        camera_ping_interval = _int(
+            ("YTR_CAMERA_PING_INTERVAL", "BWB_STATUS_CAMERA_PING_INTERVAL"),
+            cls.camera_ping_interval,
+        )
+        camera_ping_count = _int(
+            ("YTR_CAMERA_PING_COUNT", "BWB_STATUS_CAMERA_PING_COUNT"),
+            cls.camera_ping_count,
+        )
+        camera_ping_timeout = _float(
+            ("YTR_CAMERA_PING_TIMEOUT", "BWB_STATUS_CAMERA_PING_TIMEOUT"),
+            cls.camera_ping_timeout,
+        )
 
         def _maybe_bool(name: str) -> Optional[bool]:
             raw = os.environ.get(name)
@@ -138,6 +195,13 @@ class MonitorSettings:
                 "Autenticação Bearer exigida, mas nenhuma variável YTR_TOKEN/BWB_STATUS_TOKEN foi definida."
             )
 
+        if camera_ping_interval <= 0:
+            camera_ping_interval = cls.camera_ping_interval
+        if camera_ping_count <= 0:
+            camera_ping_count = cls.camera_ping_count
+        if camera_ping_timeout <= 0:
+            camera_ping_timeout = cls.camera_ping_timeout
+
         return cls(
             bind=bind,
             port=port,
@@ -148,6 +212,11 @@ class MonitorSettings:
             auth_token=token if token else None,
             require_token=require_token,
             mode_file=mode_file,
+            camera_ping_host=camera_ping_host or None,
+            camera_ping_interval=camera_ping_interval,
+            camera_ping_count=camera_ping_count,
+            camera_ping_timeout=camera_ping_timeout,
+            camera_ping_command=camera_ping_command or None,
         )
 
 
@@ -257,6 +326,18 @@ class StatusMonitor:
         self._last_camera_status: Optional[Dict[str, Any]] = None
         self._mode_file = settings.mode_file
         self._stop_event = threading.Event()
+        self._camera_ping_host = settings.camera_ping_host
+        self._camera_ping_interval = max(1, int(settings.camera_ping_interval))
+        self._camera_ping_count = max(1, int(settings.camera_ping_count))
+        self._camera_ping_timeout = max(0.5, float(settings.camera_ping_timeout))
+        self._ping_command = self._resolve_ping_command(settings.camera_ping_command)
+        self._ping_unavailable_logged = False
+        self._last_ping_result: Optional[bool] = None
+        self._last_ping_checked: Optional[dt.datetime] = None
+        self._last_ping_success: Optional[dt.datetime] = None
+        self._last_ping_failure: Optional[dt.datetime] = None
+        self._last_ping_error: Optional[str] = None
+        self._last_ping_rtt_ms: Optional[float] = None
         self._watcher_thread = threading.Thread(
             target=self._watchdog_loop, name="bwb-status-watchdog", daemon=True
         )
@@ -287,6 +368,16 @@ class StatusMonitor:
 
     def record_status(self, entry: StatusEntry) -> None:
         camera_present, camera_snapshot = self._extract_camera_status(entry.payload)
+        ping_result = self._refresh_camera_ping()
+        if ping_result is False:
+            camera_present = False
+            camera_snapshot["present"] = False
+            camera_snapshot["ping_override"] = True
+        elif ping_result is True:
+            camera_snapshot["ping_override"] = False
+        ping_snapshot = self._build_ping_snapshot()
+        if ping_snapshot is not None:
+            camera_snapshot["network_ping"] = ping_snapshot
 
         with self._lock:
             self._last_timestamp = entry.timestamp
@@ -304,17 +395,56 @@ class StatusMonitor:
     def snapshot(self) -> Dict[str, Any]:
         with self._lock:
             reference = self._last_timestamp or self._started_at
-            elapsed = (utc_now() - reference).total_seconds()
-            camera_snapshot = (
+            now = utc_now()
+            elapsed = (now - reference).total_seconds()
+            raw_snapshot = (
                 dict(self._last_camera_status)
                 if isinstance(self._last_camera_status, dict)
-                else None
+                else {}
             )
             fallback_reason = self._fallback_reason
             fallback_active = self._fallback_active
             last_timestamp = (
                 isoformat(self._last_timestamp) if self._last_timestamp else None
             )
+
+        stale = elapsed >= self._settings.missed_threshold
+        age_seconds = round(elapsed, 1)
+
+        snapshot: Dict[str, Any] = {}
+        for key, value in raw_snapshot.items():
+            if isinstance(key, str):
+                snapshot[key] = value
+
+        present_value = snapshot.get("present")
+        last_known = snapshot.get("last_known_present")
+        if isinstance(present_value, bool):
+            last_known = present_value
+        elif isinstance(last_known, bool):
+            snapshot.setdefault("last_known_present", last_known)
+        else:
+            last_known = None
+
+        snapshot["age_seconds"] = age_seconds
+        snapshot["stale"] = stale
+        if last_known is not None:
+            snapshot["last_known_present"] = last_known
+
+        if stale:
+            snapshot["present"] = False
+        elif isinstance(present_value, bool):
+            snapshot["present"] = present_value
+        elif isinstance(last_known, bool):
+            snapshot["present"] = last_known
+        else:
+            snapshot["present"] = False
+
+        ping_snapshot = self._build_ping_snapshot()
+        if ping_snapshot is not None:
+            snapshot["network_ping"] = ping_snapshot
+            reachable = ping_snapshot.get("reachable")
+            if reachable is False:
+                snapshot["present"] = False
 
         return {
             "last_timestamp": last_timestamp,
@@ -323,7 +453,7 @@ class StatusMonitor:
             "missed_threshold": self._settings.missed_threshold,
             "fallback_reason": fallback_reason,
             "mode_file": self._mode_file.as_posix(),
-            "last_camera_signal": camera_snapshot,
+            "last_camera_signal": snapshot,
         }
 
     def _watchdog_loop(self) -> None:
@@ -369,8 +499,9 @@ class StatusMonitor:
     @staticmethod
     def _extract_camera_status(payload: Dict[str, Any]) -> tuple[bool, Dict[str, Any]]:
         status = payload.get("status")
-        present = True
         snapshot: Dict[str, Any] = {}
+        present: Optional[bool] = None
+        stale = False
 
         if isinstance(status, dict):
             camera_info = status.get("camera_signal")
@@ -378,19 +509,175 @@ class StatusMonitor:
                 for key, value in camera_info.items():
                     if isinstance(key, str):
                         snapshot[key] = value
-                present_value = snapshot.get("present")
-                if isinstance(present_value, bool):
-                    present = present_value
-                else:
-                    snapshot["present"] = present
+                raw_present = snapshot.get("present")
+                if isinstance(raw_present, bool):
+                    present = raw_present
+                last_known = snapshot.get("last_known_present")
+                if present is None and isinstance(last_known, bool):
+                    present = last_known
+                raw_stale = snapshot.get("stale")
+                if isinstance(raw_stale, bool):
+                    stale = raw_stale
             elif isinstance(camera_info, bool):
                 present = camera_info
                 snapshot["present"] = present
 
-        if "present" not in snapshot:
-            snapshot["present"] = present
+        if stale:
+            present = False
+
+        if present is None:
+            present = False
+
+        snapshot["present"] = present
+        snapshot.setdefault("stale", stale)
 
         return present, snapshot
+
+    def _resolve_ping_command(self, explicit: Optional[str]) -> Optional[str]:
+        candidates: list[str] = []
+        if explicit:
+            candidates.append(explicit)
+        candidates.extend(["/bin/ping", "/usr/bin/ping", "ping"])
+        for candidate in candidates:
+            if not candidate:
+                continue
+            path = Path(candidate)
+            if path.exists() and os.access(path, os.X_OK):
+                return path.as_posix()
+            resolved = shutil.which(candidate)
+            if resolved:
+                return resolved
+        return None
+
+    def _build_ping_snapshot(self) -> Optional[Dict[str, Any]]:
+        host = self._camera_ping_host
+        if not host:
+            return None
+
+        with self._lock:
+            last_checked = self._last_ping_checked
+            last_result = self._last_ping_result
+            last_success = self._last_ping_success
+            last_failure = self._last_ping_failure
+            last_error = self._last_ping_error
+            last_rtt = self._last_ping_rtt_ms
+
+        snapshot: Dict[str, Any] = {
+            "host": host,
+            "reachable": last_result,
+            "interval_seconds": self._camera_ping_interval,
+            "timeout_seconds": self._camera_ping_timeout,
+            "count": self._camera_ping_count,
+            "last_checked": isoformat(last_checked) if last_checked else None,
+            "last_success": isoformat(last_success) if last_success else None,
+            "last_failure": isoformat(last_failure) if last_failure else None,
+            "last_error": last_error,
+            "rtt_ms": last_rtt,
+        }
+        if last_checked:
+            snapshot["age_seconds"] = round(
+                (utc_now() - last_checked).total_seconds(), 1
+            )
+        return snapshot
+
+    def _refresh_camera_ping(self) -> Optional[bool]:
+        host = self._camera_ping_host
+        if not host:
+            return None
+
+        now = utc_now()
+        with self._lock:
+            last_checked = self._last_ping_checked
+            last_result = self._last_ping_result
+        if last_checked is not None:
+            elapsed = (now - last_checked).total_seconds()
+            if elapsed < self._camera_ping_interval:
+                return last_result
+
+        reachable, rtt_ms, error = self._ping_host(host)
+        timestamp = utc_now()
+
+        with self._lock:
+            self._last_ping_checked = timestamp
+            self._last_ping_result = reachable
+            self._last_ping_error = error
+            self._last_ping_rtt_ms = rtt_ms
+            if reachable:
+                self._last_ping_success = timestamp
+            elif reachable is False:
+                self._last_ping_failure = timestamp
+
+        if reachable is None:
+            if error and not self._ping_unavailable_logged:
+                LOGGER.warning("Ping para %s indisponível: %s", host, error)
+                self._ping_unavailable_logged = True
+            return None
+
+        if reachable:
+            if rtt_ms is not None:
+                LOGGER.debug("Ping à câmara %s bem sucedido (%.2f ms).", host, rtt_ms)
+            else:
+                LOGGER.debug("Ping à câmara %s bem sucedido.", host)
+        else:
+            if error:
+                LOGGER.warning("Ping à câmara %s falhou: %s", host, error)
+            else:
+                LOGGER.warning("Ping à câmara %s falhou sem mensagem de erro.", host)
+
+        return reachable
+
+    def _ping_host(self, host: str) -> tuple[Optional[bool], Optional[float], Optional[str]]:
+        command = self._ping_command
+        if not command:
+            return None, None, "comando ping não encontrado"
+
+        timeout = max(self._camera_ping_timeout, 0.5)
+        count = max(self._camera_ping_count, 1)
+        deadline = timeout * count + 1.0
+        args = [
+            command,
+            "-n",
+            "-c",
+            str(count),
+            "-W",
+            str(int(math.ceil(timeout))),
+            host,
+        ]
+        try:
+            completed = subprocess.run(
+                args,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=deadline,
+            )
+        except subprocess.TimeoutExpired:
+            return False, None, f"timeout após {deadline:.1f}s"
+        except FileNotFoundError as exc:
+            return None, None, f"comando ping ausente: {exc}"
+        except Exception as exc:  # noqa: BLE001
+            return False, None, f"{exc.__class__.__name__}: {exc}"
+
+        stdout = (completed.stdout or "").strip()
+        stderr = (completed.stderr or "").strip()
+        reachable = completed.returncode == 0
+
+        error: Optional[str] = None
+        if not reachable:
+            error = stderr or stdout or f"exit {completed.returncode}"
+
+        rtt_ms: Optional[float] = None
+        if stdout:
+            for line in stdout.splitlines():
+                match = re.search(r"time[=<]([0-9]+(?:\.[0-9]+)?)\s*ms", line)
+                if match:
+                    try:
+                        rtt_ms = float(match.group(1))
+                    except ValueError:
+                        rtt_ms = None
+                    break
+
+        return reachable, rtt_ms, error
 
     def _stop_fallback(self, message: str) -> None:
         LOGGER.info(message)

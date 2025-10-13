@@ -442,6 +442,33 @@ class APIWatcher:
                 present = camera_snapshot.get("present")
                 if isinstance(present, bool):
                     pieces.append(f"camera_snapshot_present={present!r}")
+                else:
+                    last_known = camera_snapshot.get("last_known_present")
+                    if isinstance(last_known, bool):
+                        pieces.append(
+                            f"camera_snapshot_present_stale={last_known!r}"
+                        )
+                stale = camera_snapshot.get("stale")
+                if isinstance(stale, bool):
+                    pieces.append(f"camera_snapshot_stale={stale!r}")
+                age = camera_snapshot.get("age_seconds")
+                if isinstance(age, (int, float)):
+                    pieces.append(f"camera_snapshot_age={age:.1f}s")
+                ping_snapshot = camera_snapshot.get("network_ping")
+                if isinstance(ping_snapshot, dict):
+                    reachable = ping_snapshot.get("reachable")
+                    if isinstance(reachable, bool):
+                        pieces.append(
+                            f"camera_ping_reachable={reachable!r}"
+                        )
+                    ping_age = ping_snapshot.get("age_seconds")
+                    if isinstance(ping_age, (int, float)):
+                        pieces.append(f"camera_ping_age={ping_age:.1f}s")
+                    last_error = ping_snapshot.get("last_error")
+                    if last_error:
+                        pieces.append(
+                            f"camera_ping_error={str(last_error)[:60]!r}"
+                        )
             if not pieces:
                 pieces.append("payload=ok")
             return " ".join(pieces)
@@ -495,10 +522,10 @@ class APIWatcher:
                     heartbeats_missing = seconds_since >= heartbeat_threshold
 
                 if not fallback_active:
-                    if camera_present is False:
-                        return Mode.BARS, "api_camera_snapshot_sem_sinal"
                     if heartbeats_missing:
                         return Mode.LIFE, "api_sem_heartbeats"
+                    if camera_present is False:
+                        return Mode.BARS, "api_camera_snapshot_sem_sinal"
                     return Mode.OFF, "api_fallback_desligado"
 
                 if fallback_reason == "no_camera_signal":
