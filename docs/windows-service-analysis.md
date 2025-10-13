@@ -32,3 +32,10 @@
 
 ## Conclusion
 Running the application as a Windows service is feasible and would streamline the user experience by hiding the console window and allowing execution without login. The primary effort lies in building a dedicated service wrapper, handling lifecycle events, and adjusting deployment and logging practices accordingly.
+
+## Implementation Notes
+- `primary-windows/src/windows_service.py` implements the Windows service entrypoint on top of the existing streaming loop, registando-o como `stream2yt-service` no SCM.
+- `stream_to_youtube.py` now expõe *helpers* públicos (`start_streaming_instance`, `stop_streaming_instance`, `stop_active_worker`) usados pelo wrapper para iniciar/parar o worker no mesmo processo.
+- Novas variáveis de ambiente (`BWB_ENV_DIR`, `BWB_ENV_FILE`, `BWB_ENV_PATH`) permitem apontar o `.env` para um diretório acessível pelo serviço.
+- O bootstrap do `.env` faz backup automático do ficheiro atual, replica os valores existentes e adiciona/remarca variáveis para se manter alinhado com o template distribuído.
+- O README do módulo primário documenta como instalar, iniciar e remover o serviço via `python windows_service.py` e como configurar o ambiente para execução headless.
