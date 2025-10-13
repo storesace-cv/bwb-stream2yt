@@ -6,6 +6,10 @@ Pipeline redundante para transmissão para o YouTube do canal **BeachCam | Praia
 >
 > 🚫 **Logs locais ficam fora do Git.** O diretório `logs/` já está no `.gitignore`; não remova essa regra nem execute `git add` em ficheiros gerados.
 
+## Estado de produção
+
+- **Versão ativa:** `v1.50.p` — corresponde ao commit que introduz este registo de produção e o resumo funcional em [`about-stream2yt.md`](about-stream2yt.md). Utilize esta referência caso necessite restaurar exatamente este estado no futuro.
+
 ## Visão geral
 
 O sistema automatiza o fluxo RTSP → YouTube, garantindo resiliência através de duas cadeias de transmissão:
