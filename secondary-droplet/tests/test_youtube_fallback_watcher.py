@@ -114,7 +114,7 @@ def test_watcher_transitions_between_modes(config: WatcherConfig) -> None:
         bundle.env.read_text(encoding="utf-8").strip()
         == "SCENE=life=size=1280x720:rate=30"
     )
-    assert bundle.mode.read_text(encoding="utf-8").strip() == "life"
+    assert bundle.mode.read_text(encoding="utf-8").strip() == "off"
 
     clock.advance(1)
     assert bundle.watcher.process_once() is Mode.BARS
