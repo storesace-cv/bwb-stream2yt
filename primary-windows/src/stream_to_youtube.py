@@ -18,10 +18,12 @@ import threading
 import time
 import urllib.error
 import urllib.request
+import urllib.parse
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 import textwrap
+import re
 from typing import Any, Callable, Dict, Optional
 
 from autotune import estimate_upload_bitrate
@@ -494,6 +496,143 @@ def _describe_executable(candidate: str) -> str:
     return f"{value} (não encontrado)"
 
 
+def _extract_camera_host(input_args: list[str]) -> Optional[str]:
+    for raw in reversed(input_args):
+        if not isinstance(raw, str):
+            continue
+        candidate = raw.strip()
+        if not candidate:
+            continue
+        lowered = candidate.lower()
+        if not (lowered.startswith("rtsp://") or lowered.startswith("rtsps://")):
+            continue
+        try:
+            parsed = urllib.parse.urlsplit(candidate)
+        except Exception:  # noqa: BLE001 - diagnostics should not abort
+            parsed = None
+        if parsed and parsed.hostname:
+            return parsed.hostname
+        try:
+            remainder = candidate.split("://", 1)[1]
+        except IndexError:
+            continue
+        authority = remainder.split("/", 1)[0]
+        host_part = authority.split("@")[-1]
+        host_only = host_part.split(":", 1)[0].strip("[] ")
+        if host_only:
+            return host_only
+    return None
+
+
+def _resolve_ping_command() -> Optional[str]:
+    candidates = ["ping.exe", "ping"]
+    for candidate in candidates:
+        if not candidate:
+            continue
+        path = shutil.which(candidate)
+        if path:
+            return path
+    return None
+
+
+def _parse_ping_rtt(output: str) -> Optional[float]:
+    patterns = [
+        r"Average\s*=\s*(\d+(?:[\.,]\d+)?)\s*ms",
+        r"M[ée]dia\s*=\s*(\d+(?:[\.,]\d+)?)\s*ms",
+        r"Avg\s*=\s*(\d+(?:[\.,]\d+)?)\s*ms",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, output, re.IGNORECASE)
+        if not match:
+            continue
+        value = match.group(1).replace(",", ".")
+        try:
+            return float(value)
+        except ValueError:
+            continue
+    return None
+
+
+def _collect_camera_ping_snapshot(host: str) -> Dict[str, Any]:
+    timestamp = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc)
+    iso_timestamp = timestamp.isoformat().replace("+00:00", "Z")
+    command = _resolve_ping_command()
+    count = 1
+    timeout = 1.5
+
+    if not command:
+        return {
+            "host": host,
+            "reachable": None,
+            "last_checked": iso_timestamp,
+            "last_error": "ping não disponível no sistema",
+        }
+
+    ping_args = [command, "-n", str(count), "-w", str(int(timeout * 1000)), host]
+    exec_timeout = max(timeout * count + 2.0, 5.0)
+
+    try:
+        completed = subprocess.run(
+            ping_args,
+            capture_output=True,
+            text=True,
+            timeout=exec_timeout,
+            check=False,
+        )
+    except FileNotFoundError:
+        return {
+            "host": host,
+            "reachable": None,
+            "last_checked": iso_timestamp,
+            "last_error": "comando ping não encontrado",
+        }
+    except subprocess.TimeoutExpired:
+        return {
+            "host": host,
+            "reachable": False,
+            "last_checked": iso_timestamp,
+            "last_failure": iso_timestamp,
+            "last_error": f"ping excedeu timeout de {exec_timeout:.1f}s",
+            "timeout_seconds": timeout,
+            "count": count,
+        }
+
+    combined_output = "\n".join(
+        part for part in (completed.stdout or "", completed.stderr or "") if part
+    )
+    reachable = completed.returncode == 0
+    rtt_ms = _parse_ping_rtt(combined_output)
+
+    snapshot: Dict[str, Any] = {
+        "host": host,
+        "reachable": reachable,
+        "last_checked": iso_timestamp,
+        "timeout_seconds": timeout,
+        "count": count,
+        "command": command,
+        "rtt_ms": rtt_ms,
+        "age_seconds": 0.0,
+    }
+    if reachable:
+        snapshot["last_success"] = iso_timestamp
+    else:
+        snapshot["last_failure"] = iso_timestamp
+
+    if not reachable:
+        lines = [line.strip() for line in combined_output.splitlines() if line.strip()]
+        if lines:
+            snapshot["last_error"] = lines[-1][:200]
+        elif completed.stderr:
+            snapshot["last_error"] = completed.stderr.strip()[:200]
+        else:
+            snapshot["last_error"] = "sem resposta"
+
+    if combined_output:
+        snapshot["raw_output"] = combined_output[-2000:]
+
+    return snapshot
+
+
 def _collect_full_diagnostics(config: "StreamingConfig") -> str:
     generated_at = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc)
     timestamp_text = generated_at.isoformat().replace("+00:00", "Z")
@@ -504,6 +643,7 @@ def _collect_full_diagnostics(config: "StreamingConfig") -> str:
     camera_snapshot: Dict[str, Any] = {}
     camera_result: Optional[bool] = None
     camera_error: Optional[str] = None
+    ping_snapshot: Optional[Dict[str, Any]] = None
     try:
         monitor = CameraSignalMonitor(
             config.camera_probe.ffprobe,
@@ -519,6 +659,19 @@ def _collect_full_diagnostics(config: "StreamingConfig") -> str:
     except Exception as exc:  # noqa: BLE001 - diagnostics must never abort
         camera_snapshot = {"error": f"{exc.__class__.__name__}: {exc}"}
         camera_error = str(exc)
+
+    camera_host = _extract_camera_host(config.input_args)
+    if camera_host:
+        try:
+            ping_snapshot = _collect_camera_ping_snapshot(camera_host)
+        except Exception as exc:  # noqa: BLE001 - diagnostics must never abort
+            ping_snapshot = {
+                "host": camera_host,
+                "reachable": None,
+                "last_error": f"{exc.__class__.__name__}: {exc}",
+            }
+        if ping_snapshot:
+            camera_snapshot["network_ping"] = ping_snapshot
 
     ffmpeg_status = _describe_executable(config.ffmpeg)
     ffprobe_status = _describe_executable(config.camera_probe.ffprobe)
@@ -564,6 +717,31 @@ def _collect_full_diagnostics(config: "StreamingConfig") -> str:
     else:
         detail = camera_error or "ver secção abaixo"
         summary_lines.append(f"- Sinal da câmara: não foi possível determinar ({detail})")
+
+    if ping_snapshot:
+        reachable = ping_snapshot.get("reachable")
+        if reachable is True:
+            rtt_ms = ping_snapshot.get("rtt_ms")
+            if isinstance(rtt_ms, (int, float)):
+                summary_lines.append(
+                    f"- Ping da câmara: alcançável ({rtt_ms:.1f} ms)"
+                )
+            else:
+                summary_lines.append("- Ping da câmara: alcançável")
+        elif reachable is False:
+            detail = ping_snapshot.get("last_error") or "sem resposta"
+            summary_lines.append(
+                f"- Ping da câmara: sem resposta ({detail})"
+            )
+        else:
+            detail = ping_snapshot.get("last_error") or "não executado"
+            summary_lines.append(
+                f"- Ping da câmara: não foi possível executar ({detail})"
+            )
+    elif camera_host:
+        summary_lines.append("- Ping da câmara: host identificado mas sem dados")
+    else:
+        summary_lines.append("- Ping da câmara: host não identificado nos argumentos")
 
     heartbeat_status = config.heartbeat
     heartbeat_token_present = bool(heartbeat_status.token)
@@ -631,6 +809,16 @@ def _collect_full_diagnostics(config: "StreamingConfig") -> str:
     lines.append("```")
     lines.append(snapshot_json)
     lines.append("```")
+
+    if ping_snapshot:
+        lines.extend(["", "## Ping da câmara", "Estado atual:"])
+        try:
+            ping_json = json.dumps(ping_snapshot, indent=2, ensure_ascii=False)
+        except TypeError:
+            ping_json = str(ping_snapshot)
+        lines.append("```")
+        lines.append(ping_json)
+        lines.append("```")
 
     if worker_snapshot is not None:
         lines.extend(["", "## Estado do worker ativo", "Estado detalhado:"])
