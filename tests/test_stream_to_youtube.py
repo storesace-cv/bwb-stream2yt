@@ -24,6 +24,8 @@ if "autotune" not in sys.modules:
         raise NotImplementedError
 
     autotune_stub.estimate_upload_bitrate = _estimate_upload_bitrate  # type: ignore[attr-defined]
+    autotune_stub.AUTOTUNE_AVAILABLE = False  # type: ignore[attr-defined]
+    autotune_stub.AUTOTUNE_UNAVAILABLE_REASON = ""  # type: ignore[attr-defined]
     sys.modules["autotune"] = autotune_stub
 
 SPEC.loader.exec_module(module)
