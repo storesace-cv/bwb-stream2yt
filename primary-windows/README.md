@@ -22,8 +22,25 @@ Ferramenta oficial para enviar o feed (RTSP/DirectShow) para a URL **primária**
 
 O diretório `src/` inclui `windows_service.py`, um *launcher* dedicado que registra o emissor como serviço do Windows, ocultando a janela de console e mantendo apenas um PID ativo (o *service host* do SCM).
 
+#### Executável (`stream2yt-service.exe`)
+
+1. Posicione `stream2yt-service.exe` (e o respetivo `.env`) numa pasta estável, por exemplo `C:\myapps\stream2yt-service\`.
+2. Abra um `PowerShell` com privilégios de administrador e navegue até essa pasta.
+3. Registe e inicie o serviço (adicione `--startup auto` se quiser *auto-start* após reboot):
+   ```powershell
+   .\stream2yt-service.exe install --startup auto
+   .\stream2yt-service.exe start
+   ```
+4. Para interromper/remover o serviço utilize:
+   ```powershell
+   .\stream2yt-service.exe stop
+   .\stream2yt-service.exe remove
+   ```
+
+#### Código-fonte (`windows_service.py`)
+
 1. Abra um `PowerShell` com privilégios de administrador e navegue até `primary-windows\src`.
-2. Registre o serviço (adicione `--startup auto` se quiser *auto-start* após reboot):
+2. Registe o serviço (adicione `--startup auto` se quiser *auto-start* após reboot):
    ```powershell
    python windows_service.py install --startup auto --720p
    python windows_service.py start
@@ -44,7 +61,7 @@ O wrapper regista o serviço como `stream2yt-service`, refletindo esse nome tant
 
 #### Configuração para o serviço
 
-- O serviço partilha o mesmo `.env` do executável. Caso pretenda manter os ficheiros de configuração em `%ProgramData%\stream2yt-service`, defina `BWB_ENV_DIR=%ProgramData%\stream2yt-service` antes de instalar o serviço (ou ajuste a variável de ambiente nas *System Properties*).
+- O serviço partilha o mesmo `.env` do executável. Se estiver a usar o binário, garanta que o `.env` permanece ao lado do `stream2yt-service.exe`. Caso pretenda manter os ficheiros de configuração em `%ProgramData%\stream2yt-service`, defina `BWB_ENV_DIR=%ProgramData%\stream2yt-service` antes de instalar o serviço (ou ajuste a variável de ambiente nas *System Properties*).
 - Como alternativa, use `BWB_ENV_FILE`/`BWB_ENV_PATH` apontando diretamente para o ficheiro `.env`. O wrapper carrega esse ficheiro antes dos demais caminhos padrão.
 - Os logs continuam a ser gravados em `logs/bwb_services-YYYY-MM-DD.log` junto ao executável ou no caminho definido por `BWB_LOG_FILE`, o que facilita a observabilidade em modo serviço.
 
