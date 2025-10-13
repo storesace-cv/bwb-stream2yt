@@ -1,9 +1,9 @@
-[2025-10-13T15:35:08+00:00] Log de arranque inicializado; a recolher diagnóstico do stream2yt-service.
-[2025-10-13T15:35:08+00:00] A verificar sentinelas pendentes antes do arranque.
-[2025-10-13T15:35:08+00:00] Sentinelas obsoletas limpas com sucesso.
-[2025-10-13T15:35:08+00:00] A registar ficheiro de PID do processo.
-[2025-10-13T15:35:08+00:00] PID registado sem erros.
-[2025-10-13T15:35:08+00:00] A instalar tratadores de sinal para encerramento limpo.
-[2025-10-13T15:35:08+00:00] A carregar configuração de streaming.
-[2025-10-13T15:35:08+00:00] Configuração carregada; resolução reportada: 360p.
-[2025-10-13T15:35:08+00:00] Configuração validada; a iniciar loop principal e remover log de arranque.
+[2025-10-13T15:59:25+00:00] Log de arranque inicializado; a recolher diagnóstico do stream2yt-service.
+[2025-10-13T15:59:25+00:00] A verificar sentinelas pendentes antes do arranque.
+[2025-10-13T15:59:25+00:00] Sentinelas obsoletas limpas com sucesso.
+[2025-10-13T15:59:25+00:00] A registar ficheiro de PID do processo.
+[2025-10-13T15:59:25+00:00] PID registado sem erros.
+[2025-10-13T15:59:25+00:00] A instalar tratadores de sinal para encerramento limpo.
+[2025-10-13T15:59:25+00:00] A carregar configuração de streaming.
+[2025-10-13T15:59:25+00:00] Configuração carregada; resolução reportada: 360p.
+[2025-10-13T15:59:25+00:00] Configuração validada; a iniciar loop principal e remover log de arranque.
