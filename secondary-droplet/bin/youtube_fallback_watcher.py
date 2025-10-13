@@ -432,6 +432,11 @@ class APIWatcher:
                 pieces.append(f"fallback_active={payload.get('fallback_active')!r}")
             if "fallback_reason" in payload and payload.get("fallback_reason"):
                 pieces.append(f"fallback_reason={payload.get('fallback_reason')!r}")
+            seconds = payload.get("seconds_since_last_heartbeat")
+            if isinstance(seconds, (int, float)):
+                pieces.append(
+                    f"seconds_since_last_heartbeat={seconds!r}"
+                )
             camera_snapshot = payload.get("last_camera_signal")
             if isinstance(camera_snapshot, dict):
                 present = camera_snapshot.get("present")
@@ -474,7 +479,26 @@ class APIWatcher:
                     if isinstance(present, bool):
                         camera_present = present
 
+                seconds_since = payload.get("seconds_since_last_heartbeat")
+                missed_threshold = payload.get("missed_threshold")
+                heartbeat_threshold: Optional[float] = None
+                if isinstance(missed_threshold, (int, float)) and missed_threshold > 0:
+                    heartbeat_threshold = float(missed_threshold)
+                elif self._config.heartbeat_stale_sec > 0:
+                    heartbeat_threshold = self._config.heartbeat_stale_sec
+
+                heartbeats_missing = False
+                if (
+                    isinstance(seconds_since, (int, float))
+                    and heartbeat_threshold is not None
+                ):
+                    heartbeats_missing = seconds_since >= heartbeat_threshold
+
                 if not fallback_active:
+                    if camera_present is False:
+                        return Mode.BARS, "api_camera_snapshot_sem_sinal"
+                    if heartbeats_missing:
+                        return Mode.LIFE, "api_sem_heartbeats"
                     return Mode.OFF, "api_fallback_desligado"
 
                 if fallback_reason == "no_camera_signal":

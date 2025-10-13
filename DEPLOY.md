@@ -46,6 +46,13 @@ systemctl enable youtube-fallback.service
 systemctl enable --now yt-restapi.service
 systemctl enable --now ensure-broadcast.timer
 
+> **Importante:** o `youtube_fallback_watcher` precisa ter privilégios para gerir o
+> `youtube-fallback.service` *e* escrever nos ficheiros
+> `/etc/youtube-fallback.env` e `/run/youtube-fallback.mode`. Execute o serviço
+> como `root` (valor por omissão no unit file) ou garanta `sudo` sem palavra-passe
+> para esses comandos. Sem estas permissões, o watcher não conseguirá activar o
+> fallback mesmo que o monitor reporte perda de heartbeats.
+
 # limpeza de serviços antigos
 systemctl disable --now yt-decider-daemon.service yt-decider.service || true
 rm -f /etc/systemd/system/yt-decider-daemon.service \
@@ -82,6 +89,11 @@ YTR_REQUIRE_TOKEN=1
 EOF
 chown yt-restapi:yt-restapi /etc/yt-restapi.env
 chmod 640 /etc/yt-restapi.env
+
+> O watcher depende dos campos `seconds_since_last_heartbeat` e
+> `missed_threshold` fornecidos por este serviço para perceber falhas da câmara.
+> Ajuste o `YTR_MISSED_THRESHOLD` apenas se tiver certeza de que o emissor envia
+> heartbeats com outra cadência.
 
 # OAuth token para YouTube Data API
 # (gerar localmente e copiar) => /root/token.json  (chmod 600)
