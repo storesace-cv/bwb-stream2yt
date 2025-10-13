@@ -18,11 +18,12 @@ import shutil
 import signal
 import subprocess
 import threading
+import time
 from dataclasses import dataclass, field
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Iterable, Optional
 
 LOGGER = logging.getLogger("bwb_status_monitor")
 
@@ -55,6 +56,9 @@ class MonitorSettings:
     camera_ping_count: int = 1
     camera_ping_timeout: float = 1.2
     camera_ping_command: Optional[str] = None
+    refresh_on_stop: bool = False
+    refresh_token_path: Path = Path("/root/token.json")
+    refresh_cooldown: int = 120
 
     @classmethod
     def from_env(cls) -> "MonitorSettings":
@@ -202,6 +206,25 @@ class MonitorSettings:
         if camera_ping_timeout <= 0:
             camera_ping_timeout = cls.camera_ping_timeout
 
+        refresh_flag = _maybe_bool("YTR_REFRESH_ON_STOP")
+        refresh_on_stop = (
+            refresh_flag
+            if refresh_flag is not None
+            else cls.refresh_on_stop
+        )
+
+        refresh_token_raw = _get_env(
+            "YTR_REFRESH_TOKEN_PATH",
+            "YT_OAUTH_TOKEN_PATH",
+        )
+        refresh_token_path = (
+            Path(refresh_token_raw).expanduser()
+            if refresh_token_raw
+            else cls.refresh_token_path
+        )
+
+        refresh_cooldown = _int(("YTR_REFRESH_COOLDOWN",), cls.refresh_cooldown)
+
         return cls(
             bind=bind,
             port=port,
@@ -217,6 +240,9 @@ class MonitorSettings:
             camera_ping_count=camera_ping_count,
             camera_ping_timeout=camera_ping_timeout,
             camera_ping_command=camera_ping_command or None,
+            refresh_on_stop=bool(refresh_on_stop),
+            refresh_token_path=refresh_token_path,
+            refresh_cooldown=refresh_cooldown,
         )
 
 
@@ -312,12 +338,227 @@ class ServiceManager:
             return True
 
 
+class YouTubeRefresher:
+    """Refresh the primary YouTube ingest via the Live Streaming API."""
+
+    SCOPES: tuple[str, ...] = (
+        "https://www.googleapis.com/auth/youtube",
+        "https://www.googleapis.com/auth/youtube.readonly",
+    )
+
+    def __init__(
+        self,
+        token_path: Path,
+        cooldown_seconds: int = 120,
+        transitions: Iterable[str] = ("testing", "live"),
+    ) -> None:
+        self._token_path = Path(token_path)
+        self._cooldown = max(int(cooldown_seconds), 0)
+        normalized = [str(value).strip().lower() for value in transitions if value]
+        self._transitions = tuple(normalized) or ("live",)
+        self._lock = threading.Lock()
+        self._last_request = 0.0
+        self._current_thread: Optional[threading.Thread] = None
+        self._token_missing_logged = False
+        self._import_error_logged = False
+
+    @classmethod
+    def from_settings(cls, settings: MonitorSettings) -> Optional["YouTubeRefresher"]:
+        if not settings.refresh_on_stop:
+            return None
+        return cls(
+            token_path=settings.refresh_token_path,
+            cooldown_seconds=settings.refresh_cooldown,
+        )
+
+    def request_refresh(self) -> None:
+        with self._lock:
+            now = time.monotonic()
+            if self._current_thread and self._current_thread.is_alive():
+                LOGGER.debug(
+                    "Refresh da ingestão primária já em andamento; ignorando novo pedido."
+                )
+                return
+            if self._cooldown and now - self._last_request < self._cooldown:
+                remaining = self._cooldown - (now - self._last_request)
+                LOGGER.debug(
+                    "Ignorando refresh da ingestão primária (cooldown %.1fs restante).",
+                    remaining,
+                )
+                return
+            self._last_request = now
+            thread = threading.Thread(
+                target=self._run, name="yt-refresh", daemon=True
+            )
+            self._current_thread = thread
+
+        thread.start()
+
+    def _run(self) -> None:
+        try:
+            LOGGER.info(
+                "Solicitando refresh da ingestão primária via API do YouTube."
+            )
+            self._perform_refresh()
+        except Exception as exc:  # noqa: BLE001
+            LOGGER.exception(
+                "Erro ao executar refresh da ingestão primária: %s", exc
+            )
+        finally:
+            with self._lock:
+                self._current_thread = None
+
+    def _perform_refresh(self) -> None:
+        client = self._build_client()
+        if client is None:
+            return
+
+        broadcast = self._select_broadcast(client)
+        if not broadcast:
+            LOGGER.warning(
+                "Nenhuma transmissão activa encontrada para refresh da ingestão primária."
+            )
+            return
+
+        broadcast_id = broadcast.get("id")
+        if not broadcast_id:
+            LOGGER.warning("Transmissão activa sem ID; refresh ignorado.")
+            return
+
+        lifecycle = str(
+            broadcast.get("status", {}).get("lifeCycleStatus", "")
+        ).lower()
+
+        targets: list[str] = []
+        for target in self._transitions:
+            if target == "testing" and lifecycle == "testing":
+                continue
+            targets.append(target)
+        if not targets:
+            targets.append("live")
+
+        for target in targets:
+            self._attempt_transition(client, broadcast_id, target)
+
+    def _build_client(self) -> Optional[Any]:
+        try:
+            from google.oauth2.credentials import Credentials
+            from googleapiclient.discovery import build
+        except ImportError:
+            if not self._import_error_logged:
+                LOGGER.warning(
+                    "Bibliotecas google-api indisponíveis; refresh primário ignorado."
+                )
+                self._import_error_logged = True
+            return None
+
+        if not self._token_path.exists():
+            if not self._token_missing_logged:
+                LOGGER.warning(
+                    "Token OAuth %s não encontrado; refresh ignorado.",
+                    self._token_path,
+                )
+                self._token_missing_logged = True
+            return None
+
+        try:
+            credentials = Credentials.from_authorized_user_file(
+                str(self._token_path), self.SCOPES
+            )
+        except Exception as exc:  # noqa: BLE001
+            LOGGER.error(
+                "Não foi possível carregar credenciais do OAuth %s: %s",
+                self._token_path,
+                exc,
+            )
+            return None
+
+        try:
+            return build(
+                "youtube", "v3", credentials=credentials, cache_discovery=False
+            )
+        except Exception as exc:  # noqa: BLE001
+            LOGGER.error("Falha ao construir cliente YouTube: %s", exc)
+            return None
+
+    @staticmethod
+    def _select_broadcast(client: Any) -> Optional[Dict[str, Any]]:
+        try:
+            response = (
+                client.liveBroadcasts()
+                .list(
+                    part="id,status",
+                    broadcastStatus="active",
+                    mine=True,
+                    maxResults=25,
+                )
+                .execute()
+            )
+        except Exception as exc:  # noqa: BLE001
+            LOGGER.error("Falha ao listar transmissões activas: %s", exc)
+            return None
+
+        items = response.get("items", [])
+        if not items:
+            return None
+
+        order = {"live": 0, "testing": 1, "ready": 2, "created": 3, "scheduled": 4}
+
+        def _priority(entry: Dict[str, Any]) -> int:
+            lifecycle = str(
+                entry.get("status", {}).get("lifeCycleStatus", "")
+            ).lower()
+            return order.get(lifecycle, 99)
+
+        return min(items, key=_priority)
+
+    def _attempt_transition(self, client: Any, broadcast_id: str, target: str) -> None:
+        try:
+            from googleapiclient.errors import HttpError
+        except ImportError:
+            LOGGER.warning(
+                "Biblioteca googleapiclient indisponível; não foi possível transicionar transmissão %s.",
+                broadcast_id,
+            )
+            return
+
+        try:
+            (
+                client.liveBroadcasts()
+                .transition(part="status", broadcastStatus=target, id=broadcast_id)
+                .execute()
+            )
+            LOGGER.info(
+                "Transmissão %s transicionada para estado %s via API.",
+                broadcast_id,
+                target,
+            )
+        except HttpError as exc:
+            LOGGER.warning(
+                "YouTube rejeitou transição %s→%s: %s",
+                broadcast_id,
+                target,
+                exc,
+            )
+        except Exception as exc:  # noqa: BLE001
+            LOGGER.error(
+                "Erro inesperado ao transicionar %s→%s: %s",
+                broadcast_id,
+                target,
+                exc,
+            )
+
+
 class StatusMonitor:
     def __init__(
-        self, settings: MonitorSettings, service_manager: ServiceManager
+        self,
+        settings: MonitorSettings,
+        service_manager: ServiceManager,
+        refresher: Optional[YouTubeRefresher] = None,
     ) -> None:
         self._settings = settings
         self._service_manager = service_manager
+        self._refresher = refresher or YouTubeRefresher.from_settings(settings)
         self._lock = threading.Lock()
         self._last_timestamp: Optional[dt.datetime] = None
         self._started_at = utc_now()
@@ -686,6 +927,8 @@ class StatusMonitor:
                 self._fallback_active = False
                 self._fallback_reason = None
             self._write_mode_file("life")
+            if self._refresher:
+                self._refresher.request_refresh()
         else:
             LOGGER.warning(
                 "Falha ao parar fallback; nova tentativa ocorrerá no próximo heartbeat."

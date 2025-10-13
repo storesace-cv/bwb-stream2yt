@@ -44,6 +44,14 @@ class DummyServiceManager:
         return True
 
 
+class DummyRefresher:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def request_refresh(self) -> None:
+        self.calls += 1
+
+
 @pytest.fixture()
 def monitor(tmp_path: Path) -> StatusMonitor:
     settings = MonitorSettings(
@@ -124,6 +132,48 @@ def test_camera_recovery_stops_fallback(monitor: StatusMonitor) -> None:
     assert monitor.settings.mode_file.read_text(encoding="utf-8").strip() == "life"
 
 
+def test_stop_fallback_triggers_refresh(tmp_path: Path) -> None:
+    refresher = DummyRefresher()
+    settings = MonitorSettings(
+        missed_threshold=2,
+        check_interval=1,
+        log_file=tmp_path / "monitor.log",
+        mode_file=tmp_path / "fallback.mode",
+        refresh_on_stop=True,
+    )
+    monitor = StatusMonitor(
+        settings=settings,
+        service_manager=DummyServiceManager(),
+        refresher=refresher,
+    )
+    with monitor._lock:  # type: ignore[attr-defined]
+        monitor._fallback_active = True
+
+    monitor.record_status(make_entry(camera_signal={"present": True}))
+
+    assert refresher.calls == 1
+
+
+def test_refresh_not_called_when_inactive(tmp_path: Path) -> None:
+    refresher = DummyRefresher()
+    settings = MonitorSettings(
+        missed_threshold=2,
+        check_interval=1,
+        log_file=tmp_path / "monitor.log",
+        mode_file=tmp_path / "fallback.mode",
+        refresh_on_stop=True,
+    )
+    monitor = StatusMonitor(
+        settings=settings,
+        service_manager=DummyServiceManager(),
+        refresher=refresher,
+    )
+
+    monitor.record_status(make_entry(camera_signal={"present": True}))
+
+    assert refresher.calls == 0
+
+
 def test_run_server_handles_address_in_use(tmp_path: Path, monkeypatch, caplog):
     caplog.set_level("ERROR")
 
@@ -175,6 +225,18 @@ def test_monitor_settings_accepts_ytr_env(monkeypatch):
     assert settings.camera_ping_count == 3
     assert settings.camera_ping_timeout == 2.5
     assert settings.camera_ping_command == "/bin/ping"
+
+
+def test_monitor_settings_refresh_env(monkeypatch):
+    monkeypatch.setenv("YTR_REFRESH_ON_STOP", "1")
+    monkeypatch.setenv("YTR_REFRESH_TOKEN_PATH", "/tmp/token.json")
+    monkeypatch.setenv("YTR_REFRESH_COOLDOWN", "15")
+
+    settings = MonitorSettings.from_env()
+
+    assert settings.refresh_on_stop is True
+    assert settings.refresh_token_path == Path("/tmp/token.json")
+    assert settings.refresh_cooldown == 15
 
 
 def test_post_requires_bearer_token(tmp_path: Path):
