@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import textwrap
 import re
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, TextIO
 
 from autotune import estimate_upload_bitrate
 
@@ -33,6 +33,10 @@ DEFAULT_STATUS_ENDPOINT = "http://104.248.134.44:8080/status"
 APP_VERSION = "2024.09"
 HEARTBEAT_USER_AGENT = f"BWBPrimary/{APP_VERSION}"
 HEARTBEAT_DEFAULT_LOG_RELATIVE = "logs/heartbeat-status.jsonl"
+_STARTUP_LOG_ENV = "BWB_SERVICE_STARTUP_LOG"
+_DEFAULT_STARTUP_LOG_RELATIVE = (
+    Path(r"C:\bwb\apps\youtube\logs") / "stream2yt-service-startup.log"
+)
 
 
 ENV_TEMPLATE_CONTENT = """# Configurações para stream_to_youtube.py
@@ -167,6 +171,64 @@ def _resolve_custom_path(env_name: str, default_relative: str) -> Path:
     return (script_dir / default_relative).resolve()
 
 
+def _resolve_startup_log_path() -> Path:
+    override = os.environ.get(_STARTUP_LOG_ENV, "").strip()
+    if override:
+        expanded = os.path.expandvars(override)
+        candidate = Path(expanded).expanduser()
+        if not candidate.is_absolute():
+            candidate = (_script_base_dir() / candidate).resolve()
+        return candidate
+    return _DEFAULT_STARTUP_LOG_RELATIVE
+
+
+class _StartupLogger:
+    """Helper that captures startup diagnostics and cleans up on success."""
+
+    def __init__(self, path: Path) -> None:
+        self._path = path
+        self._handle: Optional[TextIO] = None
+        self._remove_on_exit = False
+
+    def __enter__(self) -> "_StartupLogger":
+        try:
+            self._path.parent.mkdir(parents=True, exist_ok=True)
+            self._handle = self._path.open("w", encoding="utf-8")
+            self.log(
+                "Log de arranque inicializado; a recolher diagnóstico do stream2yt-service."
+            )
+        except OSError:
+            self._handle = None
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:  # noqa: D401 - context manager contract
+        handle = self._handle
+        if handle is not None:
+            handle.close()
+            self._handle = None
+        if self._remove_on_exit:
+            with suppress(OSError):
+                self._path.unlink()
+
+    def log(self, message: str) -> None:
+        handle = self._handle
+        if handle is None:
+            return
+        timestamp = (
+            datetime.datetime.now(datetime.timezone.utc)
+            .replace(microsecond=0)
+            .isoformat()
+        )
+        try:
+            handle.write(f"[{timestamp}] {message}\n")
+            handle.flush()
+        except OSError:
+            pass
+
+    def mark_success(self) -> None:
+        self._remove_on_exit = True
+
+
 def _resolve_ffprobe_path(ffmpeg_path: str) -> str:
     configured = os.environ.get("FFPROBE", "").strip()
     if configured:
@@ -193,6 +255,8 @@ _SHOW_ON_SCREEN = False
 
 _PID_FILE_NAME = "stream_to_youtube.pid"
 _STOP_SENTINEL_NAME = "stream_to_youtube.stop"
+_STOP_SENTINEL_STALE_AFTER_SECONDS = 30.0
+_STARTUP_SUCCESS_GRACE_PERIOD = 10.0
 _SIGNAL_HANDLERS_INSTALLED = False
 _ACTIVE_WORKER: Optional["StreamingWorker"] = None
 _CTRL_HANDLER_REF = None
@@ -361,6 +425,38 @@ def _clear_stop_request() -> None:
     path = _stop_sentinel_path()
     with suppress(OSError):
         path.unlink()
+
+
+def _clear_stale_stop_request() -> None:
+    """Remove lingering stop sentinels when they are no longer actionable."""
+
+    path = _stop_sentinel_path()
+    if not path.exists():
+        return
+
+    stale_due_to_age = False
+    try:
+        mtime = path.stat().st_mtime
+    except OSError:
+        mtime = None
+    else:
+        age = time.time() - mtime
+        stale_due_to_age = age >= _STOP_SENTINEL_STALE_AFTER_SECONDS
+
+    pid = _read_pid_file()
+    if not stale_due_to_age and pid and _is_pid_running(pid):
+        return
+
+    _clear_stop_request()
+    if stale_due_to_age:
+        reason = (
+            "Sentinela de parada antiga detectada; removendo devido a expiração."
+        )
+    else:
+        reason = (
+            "Sentinela de parada obsoleta detectada; removendo antes da inicialização."
+        )
+    log_event("primary", reason)
 
 
 def _request_stop_via_sentinel() -> bool:
@@ -2357,6 +2453,9 @@ class StreamingWorker:
 def run_forever(
     config: Optional[StreamingConfig] = None,
     existing_worker: Optional["StreamingWorker"] = None,
+    *,
+    startup_confirmed_callback: Optional[Callable[[], None]] = None,
+    startup_grace_period: float = _STARTUP_SUCCESS_GRACE_PERIOD,
 ) -> None:
     global _ACTIVE_WORKER
     if existing_worker is not None:
@@ -2374,6 +2473,11 @@ def run_forever(
         worker.start()
     stop_logged = False
     reporter: Optional[HeartbeatReporter] = None
+    startup_notified = False
+    if startup_confirmed_callback is not None:
+        deadline = time.monotonic() + max(0.0, startup_grace_period)
+    else:
+        deadline = None
     if active_config.heartbeat.enabled and active_config.heartbeat.endpoint:
 
         def _heartbeat_status() -> Dict[str, Any]:
@@ -2398,6 +2502,21 @@ def run_forever(
         reporter.start()
     try:
         while True:
+            if (
+                not startup_notified
+                and deadline is not None
+                and worker.is_running
+                and not _stop_request_active()
+                and time.monotonic() >= deadline
+            ):
+                try:
+                    startup_confirmed_callback()
+                except Exception as exc:  # pragma: no cover - defensive
+                    log_event(
+                        "primary",
+                        f"Falha ao confirmar arranque estável: {exc}",
+                    )
+                startup_notified = True
             if _stop_request_active():
                 if not stop_logged:
                     log_event(
@@ -2420,36 +2539,78 @@ def run_forever(
 def _start_streaming_instance(
     resolution: Optional[str] = None, full_diagnostics: bool = False
 ) -> int:
-    try:
-        _claim_pid_file()
-    except RuntimeError as exc:
-        message = str(exc)
-        print(f"[primary] {message}", file=sys.stderr)
-        log_event("primary", message)
-        return 1
-    except OSError as exc:
-        message = f"Falha ao registrar PID: {exc}"
-        print(f"[primary] {message}", file=sys.stderr)
-        log_event("primary", message)
-        return 1
+    startup_logger = _StartupLogger(_resolve_startup_log_path())
 
     try:
-        _ensure_signal_handlers()
-        config = load_config(resolution=resolution)
-        if full_diagnostics:
-            _write_full_diagnostics(config)
-        if not config.yt_url:
-            message = "Credenciais YT_URL/YT_KEY ausentes; streaming worker finalizado."
-            print(f"[primary] {message}", file=sys.stderr)
-            log_event("primary", message)
-            return 2
+        with startup_logger as logger:
+            logger.log("A verificar sentinelas pendentes antes do arranque.")
+            try:
+                _clear_stale_stop_request()
+                logger.log("Sentinelas obsoletas limpas com sucesso.")
+                logger.log("A registar ficheiro de PID do processo.")
+                _claim_pid_file()
+                logger.log("PID registado sem erros.")
+            except RuntimeError as exc:
+                message = str(exc)
+                logger.log(message)
+                print(f"[primary] {message}", file=sys.stderr)
+                log_event("primary", message)
+                return 1
+            except OSError as exc:
+                message = f"Falha ao registrar PID: {exc}"
+                logger.log(message)
+                print(f"[primary] {message}", file=sys.stderr)
+                log_event("primary", message)
+                return 1
 
-        log_event("primary", f"Resolução selecionada: {config.resolution}")
-        print(f"[primary] Resolução selecionada: {config.resolution}")
-        log_event("primary", f"Iniciando worker (PID {os.getpid()})")
-        run_forever(config=config)
-        log_event("primary", "Worker finalizado")
-        return 0
+            try:
+                logger.log("A instalar tratadores de sinal para encerramento limpo.")
+                _ensure_signal_handlers()
+            except Exception as exc:
+                logger.log(f"Falha ao instalar tratadores de sinal: {exc}")
+                raise
+
+            try:
+                logger.log("A carregar configuração de streaming.")
+                config = load_config(resolution=resolution)
+                logger.log(
+                    f"Configuração carregada; resolução reportada: {config.resolution}."
+                )
+            except Exception as exc:
+                logger.log(f"Falha ao carregar configuração: {exc}")
+                raise
+
+            if full_diagnostics:
+                try:
+                    logger.log("Flag --fulldiags ativa; a gerar relatório detalhado.")
+                    _write_full_diagnostics(config)
+                    logger.log("Relatório detalhado concluído.")
+                except Exception as exc:
+                    logger.log(f"Falha ao gerar relatório detalhado: {exc}")
+                    raise
+
+            if not config.yt_url:
+                message = "Credenciais YT_URL/YT_KEY ausentes; streaming worker finalizado."
+                logger.log(message)
+                print(f"[primary] {message}", file=sys.stderr)
+                log_event("primary", message)
+                return 2
+
+            logger.log(
+                "Configuração validada; a iniciar loop principal. "
+                "O log será removido após confirmar estabilidade."
+            )
+
+            log_event("primary", f"Resolução selecionada: {config.resolution}")
+            print(f"[primary] Resolução selecionada: {config.resolution}")
+            log_event("primary", f"Iniciando worker (PID {os.getpid()})")
+            run_forever(
+                config=config,
+                startup_confirmed_callback=logger.mark_success,
+                startup_grace_period=_STARTUP_SUCCESS_GRACE_PERIOD,
+            )
+            log_event("primary", "Worker finalizado")
+            return 0
     finally:
         _release_pid_file()
 
