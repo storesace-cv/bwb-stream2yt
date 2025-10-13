@@ -195,6 +195,40 @@ def test_watcher_understands_status_monitor_snapshot_off(
     assert bundle.service.stop_calls == 1
 
 
+def test_watcher_stops_service_if_reactivated_externally(
+    config: WatcherConfig,
+) -> None:
+    clock = FakeClock()
+    results = [
+        FetcherResult(
+            True,
+            {
+                "fallback_active": False,
+                "fallback_reason": None,
+                "last_camera_signal": {"present": True},
+            },
+        ),
+        FetcherResult(
+            True,
+            {
+                "fallback_active": False,
+                "fallback_reason": None,
+                "last_camera_signal": {"present": True},
+            },
+        ),
+    ]
+    bundle = make_watcher(config, results, clock)
+
+    assert bundle.watcher.process_once() is Mode.OFF
+    assert bundle.service.stop_calls == 1
+
+    bundle.service.active = True
+    clock.advance(1)
+
+    assert bundle.watcher.process_once() is Mode.OFF
+    assert bundle.service.stop_calls == 2
+
+
 def test_watcher_uses_camera_snapshot_when_api_reports_inactive(
     config: WatcherConfig,
 ) -> None:

@@ -562,7 +562,7 @@ class APIWatcher:
     def _apply_mode(self, mode: Mode) -> None:
         if mode is Mode.OFF:
             self._update_resources(mode)
-            if self._current_mode is not Mode.OFF:
+            if self._current_mode is not Mode.OFF or self._service.is_active():
                 if self._service.ensure_stopped():
                     self._current_mode = Mode.OFF
             return
