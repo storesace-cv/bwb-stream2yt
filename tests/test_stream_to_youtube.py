@@ -110,6 +110,40 @@ def test_run_forever_stops_when_sentinel_tripped(tmp_path, monkeypatch):
         module._clear_stop_request()
 
 
+def test_clear_stale_stop_request_removes_obsolete_flag(tmp_path, monkeypatch):
+    sentinel = tmp_path / "stop.flag"
+    pid_path = tmp_path / "stream_to_youtube.pid"
+    sentinel.write_text("", encoding="utf-8")
+    pid_path.write_text("9999", encoding="utf-8")
+
+    events = []
+    monkeypatch.setattr(module, "log_event", lambda *args, **kwargs: events.append(args))
+    monkeypatch.setattr(module, "_stop_sentinel_path", lambda: sentinel)
+    monkeypatch.setattr(module, "_pid_file_path", lambda: pid_path)
+    monkeypatch.setattr(module, "_is_pid_running", lambda pid: False)
+
+    module._clear_stale_stop_request()
+
+    assert not sentinel.exists()
+    assert any("Sentinela de parada obsoleta" in message for _, message in events)
+
+
+def test_clear_stale_stop_request_keeps_flag_when_pid_active(tmp_path, monkeypatch):
+    sentinel = tmp_path / "stop.flag"
+    pid_path = tmp_path / "stream_to_youtube.pid"
+    sentinel.write_text("", encoding="utf-8")
+    pid_path.write_text("8888", encoding="utf-8")
+
+    monkeypatch.setattr(module, "log_event", lambda *args, **kwargs: None)
+    monkeypatch.setattr(module, "_stop_sentinel_path", lambda: sentinel)
+    monkeypatch.setattr(module, "_pid_file_path", lambda: pid_path)
+    monkeypatch.setattr(module, "_is_pid_running", lambda pid: True)
+
+    module._clear_stale_stop_request()
+
+    assert sentinel.exists()
+
+
 def test_stop_streaming_instance_waits_for_orderly_shutdown(tmp_path, monkeypatch):
     sentinel = tmp_path / "stop.flag"
     pid_path = tmp_path / "stream_to_youtube.pid"

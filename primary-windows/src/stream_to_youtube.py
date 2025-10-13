@@ -363,6 +363,23 @@ def _clear_stop_request() -> None:
         path.unlink()
 
 
+def _clear_stale_stop_request() -> None:
+    """Remove any lingering stop sentinel when no worker is active."""
+
+    if not _stop_request_active():
+        return
+
+    pid = _read_pid_file()
+    if pid and _is_pid_running(pid):
+        return
+
+    _clear_stop_request()
+    log_event(
+        "primary",
+        "Sentinela de parada obsoleta detectada; removendo antes da inicialização.",
+    )
+
+
 def _request_stop_via_sentinel() -> bool:
     path = _stop_sentinel_path()
     try:
@@ -2421,6 +2438,7 @@ def _start_streaming_instance(
     resolution: Optional[str] = None, full_diagnostics: bool = False
 ) -> int:
     try:
+        _clear_stale_stop_request()
         _claim_pid_file()
     except RuntimeError as exc:
         message = str(exc)
