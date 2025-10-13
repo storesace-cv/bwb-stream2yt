@@ -881,14 +881,170 @@ def _load_env_template(base_dir: Path) -> str:
         return content
 
 
+def _is_valid_env_key(name: str) -> bool:
+    return bool(name) and all(ch.isalnum() or ch == "_" for ch in name)
+
+
+def _parse_env_assignment(line: str) -> Optional[tuple[str, str, bool]]:
+    stripped = line.strip()
+    if not stripped or "=" not in stripped:
+        return None
+
+    commented = False
+    working = stripped
+    if working.startswith("#"):
+        commented = True
+        working = working[1:].lstrip()
+    if "=" not in working:
+        return None
+
+    key, value = working.split("=", 1)
+    key = key.strip()
+    if not _is_valid_env_key(key):
+        return None
+
+    value = value.strip()
+    for splitter in (" #", "\t#"):
+        if splitter in value:
+            value = value.split(splitter, 1)[0].rstrip()
+    return key, value, commented
+
+
+def _sync_env_against_template(env_path: Path, template_content: str) -> None:
+    try:
+        current_content = env_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        message = f"Falha ao ler .env existente ({exc})."
+        print(f"[primary] {message}", file=sys.stderr)
+        log_event("primary", message)
+        return
+
+    template_lines = template_content.splitlines()
+    template_defaults: dict[str, str] = {}
+    template_order: list[str] = []
+    for line in template_lines:
+        parsed = _parse_env_assignment(line)
+        if not parsed:
+            continue
+        key, value, _commented = parsed
+        if key in template_defaults:
+            continue
+        template_defaults[key] = value
+        template_order.append(key)
+
+    existing_lines = current_content.splitlines()
+    existing_values: dict[str, tuple[str, bool]] = {}
+    existing_key_order: list[str] = []
+    for line in existing_lines:
+        parsed = _parse_env_assignment(line)
+        if not parsed:
+            continue
+        key, value, commented = parsed
+        existing_key_order.append(key)
+        if key not in existing_values or existing_values[key][1]:
+            existing_values[key] = (value, commented)
+
+    template_keys = set(template_defaults)
+    existing_keys = set(existing_values)
+
+    new_keys = [key for key in template_order if key not in existing_keys]
+    removed_keys = [key for key in existing_key_order if key not in template_keys]
+
+    if not new_keys and not removed_keys:
+        return
+
+    timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    backup_suffix = f".bak.{timestamp}"
+    backup_path = env_path.with_suffix(env_path.suffix + backup_suffix)
+
+    backup_created = False
+    try:
+        shutil.copy2(env_path, backup_path)
+        backup_created = True
+    except OSError as exc:
+        message = f"Falha ao criar backup do .env ({exc})."
+        print(f"[primary] {message}", file=sys.stderr)
+        log_event("primary", message)
+
+    header_lines = [
+        "# Arquivo .env atualizado automaticamente para refletir o template mais recente.",
+    ]
+    if backup_created:
+        header_lines.append(f"# Backup anterior: {backup_path.name}")
+    else:
+        header_lines.append("# ⚠️ Não foi possível criar o backup automático; revise manualmente antes de prosseguir.")
+    header_lines.append("# Reveja os valores abaixo e ajuste conforme necessário.")
+    header_lines.append("")
+
+    new_lines = header_lines
+
+    for line in template_lines:
+        stripped = line.rstrip("\n")
+        parsed = _parse_env_assignment(line)
+        if not parsed:
+            new_lines.append(stripped)
+            continue
+
+        key, default_value, _commented = parsed
+        if line.lstrip().startswith("#"):
+            new_lines.append(stripped)
+
+        existing = existing_values.get(key)
+        if existing:
+            value, was_commented = existing
+            if was_commented and value:
+                new_lines.append(f"# {key}={value}")
+            elif was_commented:
+                new_lines.append(f"# {key}=  # valor comentado no arquivo original")
+            else:
+                new_lines.append(f"{key}={value}")
+        else:
+            annotation = "valor padrão gerado automaticamente"
+            if default_value:
+                new_lines.append(f"{key}={default_value}  # {annotation}")
+            else:
+                new_lines.append(f"{key}=  # {annotation}")
+
+    if removed_keys:
+        seen_removed = set()
+        new_lines.append("")
+        new_lines.append(
+            "# Parâmetros remanescentes marcados como desactualizados (não constam no template atual)."
+        )
+        for key in removed_keys:
+            if key in seen_removed:
+                continue
+            seen_removed.add(key)
+            value, was_commented = existing_values.get(key, ("", False))
+            assignment = f"{key}={value}" if value else key
+            new_lines.append(
+                f"# {assignment}  # desactualizado - confirme se ainda é necessário"
+            )
+
+    new_lines.append("")
+
+    try:
+        env_path.write_text("\n".join(new_lines), encoding="utf-8")
+    except OSError as exc:
+        message = f"Falha ao gravar .env atualizado ({exc})."
+        print(f"[primary] {message}", file=sys.stderr)
+        log_event("primary", message)
+        return
+
+    message = "Arquivo .env atualizado automaticamente para alinhar com o template atual."
+    print(f"[primary] {message}")
+    log_event("primary", message)
+
+
 def _ensure_env_file() -> None:
     base_dir = _script_base_dir()
     env_path = base_dir / ".env"
 
-    if env_path.exists():
-        return
-
     template_content = _load_env_template(base_dir)
+
+    if env_path.exists():
+        _sync_env_against_template(env_path, template_content)
+        return
 
     try:
         env_path.write_text(template_content, encoding="utf-8")

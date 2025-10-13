@@ -12,8 +12,8 @@ from stream_to_youtube import (
     stop_active_worker,
 )
 
-SERVICE_NAME = "BWBStream2YT"
-DISPLAY_NAME = "BWB Stream2YT Primary"
+SERVICE_NAME = "stream2yt-service"
+DISPLAY_NAME = "stream2yt-service"
 DESCRIPTION = (
     "Windows service wrapper that keeps the BeachCam primary feed streaming to YouTube."
 )
