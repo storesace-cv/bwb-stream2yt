@@ -26,5 +26,30 @@ Mesmo que outros componentes (como o watcher remoto) reportem `camera_snapshot_p
 confie no diagnóstico local da aplicação Windows para aferir a conectividade da câmara,
 pois ele resulta de uma tentativa direta de leitura do stream RTSP.
 
+### Porque é que o watcher pode indicar `camera_snapshot_present=True` mesmo sem câmara
+
+O watcher que corre no droplet secundário só consegue ver o último *heartbeat*
+enviado pelo emissor Windows. O campo `camera_snapshot_present` é calculado a
+partir dessa mensagem HTTP: indica apenas que o emissor conseguiu gerar e
+enviar uma captura de ecrã em algum momento recente. O watcher **não** volta a
+consultar o RTSP; por isso, se a câmara perder alimentação ou ficar inacessível
+(por exemplo, não responde a `ping`), o valor pode continuar a ser `True` até
+que a aplicação Windows volte a reportar explicitamente a falha.
+
+Assim, perante alarmes vindos do watcher mas com `camera_snapshot_present=True`,
+siga estes passos:
+
+1. Consulte o relatório `stream2yt-diags-*.txt` mais recente e confirme a
+   linha **"Sinal da câmara"**.
+2. Verifique manualmente a câmara (ping, alimentação eléctrica, LEDs de
+   actividade). Se estiver desligada, documente a hora de perda de energia.
+3. Aguarde pelo próximo relatório gerado pela aplicação Windows: quando ela
+   detetar a falha, a linha passará para `indisponível` com o detalhe do erro
+   (p. ex. timeout do `ffprobe`).
+
+Enquanto essa confirmação não chegar, trate o estado real da câmara como
+desconhecido — o watcher apenas reflecte o último *heartbeat*, não uma
+verificação em tempo real do dispositivo físico.
+
 Quando o sinal regressa, o relatório volta a indicar `disponível` e inclui a
 marca temporal do último sucesso.
