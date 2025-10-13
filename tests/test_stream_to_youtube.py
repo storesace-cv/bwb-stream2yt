@@ -1,4 +1,5 @@
 import importlib.util
+import os
 import signal
 import sys
 import json
@@ -181,6 +182,29 @@ def test_clear_stale_stop_request_keeps_flag_when_pid_active(tmp_path, monkeypat
     assert sentinel.exists()
 
 
+def test_clear_stale_stop_request_discards_old_flag_even_with_active_pid(
+    tmp_path, monkeypatch
+):
+    sentinel = tmp_path / "stop.flag"
+    pid_path = tmp_path / "stream_to_youtube.pid"
+    sentinel.write_text("", encoding="utf-8")
+    pid_path.write_text("7777", encoding="utf-8")
+
+    old_mtime = time.time() - (module._STOP_SENTINEL_STALE_AFTER_SECONDS + 5)
+    os.utime(sentinel, (old_mtime, old_mtime))
+
+    events = []
+    monkeypatch.setattr(module, "log_event", lambda *args, **kwargs: events.append(args))
+    monkeypatch.setattr(module, "_stop_sentinel_path", lambda: sentinel)
+    monkeypatch.setattr(module, "_pid_file_path", lambda: pid_path)
+    monkeypatch.setattr(module, "_is_pid_running", lambda pid: True)
+
+    module._clear_stale_stop_request()
+
+    assert not sentinel.exists()
+    assert any("Sentinela de parada antiga" in message for _, message in events)
+
+
 def test_startup_log_removed_after_successful_launch(tmp_path, monkeypatch):
     startup_log = tmp_path / "startup.log"
     sentinel = tmp_path / "stop.flag"
@@ -192,7 +216,12 @@ def test_startup_log_removed_after_successful_launch(tmp_path, monkeypatch):
     monkeypatch.setattr(module, "_pid_file_path", lambda: pid_path)
     monkeypatch.setattr(module, "_clear_stale_stop_request", lambda: None)
     monkeypatch.setattr(module, "_ensure_signal_handlers", lambda: None)
-    monkeypatch.setattr(module, "run_forever", lambda config: None)
+    def _fake_run_forever(*args, **kwargs):
+        callback = kwargs.get("startup_confirmed_callback")
+        if callback:
+            callback()
+
+    monkeypatch.setattr(module, "run_forever", _fake_run_forever)
 
     config = _build_streaming_config(tmp_path)
     monkeypatch.setattr(module, "load_config", lambda resolution=None: config)
@@ -223,6 +252,34 @@ def test_startup_log_preserved_when_credentials_missing(tmp_path, monkeypatch):
     assert startup_log.exists()
     contents = startup_log.read_text(encoding="utf-8")
     assert "Credenciais YT_URL/YT_KEY ausentes" in contents
+
+
+def test_startup_log_preserved_when_worker_quits_early(tmp_path, monkeypatch):
+    startup_log = tmp_path / "startup.log"
+    sentinel = tmp_path / "stop.flag"
+    pid_path = tmp_path / "stream_to_youtube.pid"
+
+    monkeypatch.setenv("BWB_SERVICE_STARTUP_LOG", str(startup_log))
+    monkeypatch.setattr(module, "log_event", lambda *args, **kwargs: None)
+    monkeypatch.setattr(module, "_stop_sentinel_path", lambda: sentinel)
+    monkeypatch.setattr(module, "_pid_file_path", lambda: pid_path)
+    monkeypatch.setattr(module, "_clear_stale_stop_request", lambda: None)
+    monkeypatch.setattr(module, "_ensure_signal_handlers", lambda: None)
+
+    def _fake_run_forever(*args, **kwargs):
+        callback = kwargs.get("startup_confirmed_callback")
+        assert callback is not None
+        # Simulate worker ending before grace period elapses by skipping callback
+        return None
+
+    monkeypatch.setattr(module, "run_forever", _fake_run_forever)
+
+    config = _build_streaming_config(tmp_path)
+    monkeypatch.setattr(module, "load_config", lambda resolution=None: config)
+
+    exit_code = module._start_streaming_instance()
+    assert exit_code == 0
+    assert startup_log.exists()
 
 
 def test_stop_streaming_instance_waits_for_orderly_shutdown(tmp_path, monkeypatch):

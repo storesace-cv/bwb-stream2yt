@@ -255,6 +255,8 @@ _SHOW_ON_SCREEN = False
 
 _PID_FILE_NAME = "stream_to_youtube.pid"
 _STOP_SENTINEL_NAME = "stream_to_youtube.stop"
+_STOP_SENTINEL_STALE_AFTER_SECONDS = 30.0
+_STARTUP_SUCCESS_GRACE_PERIOD = 10.0
 _SIGNAL_HANDLERS_INSTALLED = False
 _ACTIVE_WORKER: Optional["StreamingWorker"] = None
 _CTRL_HANDLER_REF = None
@@ -426,20 +428,35 @@ def _clear_stop_request() -> None:
 
 
 def _clear_stale_stop_request() -> None:
-    """Remove any lingering stop sentinel when no worker is active."""
+    """Remove lingering stop sentinels when they are no longer actionable."""
 
-    if not _stop_request_active():
+    path = _stop_sentinel_path()
+    if not path.exists():
         return
 
+    stale_due_to_age = False
+    try:
+        mtime = path.stat().st_mtime
+    except OSError:
+        mtime = None
+    else:
+        age = time.time() - mtime
+        stale_due_to_age = age >= _STOP_SENTINEL_STALE_AFTER_SECONDS
+
     pid = _read_pid_file()
-    if pid and _is_pid_running(pid):
+    if not stale_due_to_age and pid and _is_pid_running(pid):
         return
 
     _clear_stop_request()
-    log_event(
-        "primary",
-        "Sentinela de parada obsoleta detectada; removendo antes da inicialização.",
-    )
+    if stale_due_to_age:
+        reason = (
+            "Sentinela de parada antiga detectada; removendo devido a expiração."
+        )
+    else:
+        reason = (
+            "Sentinela de parada obsoleta detectada; removendo antes da inicialização."
+        )
+    log_event("primary", reason)
 
 
 def _request_stop_via_sentinel() -> bool:
@@ -2436,6 +2453,9 @@ class StreamingWorker:
 def run_forever(
     config: Optional[StreamingConfig] = None,
     existing_worker: Optional["StreamingWorker"] = None,
+    *,
+    startup_confirmed_callback: Optional[Callable[[], None]] = None,
+    startup_grace_period: float = _STARTUP_SUCCESS_GRACE_PERIOD,
 ) -> None:
     global _ACTIVE_WORKER
     if existing_worker is not None:
@@ -2453,6 +2473,11 @@ def run_forever(
         worker.start()
     stop_logged = False
     reporter: Optional[HeartbeatReporter] = None
+    startup_notified = False
+    if startup_confirmed_callback is not None:
+        deadline = time.monotonic() + max(0.0, startup_grace_period)
+    else:
+        deadline = None
     if active_config.heartbeat.enabled and active_config.heartbeat.endpoint:
 
         def _heartbeat_status() -> Dict[str, Any]:
@@ -2477,6 +2502,21 @@ def run_forever(
         reporter.start()
     try:
         while True:
+            if (
+                not startup_notified
+                and deadline is not None
+                and worker.is_running
+                and not _stop_request_active()
+                and time.monotonic() >= deadline
+            ):
+                try:
+                    startup_confirmed_callback()
+                except Exception as exc:  # pragma: no cover - defensive
+                    log_event(
+                        "primary",
+                        f"Falha ao confirmar arranque estável: {exc}",
+                    )
+                startup_notified = True
             if _stop_request_active():
                 if not stop_logged:
                     log_event(
@@ -2557,14 +2597,18 @@ def _start_streaming_instance(
                 return 2
 
             logger.log(
-                "Configuração validada; a iniciar loop principal e remover log de arranque."
+                "Configuração validada; a iniciar loop principal. "
+                "O log será removido após confirmar estabilidade."
             )
-            logger.mark_success()
 
             log_event("primary", f"Resolução selecionada: {config.resolution}")
             print(f"[primary] Resolução selecionada: {config.resolution}")
             log_event("primary", f"Iniciando worker (PID {os.getpid()})")
-            run_forever(config=config)
+            run_forever(
+                config=config,
+                startup_confirmed_callback=logger.mark_success,
+                startup_grace_period=_STARTUP_SUCCESS_GRACE_PERIOD,
+            )
             log_event("primary", "Worker finalizado")
             return 0
     finally:
