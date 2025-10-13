@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import textwrap
 import re
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, TextIO
 
 from autotune import estimate_upload_bitrate
 
@@ -2437,37 +2437,74 @@ def run_forever(
 def _start_streaming_instance(
     resolution: Optional[str] = None, full_diagnostics: bool = False
 ) -> int:
-    try:
-        _clear_stale_stop_request()
-        _claim_pid_file()
-    except RuntimeError as exc:
-        message = str(exc)
-        print(f"[primary] {message}", file=sys.stderr)
-        log_event("primary", message)
-        return 1
-    except OSError as exc:
-        message = f"Falha ao registrar PID: {exc}"
-        print(f"[primary] {message}", file=sys.stderr)
-        log_event("primary", message)
-        return 1
+    startup_logger = _StartupLogger(_resolve_startup_log_path())
 
     try:
-        _ensure_signal_handlers()
-        config = load_config(resolution=resolution)
-        if full_diagnostics:
-            _write_full_diagnostics(config)
-        if not config.yt_url:
-            message = "Credenciais YT_URL/YT_KEY ausentes; streaming worker finalizado."
-            print(f"[primary] {message}", file=sys.stderr)
-            log_event("primary", message)
-            return 2
+        with startup_logger as logger:
+            logger.log("A verificar sentinelas pendentes antes do arranque.")
+            try:
+                _clear_stale_stop_request()
+                logger.log("Sentinelas obsoletas limpas com sucesso.")
+                logger.log("A registar ficheiro de PID do processo.")
+                _claim_pid_file()
+                logger.log("PID registado sem erros.")
+            except RuntimeError as exc:
+                message = str(exc)
+                logger.log(message)
+                print(f"[primary] {message}", file=sys.stderr)
+                log_event("primary", message)
+                return 1
+            except OSError as exc:
+                message = f"Falha ao registrar PID: {exc}"
+                logger.log(message)
+                print(f"[primary] {message}", file=sys.stderr)
+                log_event("primary", message)
+                return 1
 
-        log_event("primary", f"Resolução selecionada: {config.resolution}")
-        print(f"[primary] Resolução selecionada: {config.resolution}")
-        log_event("primary", f"Iniciando worker (PID {os.getpid()})")
-        run_forever(config=config)
-        log_event("primary", "Worker finalizado")
-        return 0
+            try:
+                logger.log("A instalar tratadores de sinal para encerramento limpo.")
+                _ensure_signal_handlers()
+            except Exception as exc:
+                logger.log(f"Falha ao instalar tratadores de sinal: {exc}")
+                raise
+
+            try:
+                logger.log("A carregar configuração de streaming.")
+                config = load_config(resolution=resolution)
+                logger.log(
+                    f"Configuração carregada; resolução reportada: {config.resolution}."
+                )
+            except Exception as exc:
+                logger.log(f"Falha ao carregar configuração: {exc}")
+                raise
+
+            if full_diagnostics:
+                try:
+                    logger.log("Flag --fulldiags ativa; a gerar relatório detalhado.")
+                    _write_full_diagnostics(config)
+                    logger.log("Relatório detalhado concluído.")
+                except Exception as exc:
+                    logger.log(f"Falha ao gerar relatório detalhado: {exc}")
+                    raise
+
+            if not config.yt_url:
+                message = "Credenciais YT_URL/YT_KEY ausentes; streaming worker finalizado."
+                logger.log(message)
+                print(f"[primary] {message}", file=sys.stderr)
+                log_event("primary", message)
+                return 2
+
+            logger.log(
+                "Configuração validada; a iniciar loop principal e remover log de arranque."
+            )
+            logger.mark_success()
+
+            log_event("primary", f"Resolução selecionada: {config.resolution}")
+            print(f"[primary] Resolução selecionada: {config.resolution}")
+            log_event("primary", f"Iniciando worker (PID {os.getpid()})")
+            run_forever(config=config)
+            log_event("primary", "Worker finalizado")
+            return 0
     finally:
         _release_pid_file()
 
@@ -2651,3 +2688,63 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+_STARTUP_LOG_ENV = "BWB_SERVICE_STARTUP_LOG"
+_DEFAULT_STARTUP_LOG_RELATIVE = Path(r"C:\bwb\apps\youtube\logs") / "stream2yt-service-startup.log"
+
+
+def _resolve_startup_log_path() -> Path:
+    override = os.environ.get(_STARTUP_LOG_ENV, "").strip()
+    if override:
+        expanded = os.path.expandvars(override)
+        candidate = Path(expanded).expanduser()
+        if not candidate.is_absolute():
+            candidate = (_script_base_dir() / candidate).resolve()
+        return candidate
+    return _DEFAULT_STARTUP_LOG_RELATIVE
+
+
+class _StartupLogger:
+    """Helper that captures startup diagnostics and cleans up on success."""
+
+    def __init__(self, path: Path) -> None:
+        self._path = path
+        self._handle: Optional[TextIO] = None
+        self._remove_on_exit = False
+
+    def __enter__(self) -> "_StartupLogger":
+        try:
+            self._path.parent.mkdir(parents=True, exist_ok=True)
+            self._handle = self._path.open("w", encoding="utf-8")
+            self.log(
+                "Log de arranque inicializado; a recolher diagnóstico do stream2yt-service."
+            )
+        except OSError:
+            self._handle = None
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:  # noqa: D401 - context manager contract
+        handle = self._handle
+        if handle is not None:
+            handle.close()
+            self._handle = None
+        if self._remove_on_exit:
+            with suppress(OSError):
+                self._path.unlink()
+
+    def log(self, message: str) -> None:
+        handle = self._handle
+        if handle is None:
+            return
+        timestamp = (
+            datetime.datetime.now(datetime.timezone.utc)
+            .replace(microsecond=0)
+            .isoformat()
+        )
+        try:
+            handle.write(f"[{timestamp}] {message}\n")
+            handle.flush()
+        except OSError:
+            pass
+
+    def mark_success(self) -> None:
+        self._remove_on_exit = True
