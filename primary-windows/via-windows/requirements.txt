@@ -1,4 +1,5 @@
-# Windows-specific build dependencies for reproducing the stream_to_youtube.exe binary
+# Windows-specific build/runtime dependencies for reproducing the stream_to_youtube.exe binary
 pyinstaller==6.10.0
 pyinstaller-hooks-contrib==2024.8
 pefile==2023.2.7
+psutil==5.9.8

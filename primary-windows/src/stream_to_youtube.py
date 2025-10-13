@@ -26,7 +26,11 @@ import textwrap
 import re
 from typing import Any, Callable, Dict, Optional, TextIO
 
-from autotune import estimate_upload_bitrate
+from autotune import (
+    AUTOTUNE_AVAILABLE,
+    AUTOTUNE_UNAVAILABLE_REASON,
+    estimate_upload_bitrate,
+)
 
 
 DEFAULT_STATUS_ENDPOINT = "http://104.248.134.44:8080/status"
@@ -2135,6 +2139,7 @@ class StreamingWorker:
         self._last_autotune_bitrate: Optional[int] = None
         self._last_autotune_preset: Optional[str] = None
         self._autotune_failed_once = False
+        self._autotune_support_warning_emitted = False
         self._started_at: Optional[float] = None
         self._last_launch_time: Optional[float] = None
         self._restart_count = 0
@@ -2306,6 +2311,20 @@ class StreamingWorker:
 
     def _prepare_output_args(self) -> list[str]:
         output_args = list(self._base_output_args)
+
+        if not AUTOTUNE_AVAILABLE:
+            if not self._autotune_support_warning_emitted:
+                message = (
+                    AUTOTUNE_UNAVAILABLE_REASON
+                    or "Autotune indisponível: psutil não está instalado."
+                )
+                log_event("primary", message)
+                self._autotune_support_warning_emitted = True
+            self._autotune_failed_once = False
+            self._last_autotune_bitrate = None
+            self._last_autotune_preset = None
+            self._sync_output_args(output_args)
+            return output_args
 
         if (
             not self._config.autotune_enabled

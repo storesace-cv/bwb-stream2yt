@@ -88,6 +88,14 @@ O wrapper regista o serviço como `stream2yt-service`, refletindo esse nome tant
 - `BWB_LOG_FILE` define o caminho base dos logs. Gravamos arquivos diários no formato
   `<nome>-YYYY-MM-DD.log` e mantemos automaticamente somente os últimos sete dias.
 
+### Autotune (bitrate dinâmico)
+
+- Para habilitar `YT_AUTOTUNE`, é obrigatório ter a biblioteca `psutil` instalada no ambiente onde o worker roda.
+  - Executando via código-fonte: ative o *virtualenv* e instale com `pip install psutil`.
+  - Executável distribuído/PyInstaller: garanta que `psutil` conste no `requirements.txt` antes do `build.bat`
+    (o kit `via-windows` já está preparado).
+- Sem `psutil`, o worker mantém o bitrate estático e registra nos logs a instrução para instalar a dependência.
+
 ## Build (one-file) com PyInstaller
 
 - Utilize o kit offline documentado em [`primary-windows/via-windows/`](./via-windows/README.md) para reproduzir o executável oficial com Python 3.11, requirements e o `stream_to_youtube.spec` configurado com os mesmos parâmetros da pipeline.

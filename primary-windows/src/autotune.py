@@ -11,6 +11,21 @@ except ImportError:  # pragma: no cover - psutil may not be available in all env
     psutil = None  # type: ignore[assignment]
 
 
+AUTOTUNE_AVAILABLE = psutil is not None
+AUTOTUNE_UNAVAILABLE_REASON = (
+    "Autotune requer a biblioteca psutil instalada. "
+    "Execute `pip install psutil` (ou inclua o pacote no build) e reinicie o serviço."
+    if not AUTOTUNE_AVAILABLE
+    else ""
+)
+
+__all__ = [
+    "AUTOTUNE_AVAILABLE",
+    "AUTOTUNE_UNAVAILABLE_REASON",
+    "estimate_upload_bitrate",
+]
+
+
 def estimate_upload_bitrate(
     interval: float,
     min_kbps: int,

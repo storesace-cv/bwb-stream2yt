@@ -65,6 +65,7 @@ Escolha uma das opções abaixo para copiar o conteúdo do repositório para o s
 1. **Requisitos**:
    - Python 3.11 instalado e acessível no `PATH`.
    - Repositório `bwb-stream2yt` disponível localmente (clone ou pacote ZIP extraído).
+   - (Opcional) Para ativar o ajuste automático de bitrate (`YT_AUTOTUNE`), instale `psutil` no mesmo ambiente com `pip install psutil`.
 2. **Configuração do `.env`**:
    - A primeira execução de `python stream_to_youtube.py` cria automaticamente `primary-windows\src\.env` com o template padrão.
    - Edite o arquivo para preencher `YT_KEY` (ou `YT_URL`). Se preferir a configuração simplificada, deixe `YT_INPUT_ARGS` em branco e defina `RTSP_HOST`, `RTSP_PORT`, `RTSP_PATH` e, opcionalmente, `RTSP_USERNAME`/`RTSP_PASSWORD`; o script gera o endereço RTSP com base nessas variáveis. Para personalizações completas, continue podendo especificar manualmente `YT_INPUT_ARGS`, `YT_OUTPUT_ARGS` e `FFMPEG`.
