@@ -12,6 +12,7 @@ from typing import Dict, Optional
 import pytest
 
 
+
 MODULE_PATH = Path(__file__).resolve().parent.parent / "bin" / "bwb_status_monitor.py"
 SPEC = importlib.util.spec_from_file_location("bwb_status_monitor", MODULE_PATH)
 assert SPEC and SPEC.loader is not None
@@ -215,3 +216,27 @@ def test_post_requires_bearer_token(tmp_path: Path):
         server.shutdown()
         thread.join(timeout=1)
         monitor.shutdown()
+
+
+def test_snapshot_marks_camera_signal_stale(monkeypatch, monitor: StatusMonitor) -> None:
+    base_time = dt.datetime(2025, 10, 13, 0, 0, tzinfo=dt.timezone.utc)
+    monkeypatch.setattr(status_monitor, "utc_now", lambda: base_time)
+
+    monitor.record_status(make_entry(camera_signal={"present": True}))
+    monitor._last_timestamp = base_time  # noqa: SLF001
+    monitor._started_at = base_time  # noqa: SLF001
+
+    fresh_snapshot = monitor.snapshot()["last_camera_signal"]
+    assert fresh_snapshot["stale"] is False
+    assert fresh_snapshot["present"] is True
+
+    later = base_time + dt.timedelta(seconds=monitor.settings.missed_threshold + 15)
+    monkeypatch.setattr(status_monitor, "utc_now", lambda: later)
+
+    stale_snapshot = monitor.snapshot()["last_camera_signal"]
+    assert stale_snapshot["stale"] is True, stale_snapshot
+    assert stale_snapshot["present"] is False
+    assert stale_snapshot["last_known_present"] is True
+    assert stale_snapshot["age_seconds"] == pytest.approx(
+        monitor.settings.missed_threshold + 15, rel=0.0, abs=0.6
+    )

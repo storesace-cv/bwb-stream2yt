@@ -304,17 +304,49 @@ class StatusMonitor:
     def snapshot(self) -> Dict[str, Any]:
         with self._lock:
             reference = self._last_timestamp or self._started_at
-            elapsed = (utc_now() - reference).total_seconds()
-            camera_snapshot = (
+            now = utc_now()
+            elapsed = (now - reference).total_seconds()
+            raw_snapshot = (
                 dict(self._last_camera_status)
                 if isinstance(self._last_camera_status, dict)
-                else None
+                else {}
             )
             fallback_reason = self._fallback_reason
             fallback_active = self._fallback_active
             last_timestamp = (
                 isoformat(self._last_timestamp) if self._last_timestamp else None
             )
+
+        stale = elapsed >= self._settings.missed_threshold
+        age_seconds = round(elapsed, 1)
+
+        snapshot: Dict[str, Any] = {}
+        for key, value in raw_snapshot.items():
+            if isinstance(key, str):
+                snapshot[key] = value
+
+        present_value = snapshot.get("present")
+        last_known = snapshot.get("last_known_present")
+        if isinstance(present_value, bool):
+            last_known = present_value
+        elif isinstance(last_known, bool):
+            snapshot.setdefault("last_known_present", last_known)
+        else:
+            last_known = None
+
+        snapshot["age_seconds"] = age_seconds
+        snapshot["stale"] = stale
+        if last_known is not None:
+            snapshot["last_known_present"] = last_known
+
+        if stale:
+            snapshot["present"] = False
+        elif isinstance(present_value, bool):
+            snapshot["present"] = present_value
+        elif isinstance(last_known, bool):
+            snapshot["present"] = last_known
+        else:
+            snapshot["present"] = False
 
         return {
             "last_timestamp": last_timestamp,
@@ -323,7 +355,7 @@ class StatusMonitor:
             "missed_threshold": self._settings.missed_threshold,
             "fallback_reason": fallback_reason,
             "mode_file": self._mode_file.as_posix(),
-            "last_camera_signal": camera_snapshot,
+            "last_camera_signal": snapshot,
         }
 
     def _watchdog_loop(self) -> None:
@@ -369,8 +401,9 @@ class StatusMonitor:
     @staticmethod
     def _extract_camera_status(payload: Dict[str, Any]) -> tuple[bool, Dict[str, Any]]:
         status = payload.get("status")
-        present = True
         snapshot: Dict[str, Any] = {}
+        present: Optional[bool] = None
+        stale = False
 
         if isinstance(status, dict):
             camera_info = status.get("camera_signal")
@@ -378,17 +411,27 @@ class StatusMonitor:
                 for key, value in camera_info.items():
                     if isinstance(key, str):
                         snapshot[key] = value
-                present_value = snapshot.get("present")
-                if isinstance(present_value, bool):
-                    present = present_value
-                else:
-                    snapshot["present"] = present
+                raw_present = snapshot.get("present")
+                if isinstance(raw_present, bool):
+                    present = raw_present
+                last_known = snapshot.get("last_known_present")
+                if present is None and isinstance(last_known, bool):
+                    present = last_known
+                raw_stale = snapshot.get("stale")
+                if isinstance(raw_stale, bool):
+                    stale = raw_stale
             elif isinstance(camera_info, bool):
                 present = camera_info
                 snapshot["present"] = present
 
-        if "present" not in snapshot:
-            snapshot["present"] = present
+        if stale:
+            present = False
+
+        if present is None:
+            present = False
+
+        snapshot["present"] = present
+        snapshot.setdefault("stale", stale)
 
         return present, snapshot
 
