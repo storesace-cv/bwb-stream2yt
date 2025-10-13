@@ -1,0 +1,132 @@
+# Diagnóstico stream_to_youtube
+Gerado em: 2025-10-13T09:53:26.533532Z
+Versão da aplicação: 2024.09
+
+## Resumo
+- YT ingest configurado: sim
+- ffmpeg: C:\bwb\ffmpeg\bin\ffmpeg.exe (encontrado, tamanho=194235904 bytes)
+- ffprobe: C:\bwb\ffmpeg\bin\ffprobe.exe (encontrado, tamanho=194038784 bytes)
+- Janela diurna neste instante: sim
+- Autotune: ativo
+- Sentinela de paragem ativa: não
+- Worker em execução: não inicializado
+- Sinal da câmara: disponível (último sucesso: 2025-10-13T09:53:26.533532+00:00)
+- Ping da câmara: alcançável (2.0 ms)
+
+## Configuração carregada
+- Resolução atual: 360p
+- Intervalo diário: 08h–19h (UTC+1)
+- Bitrate mínimo/máximo (kbps): 1000/1500
+- Intervalo do autotune (s): 8.0
+- Margem de segurança do autotune: 0.75
+- URL do YouTube presente: sim
+- Argumentos de entrada (ffmpeg):
+  - -rtsp_transport
+  - tcp
+  - -rtsp_flags
+  - prefer_tcp
+  - -fflags
+  - nobuffer
+  - -flags
+  - low_delay
+  - -use_wallclock_as_timestamps
+  - 1
+  - -i
+  - rtsp://BEACHCAM:***@10.0.254.50:554/Streaming/Channels/101
+- Argumentos de saída (ffmpeg):
+  - -vf
+  - scale=640:360:flags=bicubic:in_range=pc:out_range=tv,format=yuv420p
+  - -r
+  - 30
+  - -c:v
+  - libx264
+  - -preset
+  - veryfast
+  - -profile:v
+  - high
+  - -level
+  - 4.2
+  - -b:v
+  - 1000k
+  - -maxrate
+  - 1500k
+  - -bufsize
+  - 3000k
+  - -g
+  - 60
+  - -sc_threshold
+  - 0
+  - -pix_fmt
+  - yuv420p
+  - -filter:a
+  - aresample=async=1:first_pts=0, aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo
+  - -c:a
+  - aac
+  - -b:a
+  - 128k
+  - -ar
+  - 44100
+  - -ac
+  - 2
+
+## Caminhos e ficheiros
+- Ficheiro de log ativo: C:\bwb\apps\youtube\logs\bwb_services-2025-10-13.log
+- PID file: C:\bwb\apps\youtube\stream_to_youtube.pid (existe)
+- Sentinela de paragem: C:\bwb\apps\youtube\stream_to_youtube.stop (inexistente)
+- Heartbeat ativo: sim
+- Endpoint do heartbeat: http://104.248.134.44:8080/status
+- Intervalo/timeout do heartbeat: 20.0s / 5.0s
+- Machine ID configurado: ADM-CD-05
+- Token do heartbeat presente: não
+- Ficheiro de log do heartbeat: C:\bwb\apps\youtube\logs\heartbeat-status.jsonl
+
+## Sinal da câmara
+- Verificação obrigatória: sim
+- Intervalo do probe (s): 30.0
+- Timeout do probe (s): 7.0
+- Último erro registado: nenhum
+Estado detalhado:
+```
+{
+  "present": true,
+  "last_probe": "2025-10-13T09:53:26.533532+00:00",
+  "last_success": "2025-10-13T09:53:26.533532+00:00",
+  "last_failure": null,
+  "consecutive_failures": 0,
+  "required": true,
+  "ffprobe": "C:\\bwb\\ffmpeg\\bin\\ffprobe.exe",
+  "probe_interval_seconds": 30.0,
+  "probe_timeout_seconds": 7.0,
+  "last_error": null,
+  "ffprobe_available": true,
+  "network_ping": {
+    "host": "10.0.254.50",
+    "reachable": true,
+    "last_checked": "2025-10-13T09:53:28.567499Z",
+    "timeout_seconds": 1.5,
+    "count": 1,
+    "command": "C:\\WINDOWS\\system32\\ping.exe",
+    "rtt_ms": 2.0,
+    "age_seconds": 0.0,
+    "last_success": "2025-10-13T09:53:28.567499Z",
+    "raw_output": "\nPinging 10.0.254.50 with 32 bytes of data:\nReply from 10.0.254.50: bytes=32 time=2ms TTL=63\n\nPing statistics for 10.0.254.50:\n    Packets: Sent = 1, Received = 1, Lost = 0 (0% loss),\nApproximate round trip times in milli-seconds:\n    Minimum = 2ms, Maximum = 2ms, Average = 2ms\n"
+  }
+}
+```
+
+## Ping da câmara
+Estado atual:
+```
+{
+  "host": "10.0.254.50",
+  "reachable": true,
+  "last_checked": "2025-10-13T09:53:28.567499Z",
+  "timeout_seconds": 1.5,
+  "count": 1,
+  "command": "C:\\WINDOWS\\system32\\ping.exe",
+  "rtt_ms": 2.0,
+  "age_seconds": 0.0,
+  "last_success": "2025-10-13T09:53:28.567499Z",
+  "raw_output": "\nPinging 10.0.254.50 with 32 bytes of data:\nReply from 10.0.254.50: bytes=32 time=2ms TTL=63\n\nPing statistics for 10.0.254.50:\n    Packets: Sent = 1, Received = 1, Lost = 0 (0% loss),\nApproximate round trip times in milli-seconds:\n    Minimum = 2ms, Maximum = 2ms, Average = 2ms\n"
+}
+```
