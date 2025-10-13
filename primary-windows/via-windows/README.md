@@ -1,6 +1,6 @@
 # Offline Windows Build Kit
 
-These instructions describe how to package the **stream_to_youtube** Windows executable using a fully offline-capable toolchain. The process mirrors the flags and configuration used by the official automation so developers can reproduce the artifact in an isolated Windows workstation.
+These instructions describe how to package the **stream_to_youtube** Windows executable and the companion **stream2yt-service** wrapper using a fully offline-capable toolchain. The process mirrors the flags and configuration used by the official automation so developers can reproduce the artifacts in an isolated Windows workstation.
 
 ## Prerequisites
 
@@ -23,21 +23,26 @@ pip install -r requirements.txt
 
 These commands have been validated from the default `C:\myapps\bwb-stream2yt\primary-windows\via-windows` folder layout. You can continue using alternate directory structures as long as you adjust the paths accordingly.
 
-## 2. Build the executable with PyInstaller
+## 2. Build the executables with PyInstaller
 
-With the virtual environment activated, invoke PyInstaller using the provided spec file:
+With the virtual environment activated, invoke PyInstaller using the provided spec files:
 
 ```powershell
+# Console launcher (stream_to_youtube.exe)
 pyinstaller stream_to_youtube.spec
+
+# Windows service wrapper (stream2yt-service.exe)
+pyinstaller stream2yt_service.spec
 ```
 
-The spec file already captures the CLI flags we normally pass (`--onefile`, `--noconsole`, hidden imports, and collected binaries). The resulting binary will be written to:
+Each spec file already captures the CLI flags we normally pass (`--onefile`, `--noconsole`, hidden imports, and collected binaries). The resulting binaries will be written to:
 
 ```
 primary-windows\via-windows\dist\stream_to_youtube.exe
+primary-windows\via-windows\dist\stream2yt-service.exe
 ```
 
-Alternatively, execute `build.bat` to run the same command sequence automatically.
+Alternatively, execute `build.bat` to build the console launcher automatically.
 
 ## 3. Publish the binary to the YouTube app directory
 
