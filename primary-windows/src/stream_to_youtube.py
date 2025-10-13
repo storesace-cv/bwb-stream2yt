@@ -2794,3 +2794,63 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+_STARTUP_LOG_ENV = "BWB_SERVICE_STARTUP_LOG"
+_DEFAULT_STARTUP_LOG_RELATIVE = Path(r"C:\bwb\apps\youtube\logs") / "stream2yt-service-startup.log"
+
+
+def _resolve_startup_log_path() -> Path:
+    override = os.environ.get(_STARTUP_LOG_ENV, "").strip()
+    if override:
+        expanded = os.path.expandvars(override)
+        candidate = Path(expanded).expanduser()
+        if not candidate.is_absolute():
+            candidate = (_script_base_dir() / candidate).resolve()
+        return candidate
+    return _DEFAULT_STARTUP_LOG_RELATIVE
+
+
+class _StartupLogger:
+    """Helper that captures startup diagnostics and cleans up on success."""
+
+    def __init__(self, path: Path) -> None:
+        self._path = path
+        self._handle: Optional[TextIO] = None
+        self._remove_on_exit = False
+
+    def __enter__(self) -> "_StartupLogger":
+        try:
+            self._path.parent.mkdir(parents=True, exist_ok=True)
+            self._handle = self._path.open("w", encoding="utf-8")
+            self.log(
+                "Log de arranque inicializado; a recolher diagnóstico do stream2yt-service."
+            )
+        except OSError:
+            self._handle = None
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:  # noqa: D401 - context manager contract
+        handle = self._handle
+        if handle is not None:
+            handle.close()
+            self._handle = None
+        if self._remove_on_exit:
+            with suppress(OSError):
+                self._path.unlink()
+
+    def log(self, message: str) -> None:
+        handle = self._handle
+        if handle is None:
+            return
+        timestamp = (
+            datetime.datetime.now(datetime.timezone.utc)
+            .replace(microsecond=0)
+            .isoformat()
+        )
+        try:
+            handle.write(f"[{timestamp}] {message}\n")
+            handle.flush()
+        except OSError:
+            pass
+
+    def mark_success(self) -> None:
+        self._remove_on_exit = True
