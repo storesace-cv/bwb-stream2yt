@@ -15,7 +15,7 @@ import time
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Callable, Dict, Mapping, Optional, Tuple
+from typing import Callable, Dict, List, Mapping, Optional, Tuple
 from urllib import error as urlerror
 from urllib import request as urlrequest
 
@@ -131,8 +131,10 @@ class WatcherConfig:
             api_url = DEFAULT_STATUS_API_URL
         elif placeholder_value in PLACEHOLDER_API_URLS:
             LOGGER.info(
-                "API_URL contém placeholder conhecido (%s); utilizando endpoint local (%s)."
-                " Isto é esperado quando se usa a configuração padrão.",
+                (
+                    "API_URL contém placeholder conhecido (%s); utilizando endpoint "
+                    "local (%s). Isto é esperado quando se usa a configuração padrão."
+                ),
                 placeholder_value,
                 DEFAULT_STATUS_API_URL,
             )
@@ -156,6 +158,12 @@ class WatcherConfig:
             if check_interval_raw
             else DEFAULT_CHECK_INTERVAL
         )
+        if check_interval >= 5.0:
+            LOGGER.warning(
+                "CHECK_INTERVAL=%.1fs superior ou igual a 5s; ajustando para 4.9s",
+                check_interval,
+            )
+            check_interval = 4.9
         heartbeat_stale = (
             cls._parse_positive_float(stale_raw, DEFAULT_STALE_SECONDS)
             if stale_raw
@@ -399,10 +407,42 @@ class APIWatcher:
         now = self._clock()
         result = self._fetcher(self._config.api_url, self._config.request_timeout)
         mode, reason = self._determine_mode(result, now)
-        if reason and (mode is not self._current_mode):
+        description = self._describe_result(result)
+        LOGGER.info(
+            "tick ok=%s %s → modo=%s (%s)",
+            result.ok,
+            description,
+            mode.name,
+            reason,
+        )
+        if mode is not self._current_mode:
             LOGGER.info("Alterando modo para %s (%s)", mode.name, reason)
         self._apply_mode(mode)
         return mode
+
+    def _describe_result(self, result: FetcherResult) -> str:
+        if result.ok and isinstance(result.payload, dict):
+            payload = result.payload
+            pieces: List[str] = []
+            if "internet" in payload:
+                pieces.append(f"internet={payload.get('internet')!r}")
+            if "camera" in payload:
+                pieces.append(f"camera={payload.get('camera')!r}")
+            if "fallback_active" in payload:
+                pieces.append(f"fallback_active={payload.get('fallback_active')!r}")
+            if "fallback_reason" in payload and payload.get("fallback_reason"):
+                pieces.append(f"fallback_reason={payload.get('fallback_reason')!r}")
+            camera_snapshot = payload.get("last_camera_signal")
+            if isinstance(camera_snapshot, dict):
+                present = camera_snapshot.get("present")
+                if isinstance(present, bool):
+                    pieces.append(f"camera_snapshot_present={present!r}")
+            if not pieces:
+                pieces.append("payload=ok")
+            return " ".join(pieces)
+        if result.error:
+            return f"erro={result.error}"
+        return "payload=desconhecido"
 
     def _determine_mode(self, result: FetcherResult, now: float) -> Tuple[Mode, str]:
         if result.ok and isinstance(result.payload, dict):
@@ -470,8 +510,7 @@ class APIWatcher:
 
     def _apply_mode(self, mode: Mode) -> None:
         if mode is Mode.OFF:
-            # Garantir que próxima inicialização utilize 'life'.
-            self._update_resources(Mode.LIFE)
+            self._update_resources(mode)
             if self._current_mode is not Mode.OFF:
                 if self._service.ensure_stopped():
                     self._current_mode = Mode.OFF
@@ -492,8 +531,15 @@ class APIWatcher:
             self._current_mode = mode
 
     def _update_resources(self, mode: Mode) -> None:
-        target_mode = Mode.LIFE if mode is Mode.OFF else mode
-        scene = self._config.scene_for(target_mode)
+        if mode is Mode.OFF:
+            scene = self._config.scene_for(Mode.LIFE)
+            if not self._env.set("SCENE", scene):
+                LOGGER.warning("Não foi possível atualizar SCENE para modo OFF")
+            if not self._mode.write(Mode.OFF):
+                LOGGER.warning("Não foi possível atualizar modo OFF no ficheiro")
+            return
+
+        scene = self._config.scene_for(mode)
         base = _scene_base(scene)
         try:
             mode_enum = Mode(base)
@@ -502,8 +548,10 @@ class APIWatcher:
                 "Cena %s não corresponde a modo conhecido; utilizando 'life'", scene
             )
             mode_enum = Mode.LIFE
-        self._env.set("SCENE", scene)
-        self._mode.write(mode_enum)
+        if not self._env.set("SCENE", scene):
+            LOGGER.warning("Não foi possível atualizar SCENE para %s", mode_enum.value)
+        if not self._mode.write(mode_enum):
+            LOGGER.warning("Não foi possível escrever modo %s no ficheiro", mode_enum.value)
 
 
 def fetch_status(url: str, timeout: float) -> FetcherResult:
