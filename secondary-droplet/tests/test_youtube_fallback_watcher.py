@@ -299,7 +299,12 @@ def test_watcher_triggers_missing_heartbeats_override(
                 "fallback_reason": None,
                 "seconds_since_last_heartbeat": 120.0,
                 "missed_threshold": 40,
-                "last_camera_signal": {"present": True},
+                "last_camera_signal": {
+                    "present": False,
+                    "stale": True,
+                    "last_known_present": True,
+                    "age_seconds": 120.0,
+                },
             },
         )
     ]
