@@ -195,6 +195,26 @@ def test_watcher_understands_status_monitor_snapshot_off(
     assert bundle.service.stop_calls == 1
 
 
+def test_watcher_uses_camera_snapshot_when_api_reports_inactive(
+    config: WatcherConfig,
+) -> None:
+    clock = FakeClock()
+    results = [
+        FetcherResult(
+            True,
+            {
+                "fallback_active": False,
+                "fallback_reason": None,
+                "last_camera_signal": {"present": False},
+            },
+        )
+    ]
+    bundle = make_watcher(config, results, clock)
+
+    assert bundle.watcher.process_once() is Mode.BARS
+    assert bundle.service.start_calls == 1
+
+
 def test_watcher_understands_status_monitor_camera_loss(
     config: WatcherConfig,
 ) -> None:
@@ -265,6 +285,28 @@ def test_watcher_uses_camera_snapshot_when_reason_missing(
     clock.advance(1)
     assert bundle.watcher.process_once() is Mode.LIFE
     assert bundle.service.restart_calls == 1
+
+
+def test_watcher_triggers_missing_heartbeats_override(
+    config: WatcherConfig,
+) -> None:
+    clock = FakeClock()
+    results = [
+        FetcherResult(
+            True,
+            {
+                "fallback_active": False,
+                "fallback_reason": None,
+                "seconds_since_last_heartbeat": 120.0,
+                "missed_threshold": 40,
+                "last_camera_signal": {"present": True},
+            },
+        )
+    ]
+    bundle = make_watcher(config, results, clock)
+
+    assert bundle.watcher.process_once() is Mode.LIFE
+    assert bundle.service.start_calls == 1
 
 
 def test_watcher_does_not_warn_when_snapshot_payload_has_string_internet(
