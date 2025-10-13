@@ -157,6 +157,11 @@ def test_monitor_settings_accepts_ytr_env(monkeypatch):
     monkeypatch.setenv("YTR_PORT", "9090")
     monkeypatch.setenv("YTR_SECONDARY_SERVICE", "custom.service")
     monkeypatch.setenv("YTR_FALLBACK_MODE_FILE", "/tmp/custom.mode")
+    monkeypatch.setenv("YTR_CAMERA_PING_HOST", "192.0.2.10")
+    monkeypatch.setenv("YTR_CAMERA_PING_INTERVAL", "45")
+    monkeypatch.setenv("YTR_CAMERA_PING_COUNT", "3")
+    monkeypatch.setenv("YTR_CAMERA_PING_TIMEOUT", "2.5")
+    monkeypatch.setenv("YTR_CAMERA_PING_COMMAND", "/bin/ping")
 
     settings = MonitorSettings.from_env()
 
@@ -165,6 +170,11 @@ def test_monitor_settings_accepts_ytr_env(monkeypatch):
     assert settings.port == 9090
     assert settings.secondary_service == "custom.service"
     assert settings.mode_file == Path("/tmp/custom.mode")
+    assert settings.camera_ping_host == "192.0.2.10"
+    assert settings.camera_ping_interval == 45
+    assert settings.camera_ping_count == 3
+    assert settings.camera_ping_timeout == 2.5
+    assert settings.camera_ping_command == "/bin/ping"
 
 
 def test_post_requires_bearer_token(tmp_path: Path):
@@ -240,3 +250,73 @@ def test_snapshot_marks_camera_signal_stale(monkeypatch, monitor: StatusMonitor)
     assert stale_snapshot["age_seconds"] == pytest.approx(
         monitor.settings.missed_threshold + 15, rel=0.0, abs=0.6
     )
+
+
+def test_camera_ping_forces_absence(monkeypatch, tmp_path: Path) -> None:
+    settings = MonitorSettings(
+        missed_threshold=2,
+        check_interval=1,
+        log_file=tmp_path / "monitor.log",
+        mode_file=tmp_path / "fallback.mode",
+        camera_ping_host="198.51.100.10",
+        camera_ping_interval=1,
+        camera_ping_timeout=1.0,
+    )
+    monitor = StatusMonitor(settings=settings, service_manager=DummyServiceManager())
+
+    calls: Dict[str, int] = {"count": 0}
+
+    def fake_ping(self, host: str):  # type: ignore[override]
+        calls["count"] += 1
+        assert host == "198.51.100.10"
+        return False, None, "host unreachable"
+
+    monkeypatch.setattr(StatusMonitor, "_ping_host", fake_ping, raising=False)
+
+    monitor.record_status(make_entry(camera_signal={"present": True}))
+
+    assert calls["count"] == 1
+    assert monitor.fallback_active is True
+    snapshot = monitor.snapshot()
+    assert snapshot["fallback_reason"] == "no_camera_signal"
+    camera_snapshot = snapshot["last_camera_signal"]
+    assert camera_snapshot["present"] is False
+    assert camera_snapshot.get("ping_override") is True
+    ping_info = camera_snapshot["network_ping"]
+    assert ping_info["reachable"] is False
+    assert ping_info["last_error"] == "host unreachable"
+    assert ping_info["host"] == "198.51.100.10"
+
+
+def test_camera_ping_cached_between_heartbeats(monkeypatch, tmp_path: Path) -> None:
+    settings = MonitorSettings(
+        missed_threshold=2,
+        check_interval=1,
+        log_file=tmp_path / "monitor.log",
+        mode_file=tmp_path / "fallback.mode",
+        camera_ping_host="198.51.100.11",
+        camera_ping_interval=60,
+        camera_ping_timeout=1.0,
+    )
+    monitor = StatusMonitor(settings=settings, service_manager=DummyServiceManager())
+
+    calls: Dict[str, int] = {"count": 0}
+
+    def fake_ping(self, host: str):  # type: ignore[override]
+        calls["count"] += 1
+        return True, 12.5, None
+
+    monkeypatch.setattr(StatusMonitor, "_ping_host", fake_ping, raising=False)
+
+    monitor.record_status(make_entry(camera_signal={"present": True}))
+    first_snapshot = monitor.snapshot()["last_camera_signal"]
+    assert first_snapshot["present"] is True
+    assert first_snapshot.get("ping_override") is False
+    assert first_snapshot["network_ping"]["reachable"] is True
+    assert calls["count"] == 1
+
+    monitor.record_status(make_entry(camera_signal={"present": True}))
+    assert calls["count"] == 1  # cached
+    second_snapshot = monitor.snapshot()["last_camera_signal"]
+    assert second_snapshot["present"] is True
+    assert second_snapshot["network_ping"]["reachable"] is True

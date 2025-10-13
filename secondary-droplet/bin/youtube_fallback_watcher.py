@@ -454,6 +454,21 @@ class APIWatcher:
                 age = camera_snapshot.get("age_seconds")
                 if isinstance(age, (int, float)):
                     pieces.append(f"camera_snapshot_age={age:.1f}s")
+                ping_snapshot = camera_snapshot.get("network_ping")
+                if isinstance(ping_snapshot, dict):
+                    reachable = ping_snapshot.get("reachable")
+                    if isinstance(reachable, bool):
+                        pieces.append(
+                            f"camera_ping_reachable={reachable!r}"
+                        )
+                    ping_age = ping_snapshot.get("age_seconds")
+                    if isinstance(ping_age, (int, float)):
+                        pieces.append(f"camera_ping_age={ping_age:.1f}s")
+                    last_error = ping_snapshot.get("last_error")
+                    if last_error:
+                        pieces.append(
+                            f"camera_ping_error={str(last_error)[:60]!r}"
+                        )
             if not pieces:
                 pieces.append("payload=ok")
             return " ".join(pieces)

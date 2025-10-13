@@ -36,13 +36,21 @@ consultar o RTSP; por isso, se a câmara perder alimentação ou ficar inacessí
 (por exemplo, não responde a `ping`), o valor pode continuar a ser `True` até
 que a aplicação Windows volte a reportar explicitamente a falha.
 
-Assim, perante alarmes vindos do watcher mas com `camera_snapshot_present=True`,
-siga estes passos:
+> ℹ️ **Novo:** o watcher secundário passa agora a tentar um `ping` directo para a câmara
+> sempre que recebe um heartbeat. Se o equipamento estiver sem energia ou
+> inacessível na rede, o campo `network_ping.reachable` será `false` e o
+> `camera_snapshot_present` será forçado para `false`, mesmo antes do
+> diagnóstico Windows actualizar o estado. Use esta informação como segunda
+> camada de confirmação.
+
+Assim, perante alarmes vindos do watcher mas com `camera_snapshot_present=True`
+ou `network_ping.reachable=false`, siga estes passos:
 
 1. Consulte o relatório `stream2yt-diags-*.txt` mais recente e confirme a
    linha **"Sinal da câmara"**.
 2. Verifique manualmente a câmara (ping, alimentação eléctrica, LEDs de
-   actividade). Se estiver desligada, documente a hora de perda de energia.
+   actividade). Quando o watcher já reportar `network_ping.reachable=false`,
+   tem indícios de falha de rede/alimentação vindos do droplet.
 3. Aguarde pelo próximo relatório gerado pela aplicação Windows: quando ela
    detetar a falha, a linha passará para `indisponível` com o detalhe do erro
    (p. ex. timeout do `ffprobe`).
