@@ -1,20 +1,7 @@
-name: Nuke Actions (runs, artifacts, releases, tags) [autosleep + initial wait]
+name: Nuke Actions (runs, artifacts, releases, tags) [limit 900]
 
 on:
   workflow_dispatch:
-    inputs:
-      branch:
-        description: Branch a limpar
-        default: main
-        required: true
-      tagPrefix:
-        description: Prefixo de tags a remover (refs/tags/<prefix>*)
-        default: release-
-        required: true
-      nearLimitThreshold:
-        description: Faz sleep quando faltarem <= este nº de requests
-        default: "50"
-        required: true
 
 permissions:
   actions: write     # apagar runs + artifacts
@@ -23,195 +10,140 @@ permissions:
 jobs:
   nuke:
     runs-on: ubuntu-latest
-    timeout-minutes: 420
-
     steps:
-      # Espera 1 hora logo no arranque
-      - name: ⏳ Cooldown inicial (aguardar 1h)
-        run: |
-          echo "Starting with a hard 1-hour cooldown to clear rate limits…"
-          sleep 3660
-
-      # (opcional) se ainda estiver perto do limite, espera até ao reset real
-      - name: ⏳ Verificar rate limit e aguardar até reset se necessário
+      - name: Delete ALL artifacts (repo-wide)
         uses: actions/github-script@v7
         with:
           script: |
-            const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-            const r = await github.request('GET /rate_limit');
-            const core = r.data.resources.core;
-            const now = Math.floor(Date.now()/1000);
-            const wait = Math.max(0, core.reset - now) + 5;
-            console.log(`Remaining=${core.remaining}/${core.limit} — reset=${new Date(core.reset*1000).toISOString()}`);
-            if (wait > 5) {
-              console.log(`Waiting ${wait}s until real reset…`);
-              await sleep(wait * 1000);
-            } else {
-              console.log('No extra wait needed.');
-            }
-
-      - name: 🧹 Nuke repo (artifacts/runs/releases/tags) com auto-wait
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const owner = context.repo.owner;
-            const repo  = context.repo.repo;
-            const branch = core.getInput('branch') || 'main';
-            const tagPrefix = core.getInput('tagPrefix') || 'release-';
-            const NEAR_LIMIT = parseInt(core.getInput('nearLimitThreshold') || '50', 10);
-            const snooze = (ms) => new Promise(r => setTimeout(r, ms));
-
-            async function getRate() {
-              const r = await github.request('GET /rate_limit');
-              return r.data.resources.core; // {limit, remaining, reset}
-            }
-            async function waitForReset(resetEpochSec) {
-              const now = Math.floor(Date.now()/1000);
-              const waitSec = Math.max(0, resetEpochSec - now) + 5;
-              core.info(`⏳ A aguardar ${waitSec}s até ao reset…`);
-              await snooze(waitSec*1000);
-            }
-            async function ensureBudget() {
-              const coreRate = await getRate();
-              core.info(`🔋 Budget: remaining=${coreRate.remaining}/${coreRate.limit} (reset @ ${new Date(coreRate.reset*1000).toISOString()})`);
-              if (coreRate.remaining <= NEAR_LIMIT) {
-                await waitForReset(coreRate.reset);
-              }
-            }
-            async function safeCall(fn, label) {
-              for (let attempt=1; attempt<=5; attempt++) {
-                try {
-                  await ensureBudget();
-                  return await fn();
-                } catch (e) {
-                  const status = e.status || e?.response?.status;
-                  const msg = e.message || (e?.response?.data?.message);
-                  const reset = Number(e?.response?.headers?.['x-ratelimit-reset'] || 0);
-                  core.warning(`${label} → erro (attempt ${attempt}): ${status} ${msg || ''}`);
-                  if (status === 403 && /rate limit/i.test(String(msg))) {
-                    if (reset) { await waitForReset(reset); continue; }
-                    await snooze(60_000); continue;
-                  }
-                  await snooze(attempt * 3000);
-                }
-              }
-              throw new Error(`${label} falhou após retries.`);
-            }
-
-            // ---------- 1) ARTIFACTS ----------
-            let artifactsDeleted = 0, artifactsFailed = 0;
-            core.startGroup('🧹 Apagar TODOS os artifacts (repo-wide)');
+            let deleted = 0, totalDeleted = 0, HARD_LIMIT = 900;
             for await (const page of github.paginate.iterator(
               github.rest.actions.listArtifactsForRepo,
-              { owner, repo, per_page: 100 }
+              { owner: context.repo.owner, repo: context.repo.repo, per_page: 100 }
             )) {
               for (const art of page.data) {
+                if (totalDeleted >= HARD_LIMIT) {
+                  core.notice(`🛑 Hard limit ${HARD_LIMIT} reached — stopping early.`);
+                  process.exit(0);
+                }
                 try {
-                  await safeCall(
-                    () => github.rest.actions.deleteArtifact({ owner, repo, artifact_id: art.id }),
-                    `deleteArtifact id=${art.id} name=${art.name}`
-                  );
-                  artifactsDeleted++;
+                  await github.rest.actions.deleteArtifact({
+                    owner: context.repo.owner, repo: context.repo.repo, artifact_id: art.id
+                  });
+                  deleted++; totalDeleted++;
                 } catch (e) {
-                  artifactsFailed++;
-                  core.warning(`Artifact ${art.id} (${art.name}) falhou: ${e.message}`);
+                  core.warning(`Artifact ${art.id} (${art.name}): ${e.message}`);
                 }
               }
             }
-            core.endGroup();
-            core.summary.addHeading('Artifacts')
-              .addTable([['Deleted','Failed'],[String(artifactsDeleted), String(artifactsFailed)]]);
+            core.summary.addHeading('Artifacts').addRaw(`Deleted: ${deleted}`).write();
 
-            // ---------- 2) RUNS ----------
-            let runsTotal = 0, runsDeleted = 0, runsFailed = 0;
-            core.startGroup(`🧹 Apagar TODOS os runs do branch=${branch}`);
+      - name: Delete ALL workflow runs on main (all workflows)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            let total = 0, ok = 0, fail = 0, totalDeleted = 0, HARD_LIMIT = 900;
             for await (const page of github.paginate.iterator(
               github.rest.actions.listWorkflowRunsForRepo,
-              { owner, repo, branch, per_page: 100 }
+              { owner: context.repo.owner, repo: context.repo.repo, branch: 'main', per_page: 100 }
             )) {
               for (const run of page.data) {
-                runsTotal++;
+                if (totalDeleted >= HARD_LIMIT) {
+                  core.notice(`🛑 Hard limit ${HARD_LIMIT} reached — stopping early.`);
+                  process.exit(0);
+                }
+                total++;
                 try {
-                  await safeCall(
-                    () => github.rest.actions.deleteWorkflowRun({ owner, repo, run_id: run.id }),
-                    `deleteRun id=${run.id}`
-                  );
-                  runsDeleted++;
+                  await github.rest.actions.deleteWorkflowRun({
+                    owner: context.repo.owner, repo: context.repo.repo, run_id: run.id
+                  });
+                  ok++; totalDeleted++;
                 } catch (e) {
-                  runsFailed++;
-                  core.warning(`Run ${run.id} falhou: ${e.message}`);
+                  fail++;
+                  core.warning(`Run ${run.id}: ${e.message}`);
                 }
               }
             }
-            core.endGroup();
-            core.summary.addHeading('Runs')
-              .addTable([['Total','Deleted','Failed'],[String(runsTotal), String(runsDeleted), String(runsFailed)]]);
+            core.summary.addHeading('Runs (branch=main)')
+              .addRaw(`Total: ${total} | Deleted: ${ok} | Failed: ${fail}`).write();
 
-            // ---------- 3) RELEASES ----------
-            let relDeleted = 0, relFailed = 0;
-            core.startGroup('🧹 Apagar releases (target=branch ou autor=bot ou tag=prefix)');
+      - name: Delete releases (target_commitish=main or author=bot or tag starts with release-)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            let del = 0, fail = 0, totalDeleted = 0, HARD_LIMIT = 900;
             for await (const page of github.paginate.iterator(
               github.rest.repos.listReleases,
-              { owner, repo, per_page: 100 }
+              { owner: context.repo.owner, repo: context.repo.repo, per_page: 100 }
             )) {
               for (const r of page.data) {
-                const byBot = r.author?.login === 'github-actions[bot]';
-                const fromBranch = r.target_commitish === branch;
-                const tagMatches = (r.tag_name || '').startsWith(tagPrefix);
-                if (byBot || fromBranch || tagMatches) {
+                if (totalDeleted >= HARD_LIMIT) {
+                  core.notice(`🛑 Hard limit ${HARD_LIMIT} reached — stopping early.`);
+                  process.exit(0);
+                }
+                const fromMain = r.target_commitish === 'main';
+                const byBot = (r.author && r.author.login === 'github-actions[bot]');
+                const tagIsRelease = r.tag_name && r.tag_name.startsWith('release-');
+                if (fromMain || byBot || tagIsRelease) {
                   try {
-                    await safeCall(
-                      () => github.rest.repos.deleteRelease({ owner, repo, release_id: r.id }),
-                      `deleteRelease id=${r.id} tag=${r.tag_name}`
-                    );
-                    relDeleted++;
+                    await github.rest.repos.deleteRelease({
+                      owner: context.repo.owner, repo: context.repo.repo, release_id: r.id
+                    });
+                    del++; totalDeleted++;
                   } catch (e) {
-                    relFailed++;
-                    core.warning(`Release ${r.id} (${r.tag_name}) falhou: ${e.message}`);
+                    fail++;
+                    core.warning(`Release ${r.id} (${r.tag_name}): ${e.message}`);
                   }
                 }
               }
             }
-            core.endGroup();
             core.summary.addHeading('Releases')
-              .addTable([['Deleted','Failed'],[String(relDeleted), String(relFailed)]]);
+              .addRaw(`Deleted: ${del} | Failed: ${fail}`).write();
 
-            // ---------- 4) TAGS ----------
-            let tagsDeleted = 0, tagsFailed = 0;
-            core.startGroup(`🧹 Apagar tags com prefixo ${tagPrefix}`);
-            async function listMatchingRefs(refPrefix, page=1) {
-              return (await safeCall(
-                () => github.request('GET /repos/{owner}/{repo}/git/matching-refs/{ref}', {
-                  owner, repo, ref: `tags/${refPrefix}`, per_page: 100, page
-                }),
-                `listMatchingRefs page=${page}`
-              )).data ?? [];
-            }
-            for (let page=1;; page++) {
-              const refs = await listMatchingRefs(tagPrefix, page);
-              if (!refs.length) break;
-              for (const ref of refs) {
-                const full = ref.ref; // "refs/tags/<tag>"
-                const shortRef = full.replace(/^refs\//,''); // "tags/<tag>"
-                try {
-                  await safeCall(
-                    () => github.request('DELETE /repos/{owner}/{repo}/git/refs/{ref}', {
-                      owner, repo, ref: shortRef
-                    }),
-                    `deleteTag ${shortRef}`
-                  );
-                  tagsDeleted++;
-                } catch (e) {
-                  tagsFailed++;
-                  core.warning(`Tag ${shortRef} falhou: ${e.message}`);
-                }
+      - name: Delete tags with prefix release- (refs/tags/release-*)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            let del = 0, fail = 0, totalDeleted = 0, HARD_LIMIT = 900;
+            async function listTagRefs(page = 1) {
+              try {
+                const res = await github.request('GET /repos/{owner}/{repo}/git/matching-refs/{ref}', {
+                  owner: context.repo.owner, repo: context.repo.repo, ref: 'tags/release-', per_page: 100, page
+                });
+                return res.data;
+              } catch (e) {
+                return [];
               }
             }
-            core.endGroup();
-            core.summary.addHeading('Tags')
-              .addTable([['Prefix','Deleted','Failed'],[tagPrefix, String(tagsDeleted), String(tagsFailed)]]);
+            let page = 1, refs = [];
+            while (true) {
+              if (totalDeleted >= HARD_LIMIT) {
+                core.notice(`🛑 Hard limit ${HARD_LIMIT} reached — stopping early.`);
+                process.exit(0);
+              }
+              const batch = await listTagRefs(page);
+              if (!batch || batch.length === 0) break;
+              refs.push(...batch);
+              page++;
+            }
+            for (const ref of refs) {
+              if (totalDeleted >= HARD_LIMIT) {
+                core.notice(`🛑 Hard limit ${HARD_LIMIT} reached — stopping early.`);
+                process.exit(0);
+              }
+              const full = ref.ref; // e.g., "refs/tags/release-123"
+              try {
+                await github.request('DELETE /repos/{owner}/{repo}/git/refs/{ref}', {
+                  owner: context.repo.owner, repo: context.repo.repo, ref: full.replace('refs/','')
+                });
+                del++; totalDeleted++;
+              } catch (e) {
+                fail++;
+                core.warning(`Tag ${full}: ${e.message}`);
+              }
+            }
+            core.summary.addHeading('Tags release-*')
+              .addRaw(`Deleted: ${del} | Failed: ${fail}`).write();
 
-            core.summary.addSeparator()
-              .addRaw(`NEAR_LIMIT threshold: ${NEAR_LIMIT}\n`)
-              .addLink('Ver rate limit atual', 'https://api.github.com/rate_limit')
-              .write();
+      - name: Print summary link
+        run: |
+          echo "👉 Abre o 'Summary' deste run para veres os totais e eventuais warnings."
