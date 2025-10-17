@@ -28,7 +28,7 @@ from typing import Any, Dict, Iterable, Optional
 
 LOGGER = logging.getLogger("bwb_status_monitor")
 
-DEFAULT_MODE_FILE = Path("/run/youtube-fallback/mode")
+DEFAULT_MODE_FILE = Path("/run/youtube-fallback.mode")
 
 
 def utc_now() -> dt.datetime:
@@ -742,8 +742,8 @@ class StatusMonitor:
             if exc.errno in {errno.EACCES, errno.EROFS}:
                 LOGGER.error(
                     "A conta atual (%s) não tem permissões para escrever em %s. "
-                    "Garanta que yt-restapi.service cria um diretório em /run com "
-                    "RuntimeDirectory=youtube-fallback e modo ≥0755, ou defina "
+                    "Garanta que yt-restapi.service pré-cria /run/youtube-fallback.mode "
+                    "com permissões de escrita para a conta yt-restapi ou defina "
                     "YTR_FALLBACK_MODE_FILE para um caminho acessível.",
                     pwd.getpwuid(os.geteuid()).pw_name if hasattr(pwd, "getpwuid") else os.geteuid(),
                     path,
