@@ -272,7 +272,7 @@ class ServiceManager:
     _lock: threading.Lock = field(default_factory=threading.Lock)
 
     def _systemctl_cmd(self, *args: str) -> list[str]:
-        base_cmd = ["/bin/systemctl", "--no-ask-password", *args, self.name]
+        base_cmd = ["/usr/bin/systemctl", "--no-ask-password", *args, self.name]
         if os.geteuid() == 0:
             return base_cmd
         return ["/usr/bin/sudo", "-n", *base_cmd]

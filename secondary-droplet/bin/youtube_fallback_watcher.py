@@ -206,7 +206,7 @@ class SystemdService:
         self._lock = threading.Lock()
 
     def _systemctl_cmd(self, *args: str) -> Tuple[str, ...]:
-        base_cmd = ("/bin/systemctl", "--no-ask-password", *args, self.name)
+        base_cmd = ("/usr/bin/systemctl", "--no-ask-password", *args, self.name)
         if os.geteuid() == 0:
             return base_cmd
         return ("/usr/bin/sudo", "-n", *base_cmd)
