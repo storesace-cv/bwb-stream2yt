@@ -86,8 +86,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument(
         "--mode-file",
         type=Path,
-        default=Path("/run/youtube-fallback.mode"),
-        help="Caminho do ficheiro de modo (default: /run/youtube-fallback.mode)",
+        default=Path("/run/youtube-fallback/mode"),
+        help="Caminho do ficheiro de modo (default: /run/youtube-fallback/mode)",
     )
     parser.add_argument(
         "--show",

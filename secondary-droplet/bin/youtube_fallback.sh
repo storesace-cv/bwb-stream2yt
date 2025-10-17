@@ -46,7 +46,7 @@ fi
 ENV_FILE="/etc/youtube-fallback.env"
 [ -r "$ENV_FILE" ] && . "$ENV_FILE"
 
-FALLBACK_MODE_FILE=${FALLBACK_MODE_FILE:-/run/youtube-fallback.mode}
+FALLBACK_MODE_FILE=${FALLBACK_MODE_FILE:-/run/youtube-fallback/mode}
 FALLBACK_DEFAULT_MODE=${FALLBACK_DEFAULT_MODE:-life}
 
 read_fallback_mode() {

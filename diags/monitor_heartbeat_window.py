@@ -124,7 +124,7 @@ def summarise_intervals(
 
 def systemctl_state(service: str) -> Tuple[str, Optional[int]]:
     result = subprocess.run(
-        ["/bin/systemctl", "is-active", service],
+        ["/usr/bin/systemctl", "is-active", service],
         capture_output=True,
         text=True,
         check=False,

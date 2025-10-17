@@ -6,7 +6,10 @@ After=network.target
 User=yt-restapi
 Group=yt-restapi
 EnvironmentFile=/etc/yt-restapi.env
+PermissionsStartOnly=true
+ExecStartPre=/usr/bin/install -D -o yt-restapi -g yt-restapi -m 0644 /dev/null /run/youtube-fallback/mode
 ExecStart=/usr/bin/python3 /usr/local/bin/bwb_status_monitor.py
+Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 Restart=always
 RestartSec=3
 # Nota: o monitor controla youtube-fallback via sudo; este serviço necessita
@@ -16,8 +19,6 @@ NoNewPrivileges=false
 PrivateTmp=true
 ProtectSystem=full
 ProtectHome=true
-CapabilityBoundingSet=
-AmbientCapabilities=
 
 [Install]
 WantedBy=multi-user.target

@@ -19,6 +19,7 @@ import signal
 import subprocess
 import threading
 import time
+import pwd
 from dataclasses import dataclass, field
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -26,6 +27,19 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, Optional
 
 LOGGER = logging.getLogger("bwb_status_monitor")
+
+SYSTEMCTL_BIN = "/usr/bin/systemctl"
+SUDO_BIN = "/usr/bin/sudo"
+FALLBACK_SERVICE_NAME = "youtube-fallback.service"
+FALLBACK_RESTART_CMD: tuple[str, ...] = (
+    "/usr/bin/sudo",
+    "-n",
+    "/usr/bin/systemctl",
+    "restart",
+    FALLBACK_SERVICE_NAME,
+)
+
+DEFAULT_MODE_FILE = Path("/run/youtube-fallback/mode")
 
 
 def utc_now() -> dt.datetime:
@@ -50,7 +64,7 @@ class MonitorSettings:
     secondary_service: str = "youtube-fallback.service"
     auth_token: Optional[str] = None
     require_token: bool = False
-    mode_file: Path = Path("/run/youtube-fallback.mode")
+    mode_file: Path = DEFAULT_MODE_FILE
     camera_ping_host: Optional[str] = None
     camera_ping_interval: int = 30
     camera_ping_count: int = 1
@@ -269,10 +283,10 @@ class ServiceManager:
     _lock: threading.Lock = field(default_factory=threading.Lock)
 
     def _systemctl_cmd(self, *args: str) -> list[str]:
-        base_cmd = ["/bin/systemctl", "--no-ask-password", *args, self.name]
+        base_cmd = [SYSTEMCTL_BIN, *args, self.name]
         if os.geteuid() == 0:
             return base_cmd
-        return ["/usr/bin/sudo", "-n", *base_cmd]
+        return [SUDO_BIN, "-n", *base_cmd]
 
     def _run_systemctl(self, *args: str) -> subprocess.CompletedProcess[str]:
         cmd = self._systemctl_cmd(*args)
@@ -335,6 +349,28 @@ class ServiceManager:
                 return False
 
             LOGGER.info("Serviço %s parado", self.name)
+            return True
+
+    def restart(self) -> bool:
+        with self._lock:
+            if self.name == FALLBACK_SERVICE_NAME:
+                cmd = list(FALLBACK_RESTART_CMD)
+            else:
+                cmd = self._systemctl_cmd("restart")
+
+            LOGGER.debug("Executando reinício: %s", " ".join(cmd))
+            result = subprocess.run(
+                cmd,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+
+            if result.returncode != 0:
+                self._log_failure("reiniciar", result)
+                return False
+
+            LOGGER.info("Serviço %s reiniciado", self.name)
             return True
 
 
@@ -736,6 +772,15 @@ class StatusMonitor:
             LOGGER.warning(
                 "Não foi possível escrever modo de fallback em %s: %s", path, exc
             )
+            if exc.errno in {errno.EACCES, errno.EROFS}:
+                LOGGER.error(
+                    "A conta atual (%s) não tem permissões para escrever em %s. "
+                    "Garanta que yt-restapi.service pré-cria /run/youtube-fallback/mode "
+                    "com permissões de escrita para a conta yt-restapi ou defina "
+                    "YTR_FALLBACK_MODE_FILE para um caminho acessível.",
+                    pwd.getpwuid(os.geteuid()).pw_name if hasattr(pwd, "getpwuid") else os.geteuid(),
+                    path,
+                )
 
     @staticmethod
     def _extract_camera_status(payload: Dict[str, Any]) -> tuple[bool, Dict[str, Any]]:
@@ -947,32 +992,35 @@ class StatusMonitor:
             LOGGER.info(
                 "Heartbeat indica ausência de sinal da câmara; reiniciando fallback em modo SMPTE."
             )
-            if not self._service_manager.ensure_stopped():
+            self._write_mode_file("smptehdbars")
+            if self._service_manager.restart():
+                with self._lock:
+                    self._fallback_active = True
+                    self._fallback_reason = "no_camera_signal"
+                LOGGER.info(
+                    "Fallback reiniciado em modo SMPTE devido à ausência de sinal da câmara."
+                )
+            else:
                 LOGGER.warning(
                     "Falha ao reiniciar fallback em modo SMPTE; nova tentativa ocorrerá no próximo heartbeat."
                 )
                 with self._lock:
-                    self._fallback_active = True
-                    self._fallback_reason = fallback_reason
-                return
-        else:
-            LOGGER.info(
-                "Heartbeat indica ausência de sinal da câmara; ativando fallback em modo SMPTE."
-            )
+                    self._fallback_active = False
+                    self._fallback_reason = None
+            return
+
+        LOGGER.info(
+            "Heartbeat indica ausência de sinal da câmara; ativando fallback em modo SMPTE."
+        )
 
         self._write_mode_file("smptehdbars")
         if self._service_manager.ensure_started():
             with self._lock:
                 self._fallback_active = True
                 self._fallback_reason = "no_camera_signal"
-            if restart_required:
-                LOGGER.info(
-                    "Fallback reiniciado em modo SMPTE devido à ausência de sinal da câmara."
-                )
-            else:
-                LOGGER.info(
-                    "Fallback ativado em modo SMPTE devido à ausência de sinal da câmara."
-                )
+            LOGGER.info(
+                "Fallback ativado em modo SMPTE devido à ausência de sinal da câmara."
+            )
         else:
             LOGGER.warning(
                 "Não foi possível iniciar o fallback em modo SMPTE; nova tentativa ocorrerá no próximo heartbeat."
