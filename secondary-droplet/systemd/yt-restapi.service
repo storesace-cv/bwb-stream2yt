@@ -6,6 +6,12 @@ After=network.target
 User=yt-restapi
 Group=yt-restapi
 EnvironmentFile=/etc/yt-restapi.env
+PermissionsStartOnly=true
+ExecStartPre=/bin/sh -c '
+    touch /run/youtube-fallback.mode && \
+    chown yt-restapi:yt-restapi /run/youtube-fallback.mode && \
+    chmod 0644 /run/youtube-fallback.mode
+'
 ExecStart=/usr/bin/python3 /usr/local/bin/bwb_status_monitor.py
 Restart=always
 RestartSec=3
@@ -16,8 +22,8 @@ NoNewPrivileges=false
 PrivateTmp=true
 ProtectSystem=full
 ProtectHome=true
-CapabilityBoundingSet=
-AmbientCapabilities=
+RuntimeDirectory=youtube-fallback
+RuntimeDirectoryMode=0755
 
 [Install]
 WantedBy=multi-user.target
