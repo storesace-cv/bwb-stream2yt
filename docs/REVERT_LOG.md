@@ -26,7 +26,7 @@ apt-get update -y && apt-get install -y fonts-dejavu-core
 cat >/etc/youtube-fallback.env <<'EOF'
 YT_URL=rtmp://a.rtmp.youtube.com/live2/f4ex-ztrk-vc4h-2pvc-2kg4
 FALLBACK_DEFAULT_MODE=life
-FALLBACK_MODE_FILE=/run/youtube-fallback.mode
+FALLBACK_MODE_FILE=/run/youtube-fallback/mode
 FALLBACK_WIDTH=1280
 FALLBACK_HEIGHT=720
 FALLBACK_FPS=30
@@ -57,7 +57,7 @@ cat >/etc/youtube-fallback.env <<'EOF'
 YT_KEY=f4ex-ztrk-vc4h-2pvc-2kg4
 YT_RTMP_BASE=rtmp://a.rtmp.youtube.com/live2
 FALLBACK_DEFAULT_MODE=life
-FALLBACK_MODE_FILE=/run/youtube-fallback.mode
+FALLBACK_MODE_FILE=/run/youtube-fallback/mode
 FALLBACK_WIDTH=1280
 FALLBACK_HEIGHT=720
 FALLBACK_FPS=30
