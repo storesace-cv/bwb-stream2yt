@@ -23,7 +23,7 @@ LOGGER = logging.getLogger("youtube_fallback_watcher")
 
 DEFAULT_CONFIG_PATH = Path("/etc/youtube-fallback-watcher.conf")
 DEFAULT_ENV_FILE = Path("/etc/youtube-fallback.env")
-DEFAULT_MODE_FILE = Path("/run/youtube-fallback.mode")
+DEFAULT_MODE_FILE = Path("/run/youtube-fallback/mode")
 DEFAULT_SERVICE_NAME = "youtube-fallback.service"
 DEFAULT_CHECK_INTERVAL = 3.0
 DEFAULT_STALE_SECONDS = 15.0

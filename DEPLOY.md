@@ -48,7 +48,7 @@ systemctl enable --now ensure-broadcast.timer
 
 > **Importante:** o `youtube_fallback_watcher` precisa ter privilégios para gerir o
 > `youtube-fallback.service` *e* escrever nos ficheiros
-> `/etc/youtube-fallback.env` e `/run/youtube-fallback.mode`. Execute o serviço
+> `/etc/youtube-fallback.env` e `/run/youtube-fallback/mode`. Execute o serviço
 > como `root` (valor por omissão no unit file) ou garanta `sudo` sem palavra-passe
 > para esses comandos. Sem estas permissões, o watcher não conseguirá activar o
 > fallback mesmo que o monitor reporte perda de heartbeats.
