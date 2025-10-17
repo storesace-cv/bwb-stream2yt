@@ -19,6 +19,7 @@ import signal
 import subprocess
 import threading
 import time
+import pwd
 from dataclasses import dataclass, field
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -26,6 +27,8 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, Optional
 
 LOGGER = logging.getLogger("bwb_status_monitor")
+
+DEFAULT_MODE_FILE = Path("/run/youtube-fallback.mode")
 
 
 def utc_now() -> dt.datetime:
@@ -50,7 +53,7 @@ class MonitorSettings:
     secondary_service: str = "youtube-fallback.service"
     auth_token: Optional[str] = None
     require_token: bool = False
-    mode_file: Path = Path("/run/youtube-fallback.mode")
+    mode_file: Path = DEFAULT_MODE_FILE
     camera_ping_host: Optional[str] = None
     camera_ping_interval: int = 30
     camera_ping_count: int = 1
@@ -736,6 +739,15 @@ class StatusMonitor:
             LOGGER.warning(
                 "Não foi possível escrever modo de fallback em %s: %s", path, exc
             )
+            if exc.errno in {errno.EACCES, errno.EROFS}:
+                LOGGER.error(
+                    "A conta atual (%s) não tem permissões para escrever em %s. "
+                    "Garanta que yt-restapi.service pré-cria /run/youtube-fallback.mode "
+                    "com permissões de escrita para a conta yt-restapi ou defina "
+                    "YTR_FALLBACK_MODE_FILE para um caminho acessível.",
+                    pwd.getpwuid(os.geteuid()).pw_name if hasattr(pwd, "getpwuid") else os.geteuid(),
+                    path,
+                )
 
     @staticmethod
     def _extract_camera_status(payload: Dict[str, Any]) -> tuple[bool, Dict[str, Any]]:
