@@ -265,6 +265,8 @@ _SIGNAL_HANDLERS_INSTALLED = False
 _ACTIVE_WORKER: Optional["StreamingWorker"] = None
 _CTRL_HANDLER_REF = None
 _FULL_DIAGNOSTICS_REQUESTED = False
+_INSTANCE_MUTEX_HANDLE: Optional[int] = None
+_INSTANCE_MUTEX_NAME = "Global\\BWBStream2YTPrimary"
 
 
 def _pid_file_path() -> Path:
@@ -334,6 +336,54 @@ def _claim_pid_file() -> None:
     tmp_path.write_text(str(os.getpid()), encoding="utf-8")
     os.replace(tmp_path, path)
     log_event("primary", f"Registrado PID {os.getpid()} em {path}")
+
+
+def _acquire_single_instance_mutex() -> None:
+    """Acquire a Windows named mutex to prevent parallel launches."""
+
+    if os.name != "nt":
+        return
+
+    import ctypes
+
+    global _INSTANCE_MUTEX_HANDLE
+    kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+    ctypes.set_last_error(0)
+    handle = kernel32.CreateMutexW(None, False, _INSTANCE_MUTEX_NAME)
+    if not handle:
+        error_code = ctypes.get_last_error()
+        raise OSError(
+            f"Falha ao criar mutex de instância única (erro {error_code})."
+        )
+
+    ERROR_ALREADY_EXISTS = 183
+    last_error = ctypes.get_last_error()
+    if last_error == ERROR_ALREADY_EXISTS:
+        kernel32.CloseHandle(handle)
+        raise RuntimeError(
+            "Já existe uma instância ativa (detetada via mutex). Utilize --stop antes de reiniciar."
+        )
+
+    _INSTANCE_MUTEX_HANDLE = handle
+
+
+def _release_single_instance_mutex() -> None:
+    """Release the Windows named mutex when exiting."""
+
+    if os.name != "nt":
+        return
+
+    global _INSTANCE_MUTEX_HANDLE
+    handle = _INSTANCE_MUTEX_HANDLE
+    if not handle:
+        return
+
+    with suppress(Exception):
+        import ctypes
+
+        ctypes.windll.kernel32.CloseHandle(handle)  # type: ignore[attr-defined]
+
+    _INSTANCE_MUTEX_HANDLE = None
 
 
 def _release_pid_file(expected_pid: Optional[int] = None) -> None:
@@ -415,6 +465,7 @@ def _ensure_signal_handlers() -> None:
 
 
 atexit.register(_release_pid_file)
+atexit.register(_release_single_instance_mutex)
 
 
 def _stop_request_active() -> bool:
@@ -2566,6 +2617,9 @@ def _start_streaming_instance(
             try:
                 _clear_stale_stop_request()
                 logger.log("Sentinelas obsoletas limpas com sucesso.")
+                logger.log("A adquirir exclusividade de instância via mutex.")
+                _acquire_single_instance_mutex()
+                logger.log("Mutex de instância adquirido com sucesso.")
                 logger.log("A registar ficheiro de PID do processo.")
                 _claim_pid_file()
                 logger.log("PID registado sem erros.")
@@ -2632,6 +2686,7 @@ def _start_streaming_instance(
             return 0
     finally:
         _release_pid_file()
+        _release_single_instance_mutex()
 
 
 def start_streaming_instance(

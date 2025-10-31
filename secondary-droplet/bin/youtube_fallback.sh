@@ -155,6 +155,14 @@ fi
 
 YT_URL_BACKUP="$(normalize_backup_url "${YT_URL_BACKUP-}" "$YT_KEY")"
 
+if [[ "${YT_URL_BACKUP}" != *"?backup=1/"* ]]; then
+  echo "[youtube_fallback] ERRO: URL de backup inválida (falta '?backup=1/')."; exit 1
+fi
+
+if [[ "${YT_URL_BACKUP}" == *"rtmps://a.rtmps.youtube.com"* ]]; then
+  echo "[youtube_fallback] ERRO: URL aponta para ingest primário; utilize sempre a porta de backup."; exit 1
+fi
+
 echo "[youtube_fallback] Envio contínuo → ${YT_URL_BACKUP}"
 echo "[youtube_fallback] ${FALLBACK_WIDTH}x${FALLBACK_HEIGHT}@${FALLBACK_FPS} | V=${FALLBACK_VBITRATE}/${FALLBACK_MAXRATE}/${FALLBACK_BUFSIZE} | A=${FALLBACK_ABITRATE}@${FALLBACK_AR} | Delay=${FALLBACK_DELAY_SEC}s | GOP=${FALLBACK_GOP} | LogLevel=${FALLBACK_LOGLEVEL}"
 
