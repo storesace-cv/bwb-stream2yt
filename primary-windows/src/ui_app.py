@@ -11,12 +11,19 @@ import threading
 import time
 import urllib.error
 import urllib.request
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from preview_rtsp import (
     STATUS_CONNECTING,
     STATUS_NO_IMAGE,
     sanitize_preview_text,
+)
+from demo_video import (
+    DEMO_CAMERA_STATUS,
+    build_demo_input_args,
+    demo_video_exists,
+    demo_video_missing_message,
+    resolve_demo_video_path,
 )
 
 YOUTUBE_CONFIRMED_STATUS = "Não verificado"
@@ -64,7 +71,11 @@ def check_internet_connectivity(
         return INTERNET_OFFLINE
 
 
-def derive_camera_status(snapshot: Optional[Dict[str, Any]]) -> str:
+def derive_camera_status(
+    snapshot: Optional[Dict[str, Any]], *, demo_mode: bool = False
+) -> str:
+    if demo_mode or (snapshot and snapshot.get("demo_mode")):
+        return DEMO_CAMERA_STATUS
     if not snapshot:
         return "A verificar"
     camera = snapshot.get("camera_signal") or {}
@@ -122,6 +133,35 @@ def extract_recent_event_lines(
     return lines
 
 
+def replace_active_preview(
+    lock: threading.Lock,
+    holder: Dict[str, Any],
+    *,
+    build_session: Callable[[], Any],
+    stop_timeout: float = 5.0,
+) -> Any:
+    """Troca o preview sob lock: ler, None, parar, criar, iniciar, guardar.
+
+    O holder deve ser a fonte de verdade da sessão ativa. A leitura de
+    ``holder['session']`` ocorre apenas dentro do ``lock``.
+    """
+
+    with lock:
+        previous = holder.get("session")
+        holder["session"] = None
+        if previous is not None:
+            stop = getattr(previous, "stop", None)
+            if callable(stop):
+                stop(timeout=stop_timeout)
+        session = build_session()
+        if session is not None:
+            start = getattr(session, "start", None)
+            if callable(start):
+                start()
+        holder["session"] = session
+        return session
+
+
 def run_ui_app(*, resolution: Optional[str] = None) -> int:
     """Arranca a janela Qt. Devolve código de saída do QApplication."""
 
@@ -130,6 +170,7 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
         from PySide6.QtGui import QImage, QPixmap
         from PySide6.QtWidgets import (
             QApplication,
+            QCheckBox,
             QGridLayout,
             QHBoxLayout,
             QLabel,
@@ -172,8 +213,11 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
             self._last_internet_check_at = 0.0
             self._preview_session: Optional[PreviewSession] = None
             self._preview_frame_lock = threading.Lock()
+            self._preview_switch_lock = threading.RLock()
             self._latest_preview_jpeg: Optional[bytes] = None
             self._preview_frame_dirty = False
+            self._demo_enabled = False
+            self._demo_path = resolve_demo_video_path()
 
             self.setWindowTitle("stream2yt — Primary")
             self.resize(720, 640)
@@ -187,6 +231,17 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
             self._preview.setMinimumHeight(180)
             self._preview.setStyleSheet("border: 1px solid #888; padding: 8px;")
             layout.addWidget(self._preview)
+
+            demo_row = QHBoxLayout()
+            self._demo_checkbox = QCheckBox("Usar vídeo de demonstração")
+            self._demo_checkbox.setChecked(False)
+            self._demo_checkbox.toggled.connect(self._on_demo_toggled)
+            self._demo_path_label = QLabel(self._demo_path)
+            self._demo_path_label.setStyleSheet("color: #666;")
+            self._demo_path_label.setWordWrap(True)
+            demo_row.addWidget(self._demo_checkbox)
+            demo_row.addWidget(self._demo_path_label, stretch=1)
+            layout.addLayout(demo_row)
 
             status_grid = QGridLayout()
             self._camera_value = QLabel("A verificar")
@@ -274,6 +329,7 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
             self._btn_restart.setEnabled(not self._busy)
             self._btn_stop.setEnabled(not self._busy)
             self._btn_diag.setEnabled(not self._busy)
+            self._demo_checkbox.setEnabled(not self._busy and not session_alive)
 
         def _set_busy(self, busy: bool) -> None:
             self._busy = busy
@@ -281,6 +337,92 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
 
         def _post(self, kind: str, payload: Any = None) -> None:
             self._ui_queue.put((kind, payload))
+
+        def _on_demo_toggled(self, checked: bool) -> None:
+            if self._busy or self._session_thread_alive():
+                self._demo_checkbox.blockSignals(True)
+                self._demo_checkbox.setChecked(self._demo_enabled)
+                self._demo_checkbox.blockSignals(False)
+                return
+
+            self._demo_path = resolve_demo_video_path()
+            self._demo_path_label.setText(self._demo_path)
+
+            if checked and not demo_video_exists(self._demo_path):
+                self._message.setText(demo_video_missing_message(self._demo_path))
+                self._demo_checkbox.blockSignals(True)
+                self._demo_checkbox.setChecked(False)
+                self._demo_checkbox.blockSignals(False)
+                self._demo_enabled = False
+                return
+
+            self._demo_enabled = bool(checked)
+            if checked:
+                self._message.setText("A mudar preview para vídeo de demonstração…")
+            else:
+                self._message.setText("A mudar preview para a câmara RTSP…")
+            threading.Thread(
+                target=self._restart_preview_source,
+                name="UiPreviewSwitch",
+                daemon=True,
+            ).start()
+
+        def _boot_preview(self) -> None:
+            self._replace_preview_locked()
+
+        def _restart_preview_source(self) -> None:
+            self._replace_preview_locked()
+
+        def _replace_preview_locked(self) -> None:
+            window = self
+
+            class _Holder(dict):
+                def get(self, key, default=None):  # type: ignore[no-untyped-def]
+                    if key == "session":
+                        return window._preview_session
+                    return super().get(key, default)
+
+                def __setitem__(self, key, value):  # type: ignore[no-untyped-def]
+                    if key == "session":
+                        window._preview_session = value
+                    else:
+                        super().__setitem__(key, value)
+
+            def build_session():
+                if self._closing:
+                    return None
+                return self._create_preview_session()
+
+            replace_active_preview(
+                self._preview_switch_lock,
+                _Holder(),
+                build_session=build_session,
+            )
+
+        def _create_preview_session(self):
+            try:
+                config = load_config(resolution=self._resolution)
+                if self._demo_enabled:
+                    path = resolve_demo_video_path()
+                    self._demo_path = path
+                    if not demo_video_exists(path):
+                        self._post("preview_status", demo_video_missing_message(path))
+                        return None
+                    input_args = build_demo_input_args(path)
+                else:
+                    input_args = list(config.input_args)
+                return PreviewSession(
+                    ffmpeg=config.ffmpeg,
+                    input_args=input_args,
+                    on_frame=self._post_preview_frame,
+                    on_status=lambda message: self._post("preview_status", message),
+                )
+            except Exception as exc:  # noqa: BLE001
+                self._post(
+                    "preview_status",
+                    sanitize_preview_text(f"{STATUS_NO_IMAGE} ({exc})"),
+                )
+                return None
 
         def _on_timer(self) -> None:
             while True:
@@ -319,28 +461,6 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
             with self._preview_frame_lock:
                 self._latest_preview_jpeg = jpeg
             self._post("preview_frame", True)
-
-        def _boot_preview(self) -> None:
-            if self._closing:
-                return
-            try:
-                config = load_config(resolution=self._resolution)
-                session = PreviewSession(
-                    ffmpeg=config.ffmpeg,
-                    input_args=config.input_args,
-                    on_frame=self._post_preview_frame,
-                    on_status=lambda message: self._post("preview_status", message),
-                )
-                self._preview_session = session
-                if self._closing:
-                    session.stop(timeout=2.0)
-                    return
-                session.start()
-            except Exception as exc:  # noqa: BLE001
-                self._post(
-                    "preview_status",
-                    sanitize_preview_text(f"{STATUS_NO_IMAGE} ({exc})"),
-                )
 
         def _apply_preview_status(self, message: str) -> None:
             text = sanitize_preview_text(message) or STATUS_NO_IMAGE
@@ -409,7 +529,12 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
                 self._message.setText("")
 
         def _apply_snapshot(self, snapshot: Optional[Dict[str, Any]]) -> None:
-            self._camera_value.setText(derive_camera_status(snapshot))
+            demo_active = self._demo_enabled or bool(
+                snapshot and snapshot.get("demo_mode")
+            )
+            self._camera_value.setText(
+                derive_camera_status(snapshot, demo_mode=demo_active)
+            )
             self._encoder_value.setText(derive_encoder_status(snapshot))
             self._rtmps_value.setText(derive_rtmps_status(snapshot))
             self._youtube_value.setText(YOUTUBE_CONFIRMED_STATUS)
@@ -440,6 +565,13 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
                 if self._session_thread_alive():
                     self._message.setText(INSTANCE_ACTIVE_HINT)
                 return
+            if self._demo_enabled:
+                path = resolve_demo_video_path()
+                self._demo_path = path
+                self._demo_path_label.setText(path)
+                if not demo_video_exists(path):
+                    self._message.setText(demo_video_missing_message(path))
+                    return
             self._message.setText("A iniciar transmissão…")
             thread = threading.Thread(
                 target=self._start_worker_thread,
@@ -451,8 +583,12 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
             thread.start()
 
         def _start_worker_thread(self) -> None:
+            demo_path = resolve_demo_video_path() if self._demo_enabled else None
             try:
-                code = start_streaming_instance(resolution=self._resolution)
+                code = start_streaming_instance(
+                    resolution=self._resolution,
+                    demo_video_path=demo_path,
+                )
             except Exception as exc:  # noqa: BLE001
                 self._post("message", f"Falha ao iniciar: {exc}")
                 return
@@ -462,6 +598,11 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
                 self._post(
                     "message",
                     "Credenciais YT_URL/YT_KEY ausentes; configure o .env antes de iniciar.",
+                )
+            elif code == 3:
+                self._post(
+                    "message",
+                    demo_video_missing_message(demo_path),
                 )
             elif code != 0:
                 self._post("message", f"Arranque terminou com código {code}.")

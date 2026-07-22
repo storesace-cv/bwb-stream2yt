@@ -13,6 +13,7 @@ on:
       - "tests/test_stream_to_youtube.py"
       - "tests/test_ui_status.py"
       - "tests/test_preview_rtsp.py"
+      - "tests/test_demo_video.py"
   pull_request:
     paths:
       - "primary-windows/**"
@@ -21,6 +22,7 @@ on:
       - "tests/test_stream_to_youtube.py"
       - "tests/test_ui_status.py"
       - "tests/test_preview_rtsp.py"
+      - "tests/test_demo_video.py"
   workflow_dispatch:
 
 permissions:
@@ -51,7 +53,7 @@ jobs:
 
       - name: Run tests
         run: |
-          python -m pytest tests/test_observability.py tests/test_stream_to_youtube.py tests/test_ui_status.py tests/test_preview_rtsp.py -q
+          python -m pytest tests/test_observability.py tests/test_stream_to_youtube.py tests/test_ui_status.py tests/test_preview_rtsp.py tests/test_demo_video.py -q
 
       - name: Build headless executable
         run: |

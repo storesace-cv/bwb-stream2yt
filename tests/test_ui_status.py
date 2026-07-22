@@ -22,6 +22,7 @@ from ui_app import (  # noqa: E402
     extract_recent_event_lines,
     format_metric,
 )
+from demo_video import DEMO_CAMERA_STATUS  # noqa: E402
 
 
 def test_derive_camera_status_values():
@@ -34,6 +35,8 @@ def test_derive_camera_status_values():
         )
         == "Erro"
     )
+    assert derive_camera_status(None, demo_mode=True) == DEMO_CAMERA_STATUS
+    assert derive_camera_status({"demo_mode": True}) == DEMO_CAMERA_STATUS
 
 
 def test_derive_encoder_and_rtmps_status():

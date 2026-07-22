@@ -20,7 +20,7 @@ import urllib.error
 import urllib.request
 import urllib.parse
 from contextlib import suppress
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 import textwrap
 import re
@@ -30,6 +30,12 @@ from autotune import (
     AUTOTUNE_AVAILABLE,
     AUTOTUNE_UNAVAILABLE_REASON,
     estimate_upload_bitrate,
+)
+from demo_video import (
+    build_demo_input_args,
+    demo_video_exists,
+    demo_video_missing_message,
+    resolve_demo_video_path,
 )
 from observability import FFmpegProgressTracker
 
@@ -1552,6 +1558,21 @@ class StreamingConfig:
     autotune_safety_margin: float
     heartbeat: HeartbeatConfig
     camera_probe: CameraProbeConfig
+    demo_mode: bool = False
+
+
+def apply_demo_video_source(
+    config: StreamingConfig, video_path: Optional[str] = None
+) -> StreamingConfig:
+    """Devolve uma cópia da config com entrada MP4 em loop (não altera .env)."""
+
+    path = resolve_demo_video_path(explicit=video_path)
+    return replace(
+        config,
+        input_args=build_demo_input_args(path),
+        demo_mode=True,
+        camera_probe=replace(config.camera_probe, required=False),
+    )
 
 
 def _resolve_heartbeat_config(base_dir: Path) -> HeartbeatConfig:
@@ -2274,6 +2295,7 @@ class StreamingWorker:
             "resolution": self._config.resolution,
             "yt_url_present": bool(self._config.yt_url),
             "heartbeat_configured": self._config.heartbeat.enabled,
+            "demo_mode": bool(self._config.demo_mode),
         }
         snapshot["camera_signal"] = self._camera_monitor.snapshot()
         snapshot["ffmpeg_progress"] = self._progress.snapshot_for_status()
@@ -2310,7 +2332,7 @@ class StreamingWorker:
                         break
                     continue
 
-                if not self._camera_monitor.confirm_signal():
+                if not self._config.demo_mode and not self._camera_monitor.confirm_signal():
                     wait_seconds = max(self._camera_monitor.retry_delay, 5.0)
                     if self._stop_event.wait(wait_seconds):
                         break
@@ -2714,12 +2736,25 @@ def run_forever(
 
 
 def _start_streaming_instance(
-    resolution: Optional[str] = None, full_diagnostics: bool = False
+    resolution: Optional[str] = None,
+    full_diagnostics: bool = False,
+    *,
+    demo_video_path: Optional[str] = None,
+    input_args: Optional[list[str]] = None,
 ) -> int:
     startup_logger = _StartupLogger(_resolve_startup_log_path())
 
     try:
         with startup_logger as logger:
+            if demo_video_path is not None:
+                resolved_demo = resolve_demo_video_path(explicit=demo_video_path)
+                if not demo_video_exists(resolved_demo):
+                    message = demo_video_missing_message(resolved_demo)
+                    logger.log(message)
+                    print(f"[primary] {message}", file=sys.stderr)
+                    log_event("primary", message)
+                    return 3
+
             logger.log("A verificar sentinelas pendentes antes do arranque.")
             try:
                 _clear_stale_stop_request()
@@ -2753,6 +2788,13 @@ def _start_streaming_instance(
             try:
                 logger.log("A carregar configuração de streaming.")
                 config = load_config(resolution=resolution)
+                if demo_video_path is not None:
+                    config = apply_demo_video_source(config, demo_video_path)
+                    logger.log(
+                        "Modo demonstração ativo; entrada temporária MP4 (sem alterar .env)."
+                    )
+                elif input_args is not None:
+                    config = replace(config, input_args=list(input_args))
                 logger.log(
                     f"Configuração carregada; resolução reportada: {config.resolution}."
                 )
@@ -2797,12 +2839,19 @@ def _start_streaming_instance(
 
 
 def start_streaming_instance(
-    resolution: Optional[str] = None, full_diagnostics: bool = False
+    resolution: Optional[str] = None,
+    full_diagnostics: bool = False,
+    *,
+    demo_video_path: Optional[str] = None,
+    input_args: Optional[list[str]] = None,
 ) -> int:
     """Public wrapper used by alternate launchers (e.g., Windows service)."""
 
     return _start_streaming_instance(
-        resolution=resolution, full_diagnostics=full_diagnostics
+        resolution=resolution,
+        full_diagnostics=full_diagnostics,
+        demo_video_path=demo_video_path,
+        input_args=input_args,
     )
 
 

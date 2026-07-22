@@ -35,6 +35,171 @@ Binaries are **not code-signed**. Windows SmartScreen may warn on first launch; 
 
 Do not run a second primary instance while the Windows service (or another EXE) is already streaming.
 
+## Upgrade e teste no Windows
+
+Guia para o primeiro teste funcional da UI numa máquina Windows, sem substituir de imediato a instalação em produção.
+
+### Localização dos ficheiros
+
+Execução GitHub Actions:
+
+https://github.com/storesace-cv/bwb-stream2yt/actions/runs/29944586076
+
+No final da página, em **Artifacts**, descarregar:
+
+`stream2yt-windows-x64`
+
+O download contém:
+
+- `stream2yt-ui-windows-x64.zip`
+- `stream-to-youtube-windows-x64.zip`
+- `stream2yt-service-windows-x64.zip`
+- `SHA256SUMS.txt`
+
+> Nota: a retenção dos artifacts pode ser inferior aos 30 dias indicados no workflow se o repositório tiver um limite global mais curto. Versões permanentes devem ser publicadas depois com uma tag `v*` e GitHub Release.
+
+### Função de cada pacote
+
+| Pacote | Função |
+|--------|--------|
+| `stream2yt-ui-windows-x64.zip` | Aplicação gráfica. Preview da câmara, Internet, estado do FFmpeg, métricas, erros e botões Iniciar/Parar/Reiniciar. **Testar primeiro.** |
+| `stream-to-youtube-windows-x64.zip` | Versão headless, sem interface. Substitui o `stream_to_youtube.exe` antigo apenas se ainda for necessário executar dessa forma. |
+| `stream2yt-service-windows-x64.zip` | Serviço Windows para funcionamento automático em segundo plano. Sem interface. A UI e o serviço **não podem** transmitir em simultâneo. |
+| `SHA256SUMS.txt` | Hashes SHA-256 para confirmar a integridade dos três ZIPs. |
+
+### Cuidados antes do upgrade
+
+1. Não apagar nem substituir imediatamente a instalação anterior.
+2. Fazer backup da pasta atualmente instalada, incluindo:
+   - `.env`
+   - `stream2yt-service.config.json`, se existir
+   - EXEs atuais
+   - eventuais ficheiros de configuração locais
+3. Não copiar logs nem o ambiente virtual antigo para a nova pasta.
+4. Abrir PowerShell como Administrador e parar o serviço:
+
+```powershell
+Stop-Service stream2yt-service -ErrorAction SilentlyContinue
+```
+
+5. Parar também qualquer `stream_to_youtube.exe` ou `ffmpeg.exe` pertencente à aplicação antiga. Se a versão antiga suportar:
+
+```powershell
+.\stream_to_youtube.exe --stop
+```
+
+6. Confirmar no Gestor de Tarefas que a aplicação antiga deixou de transmitir.
+7. Testar a nova UI numa pasta separada, por exemplo:
+
+`C:\bwb\apps\youtube\stream2yt-ui-test\`
+
+### Instalação da UI
+
+1. Extrair `stream2yt-ui-windows-x64.zip`.
+2. Copiar a pasta `stream2yt-ui` completa para:
+
+`C:\bwb\apps\youtube\stream2yt-ui-test\`
+
+3. Não mover apenas `stream2yt-ui.exe`. O EXE precisa da pasta `_internal` e das restantes DLLs.
+4. Copiar o `.env` funcional da instalação anterior para:
+
+`C:\bwb\apps\youtube\stream2yt-ui-test\.env`
+
+O `.env` deve ficar ao lado de `stream2yt-ui.exe`.
+
+5. Rever no `.env`: `YT_KEY` ou `YT_URL`, `YT_INPUT_ARGS` ou configuração RTSP, `FFMPEG`, `FFPROBE`, horário de transmissão e endpoint de heartbeat.
+6. Confirmar especialmente:
+
+```env
+FFMPEG=C:\bwb\ffmpeg\bin\ffmpeg.exe
+FFPROBE=C:\bwb\ffmpeg\bin\ffprobe.exe
+```
+
+Ajustar se o FFmpeg estiver noutra pasta.
+
+7. Executar:
+
+```powershell
+C:\bwb\apps\youtube\stream2yt-ui-test\stream2yt-ui.exe
+```
+
+8. Se o SmartScreen aparecer: **Mais informações** → **Executar assim mesmo**. Os binários ainda não estão assinados.
+
+### Teste
+
+Confirmar:
+
+- a janela abre;
+- Internet muda para **Ligada** ou **Sem ligação**;
+- a imagem da câmara aparece;
+- se a câmara falhar, aparece mensagem clara;
+- **Iniciar** arranca a transmissão;
+- Codificador muda para **A correr**;
+- Envio RTMPS passa de **A iniciar** para **A enviar**;
+- FPS, bitrate, frames e bytes aumentam;
+- **Parar** termina o envio;
+- fechar a janela termina o FFmpeg principal e o FFmpeg de preview;
+- não ficam processos `ffmpeg.exe` pendurados.
+
+### Importante sobre o serviço
+
+Nesta versão, a UI funciona em modo autónomo e **não** controla uma transmissão já executada pelo serviço.
+
+Para transmitir através da UI: o serviço `stream2yt-service` deve estar parado.
+
+Para voltar a transmitir através do serviço: fechar a UI e executar:
+
+```powershell
+Start-Service stream2yt-service
+```
+
+Se o serviço estiver ativo, a UI pode abrir, mas não deve conseguir iniciar uma segunda transmissão.
+
+### Upgrade da versão headless
+
+Só substituir `stream_to_youtube.exe` depois de o parar.
+
+1. Fazer backup do EXE antigo.
+2. Extrair `stream-to-youtube-windows-x64.zip`.
+3. Copiar o novo `stream_to_youtube.exe` para a mesma pasta onde estava o anterior.
+4. Manter o `.env` existente.
+5. Testar o arranque e a paragem.
+
+### Upgrade do serviço
+
+Só fazer depois do teste da UI.
+
+```powershell
+Stop-Service stream2yt-service
+```
+
+1. Fazer backup do `stream2yt-service.exe` antigo.
+2. Substituir pelo novo `stream2yt-service.exe` no mesmo caminho. Não mudar o caminho do EXE sem reinstalar o serviço.
+3. Manter `.env` e `stream2yt-service.config.json`.
+4. Arrancar e verificar:
+
+```powershell
+Start-Service stream2yt-service
+Get-Service stream2yt-service
+```
+
+### Rollback
+
+Se a nova versão falhar:
+
+1. Fechar a UI.
+2. Parar processos `ffmpeg.exe` iniciados por ela.
+3. Parar o serviço, se estiver ativo.
+4. Restaurar o EXE ou pasta anterior a partir do backup.
+5. Restaurar o `.env` anterior.
+6. Arrancar novamente o serviço antigo:
+
+```powershell
+Start-Service stream2yt-service
+```
+
+Não criar tag nem Release antes de concluir este teste com sucesso.
+
 ---
 
 ## Local offline build (optional)
