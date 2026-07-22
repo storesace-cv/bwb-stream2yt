@@ -2,18 +2,36 @@ name: Build primary Windows sender
 
 on:
   push:
+    branches:
+      - "**"
+    tags:
+      - "v*"
     paths:
-      - primary-windows/**
-      - .github/workflows/build-primary-windows.yml
+      - "primary-windows/**"
+      - ".github/workflows/build-primary-windows.yml"
+      - "tests/test_observability.py"
+      - "tests/test_stream_to_youtube.py"
+      - "tests/test_ui_status.py"
+      - "tests/test_preview_rtsp.py"
   pull_request:
     paths:
-      - primary-windows/**
-      - .github/workflows/build-primary-windows.yml
+      - "primary-windows/**"
+      - ".github/workflows/build-primary-windows.yml"
+      - "tests/test_observability.py"
+      - "tests/test_stream_to_youtube.py"
+      - "tests/test_ui_status.py"
+      - "tests/test_preview_rtsp.py"
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build:
     runs-on: windows-latest
+
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout
@@ -22,19 +40,94 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
-      - name: Install build tooling
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip wheel
-          python -m pip install pyinstaller==6.10
+          python -m pip install pytest
+          python -m pip install -r primary-windows/via-windows/requirements.txt
+          python -m pip install pywin32==306
 
-      - name: Build executable
+      - name: Run tests
+        run: |
+          python -m pytest tests/test_observability.py tests/test_stream_to_youtube.py tests/test_ui_status.py tests/test_preview_rtsp.py -q
+
+      - name: Build headless executable
         run: |
           python -m PyInstaller --clean primary-windows/via-windows/stream_to_youtube.spec
 
-      - name: Upload artifact
+      - name: Build UI onedir
+        run: |
+          python -m PyInstaller --clean primary-windows/via-windows/stream2yt_ui.spec
+
+      - name: Build Windows service executable
+        run: |
+          python -m PyInstaller --clean primary-windows/via-windows/stream2yt_service.spec
+
+      - name: Package release ZIPs and checksums
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+
+          if (-not (Test-Path "dist\stream2yt-ui\stream2yt-ui.exe")) {
+            throw "UI onedir missing: dist\stream2yt-ui\stream2yt-ui.exe"
+          }
+          if (-not (Test-Path "dist\stream_to_youtube.exe")) {
+            throw "Headless EXE missing: dist\stream_to_youtube.exe"
+          }
+          if (-not (Test-Path "dist\stream2yt-service.exe")) {
+            throw "Service EXE missing: dist\stream2yt-service.exe"
+          }
+
+          # UI: zip the full onedir folder so extraction yields stream2yt-ui\stream2yt-ui.exe + DLLs
+          Compress-Archive -Path "dist\stream2yt-ui" -DestinationPath "release\stream2yt-ui-windows-x64.zip" -Force
+
+          # Headless: single EXE inside a named folder for a clear extract layout
+          $headlessDir = "release\_pkg\stream-to-youtube-windows-x64"
+          New-Item -ItemType Directory -Force -Path $headlessDir | Out-Null
+          Copy-Item "dist\stream_to_youtube.exe" -Destination $headlessDir
+          Compress-Archive -Path $headlessDir -DestinationPath "release\stream-to-youtube-windows-x64.zip" -Force
+
+          # Service
+          $serviceDir = "release\_pkg\stream2yt-service-windows-x64"
+          New-Item -ItemType Directory -Force -Path $serviceDir | Out-Null
+          Copy-Item "dist\stream2yt-service.exe" -Destination $serviceDir
+          Compress-Archive -Path $serviceDir -DestinationPath "release\stream2yt-service-windows-x64.zip" -Force
+
+          Remove-Item -Recurse -Force "release\_pkg"
+
+          $sums = @()
+          Get-ChildItem "release\*.zip" | Sort-Object Name | ForEach-Object {
+            $hash = (Get-FileHash -Algorithm SHA256 -Path $_.FullName).Hash.ToLower()
+            $sums += "$hash  $($_.Name)"
+          }
+          $sums -join "`n" | Set-Content -Path "release\SHA256SUMS.txt" -Encoding ascii
+          Get-Content "release\SHA256SUMS.txt"
+
+      - name: Upload release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: primary-windows-exe
-          path: dist/stream_to_youtube.exe
+          name: stream2yt-windows-x64
+          path: |
+            release/stream2yt-ui-windows-x64.zip
+            release/stream-to-youtube-windows-x64.zip
+            release/stream2yt-service-windows-x64.zip
+            release/SHA256SUMS.txt
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          gh release create "${{ github.ref_name }}" `
+            "release/stream2yt-ui-windows-x64.zip" `
+            "release/stream-to-youtube-windows-x64.zip" `
+            "release/stream2yt-service-windows-x64.zip" `
+            "release/SHA256SUMS.txt" `
+            --title "${{ github.ref_name }}" `
+            --generate-notes

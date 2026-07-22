@@ -31,6 +31,7 @@ from autotune import (
     AUTOTUNE_UNAVAILABLE_REASON,
     estimate_upload_bitrate,
 )
+from observability import FFmpegProgressTracker
 
 
 DEFAULT_STATUS_ENDPOINT = "http://104.248.134.44:8080/status"
@@ -2202,6 +2203,9 @@ class StreamingWorker:
             config.camera_probe.timeout,
             config.camera_probe.required,
         )
+        self._progress = FFmpegProgressTracker()
+        self._progress_thread: Optional[threading.Thread] = None
+        self._stderr_thread: Optional[threading.Thread] = None
 
     def start(self) -> None:
         if self.is_running:
@@ -2272,6 +2276,7 @@ class StreamingWorker:
             "heartbeat_configured": self._config.heartbeat.enabled,
         }
         snapshot["camera_signal"] = self._camera_monitor.snapshot()
+        snapshot["ffmpeg_progress"] = self._progress.snapshot_for_status()
         return snapshot
 
     def _run_loop(self) -> None:
@@ -2286,6 +2291,9 @@ class StreamingWorker:
             "-hide_banner",
             "-loglevel",
             "warning",
+            "-nostats",
+            "-progress",
+            "pipe:1",
             *self._config.input_args,
             *self._config.output_args,
             "-f",
@@ -2314,6 +2322,9 @@ class StreamingWorker:
                     "-hide_banner",
                     "-loglevel",
                     "warning",
+                    "-nostats",
+                    "-progress",
+                    "pipe:1",
                     *self._config.input_args,
                     *output_args,
                     "-f",
@@ -2326,6 +2337,9 @@ class StreamingWorker:
                     "-hide_banner",
                     "-loglevel",
                     "warning",
+                    "-nostats",
+                    "-progress",
+                    "pipe:1",
                     *self._config.input_args,
                     *output_args,
                     "-f",
@@ -2336,14 +2350,32 @@ class StreamingWorker:
 
                 with self._process_lock:
                     try:
-                        self._process = subprocess.Popen(cmd)
+                        self._process = subprocess.Popen(
+                            cmd,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                            text=True,
+                            encoding="utf-8",
+                            errors="replace",
+                            bufsize=1,
+                        )
                         self._last_launch_time = time.time()
                         self._last_exit_code = None
                     except OSError as exc:
+                        self._process = None
+                        self._progress.mark_error(
+                            str(exc), code="ffmpeg_start_failed"
+                        )
                         log_event("primary", f"Falha ao iniciar ffmpeg: {exc}")
                         if self._stop_event.wait(5):
                             break
                         continue
+
+                launched = self._process
+                if launched is None:
+                    continue
+                self._progress.mark_session_started()
+                self._start_io_threads(launched)
 
                 code = self._wait_process()
                 if code is None:
@@ -2480,6 +2512,8 @@ class StreamingWorker:
                     self._terminate_process()
                     return None
 
+        self._stop_io_threads()
+
         with self._process_lock:
             self._process = None
 
@@ -2489,6 +2523,12 @@ class StreamingWorker:
         self._last_exit_code = code
         if not self._stop_event.is_set():
             self._restart_count += 1
+            if code != 0:
+                self._progress.mark_error(f"código {code}")
+            else:
+                self._progress.mark_session_stopped()
+        else:
+            self._progress.mark_session_stopped()
 
         return code
 
@@ -2497,6 +2537,7 @@ class StreamingWorker:
             proc = self._process
 
         if proc is None:
+            self._stop_io_threads()
             return
 
         if proc.poll() is None:
@@ -2513,11 +2554,77 @@ class StreamingWorker:
                 except Exception:
                     pass
                 else:
-                    proc.wait()
+                    with suppress(Exception):
+                        proc.wait()
+
+        self._stop_io_threads()
 
         with self._process_lock:
-            self._process = None
+            if self._process is proc:
+                self._process = None
             self._last_launch_time = None
+
+        if self._stop_event.is_set():
+            state = self._progress.metrics_snapshot().get("rtmps_send_state")
+            if state not in ("Erro", "Parado"):
+                self._progress.mark_session_stopped()
+
+    def _start_io_threads(self, proc: subprocess.Popen[str]) -> None:
+        # Do not call _stop_io_threads here: self._process already points at
+        # this new proc, and cleanup would close its stdout/stderr before readers start.
+        # Previous session I/O is cleaned in _wait_process / _terminate_process.
+        self._progress_thread = threading.Thread(
+            target=self._read_progress_stdout,
+            args=(proc,),
+            name="FFmpegProgressReader",
+            daemon=True,
+        )
+        self._stderr_thread = threading.Thread(
+            target=self._drain_ffmpeg_stderr,
+            args=(proc,),
+            name="FFmpegStderrReader",
+            daemon=True,
+        )
+        self._progress_thread.start()
+        self._stderr_thread.start()
+
+    def _read_progress_stdout(self, proc: subprocess.Popen[str]) -> None:
+        stream = proc.stdout
+        if stream is None:
+            return
+        try:
+            for line in stream:
+                self._progress.feed_line(line)
+        except (OSError, ValueError):
+            pass
+
+    def _drain_ffmpeg_stderr(self, proc: subprocess.Popen[str]) -> None:
+        stream = proc.stderr
+        if stream is None:
+            return
+        try:
+            for line in stream:
+                text = line.rstrip("\r\n")
+                if text:
+                    log_event("ffmpeg", text)
+        except (OSError, ValueError):
+            pass
+
+    def _stop_io_threads(self, timeout: float = 2.0) -> None:
+        with self._process_lock:
+            proc = self._process
+        if proc is not None:
+            for stream in (proc.stdout, proc.stderr):
+                if stream is not None:
+                    with suppress(Exception):
+                        stream.close()
+
+        threads = (self._progress_thread, self._stderr_thread)
+        for thread in threads:
+            if thread is not None and thread.is_alive():
+                thread.join(timeout=timeout)
+        self._progress_thread = None
+        self._stderr_thread = None
 
 
 def run_forever(
@@ -2770,6 +2877,26 @@ def stop_active_worker(timeout: Optional[float] = 10.0) -> None:
         log_event("primary", f"Erro ao parar worker ativo: {exc}")
 
 
+def get_active_worker_snapshot() -> Optional[Dict[str, Any]]:
+    """Return a thread-safe status snapshot of the in-process worker, if any."""
+
+    worker = _ACTIVE_WORKER
+    if worker is None:
+        return None
+    try:
+        return worker.status_snapshot()
+    except Exception as exc:  # noqa: BLE001
+        log_event("primary", f"Falha ao obter snapshot do worker: {exc}")
+        return None
+
+
+def collect_diagnostics_text(resolution: Optional[str] = None) -> str:
+    """Build the full diagnostics report for UI or tooling."""
+
+    config = load_config(resolution=resolution)
+    return _collect_full_diagnostics(config)
+
+
 def main() -> None:
     raw_args = sys.argv[1:]
     normalized_pairs: list[tuple[str, str]] = []
@@ -2786,10 +2913,13 @@ def main() -> None:
     command = "--start"
     extra_pairs = normalized_pairs
 
-    if normalized_pairs and normalized_pairs[0][0] in {"--start", "--stop"}:
+    if normalized_pairs and normalized_pairs[0][0] in {"--start", "--stop", "--ui"}:
         command = normalized_pairs[0][0]
         extra_pairs = normalized_pairs[1:]
-    elif normalized_pairs and normalized_pairs[0][0] not in {"--showonscreen", "--fulldiags"}:
+    elif normalized_pairs and normalized_pairs[0][0] not in {
+        "--showonscreen",
+        "--fulldiags",
+    }:
         message = f"Flag desconhecida: {normalized_pairs[0][1]}"
         print(f"[primary] {message}", file=sys.stderr)
         log_event("primary", message)
@@ -2841,6 +2971,12 @@ def main() -> None:
             sys.exit(1)
 
         resolution_arg = normalized_resolution
+
+    if command == "--ui":
+        _ensure_signal_handlers()
+        from ui_app import run_ui_app
+
+        sys.exit(run_ui_app(resolution=resolution_arg))
 
     global _SHOW_ON_SCREEN, _FULL_DIAGNOSTICS_REQUESTED
     _SHOW_ON_SCREEN = show_on_screen

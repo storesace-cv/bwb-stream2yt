@@ -36,6 +36,7 @@ primary-windows/via-windows/*
 !primary-windows/via-windows/requirements.txt
 !primary-windows/via-windows/stream_to_youtube.spec
 !primary-windows/via-windows/stream2yt_service.spec
+!primary-windows/via-windows/stream2yt_ui.spec
 !primary-windows/via-windows/build.bat
 !primary-windows/via-windows/prepare-env.bat
 
