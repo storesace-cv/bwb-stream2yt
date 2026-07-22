@@ -197,6 +197,29 @@ def test_watcher_understands_status_monitor_snapshot_off(
     assert bundle.service.stop_calls == 1
 
 
+def test_watcher_keeps_off_when_primary_healthy_even_if_camera_absent(
+    config: WatcherConfig,
+) -> None:
+    clock = FakeClock()
+    results = [
+        FetcherResult(
+            True,
+            {
+                "fallback_active": False,
+                "fallback_reason": None,
+                "primary_stream_healthy": True,
+                "primary_stream_reason": "streaming",
+                "last_camera_signal": {"present": False},
+            },
+        )
+    ]
+    bundle = make_watcher(config, results, clock)
+
+    assert bundle.watcher.process_once() is Mode.OFF
+    assert bundle.service.stop_calls == 1
+    assert bundle.service.start_calls == 0
+
+
 def test_watcher_stops_service_if_reactivated_externally(
     config: WatcherConfig,
 ) -> None:

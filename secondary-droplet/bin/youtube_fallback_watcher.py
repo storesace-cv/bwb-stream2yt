@@ -436,6 +436,10 @@ class APIWatcher:
                 pieces.append(f"camera={payload.get('camera')!r}")
             if "fallback_active" in payload:
                 pieces.append(f"fallback_active={payload.get('fallback_active')!r}")
+            if "primary_stream_healthy" in payload:
+                pieces.append(
+                    f"primary_stream_healthy={payload.get('primary_stream_healthy')!r}"
+                )
             if "fallback_reason" in payload and payload.get("fallback_reason"):
                 pieces.append(f"fallback_reason={payload.get('fallback_reason')!r}")
             seconds = payload.get("seconds_since_last_heartbeat")
@@ -496,6 +500,9 @@ class APIWatcher:
             fallback_active = payload.get("fallback_active")
             if isinstance(fallback_active, bool):
                 self._last_success = now
+                if payload.get("primary_stream_healthy") is True:
+                    return Mode.OFF, "api_primary_saudavel"
+
                 fallback_reason = payload.get("fallback_reason")
                 camera_snapshot = payload.get("last_camera_signal")
                 camera_present = None
@@ -534,6 +541,9 @@ class APIWatcher:
 
                 if fallback_reason == "no_heartbeats":
                     return Mode.LIFE, "api_sem_heartbeats"
+
+                if fallback_reason == "primary_unhealthy":
+                    return Mode.LIFE, "api_primary_nao_saudavel"
 
                 return Mode.LIFE, "api_fallback_ativo"
 

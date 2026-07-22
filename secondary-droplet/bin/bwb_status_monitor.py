@@ -41,6 +41,8 @@ FALLBACK_RESTART_CMD: tuple[str, ...] = (
 
 DEFAULT_MODE_FILE = Path("/run/youtube-fallback/mode")
 
+PRIMARY_HEALTHY_RTMPS_STATE = "A enviar"
+
 
 def utc_now() -> dt.datetime:
     return dt.datetime.now(dt.timezone.utc)
@@ -50,6 +52,44 @@ def isoformat(ts: dt.datetime) -> str:
     if ts.tzinfo is None:
         ts = ts.replace(tzinfo=dt.timezone.utc)
     return ts.astimezone(dt.timezone.utc).isoformat()
+
+
+def evaluate_primary_stream_health(payload: Dict[str, Any]) -> tuple[bool, str]:
+    """Avalia se o emissor Windows está efetivamente a enviar para o YouTube."""
+
+    status = payload.get("status")
+    if not isinstance(status, dict):
+        return False, "missing_status"
+
+    if status.get("thread_running") is not True:
+        return False, "thread_not_running"
+    if status.get("ffmpeg_running") is not True:
+        return False, "ffmpeg_not_running"
+    if status.get("stop_requested") is not False:
+        return False, "stop_requested"
+    if status.get("in_day_window") is not True:
+        return False, "outside_day_window"
+    if status.get("yt_url_present") is not True:
+        return False, "yt_url_missing"
+
+    progress = status.get("ffmpeg_progress")
+    if not isinstance(progress, dict):
+        return False, "missing_progress"
+    if progress.get("session_active") is not True:
+        return False, "session_inactive"
+
+    rtmps_state = progress.get("rtmps_send_state")
+    if rtmps_state != PRIMARY_HEALTHY_RTMPS_STATE:
+        return False, f"rtmps_state:{rtmps_state}"
+
+    return True, "streaming"
+
+
+def _extract_demo_mode(payload: Dict[str, Any]) -> bool:
+    status = payload.get("status")
+    if not isinstance(status, dict):
+        return False
+    return status.get("demo_mode") is True
 
 
 @dataclass
@@ -353,6 +393,16 @@ class ServiceManager:
             LOGGER.info("Serviço %s parado", self.name)
             return True
 
+    def is_active(self) -> bool:
+        with self._lock:
+            status = subprocess.run(
+                self._systemctl_cmd("is-active"),
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            return status.returncode == 0 and status.stdout.strip() == "active"
+
     def restart(self) -> bool:
         with self._lock:
             if self.name == FALLBACK_SERVICE_NAME:
@@ -592,6 +642,8 @@ class StatusMonitor:
         self._started_at = utc_now()
         self._fallback_active = False
         self._fallback_reason: Optional[str] = None
+        self._primary_stream_healthy = False
+        self._primary_stream_reason = "no_heartbeat"
         self._last_camera_status: Optional[Dict[str, Any]] = None
         self._mode_file = settings.mode_file
         self._stop_event = threading.Event()
@@ -636,7 +688,34 @@ class StatusMonitor:
             return self._fallback_active
 
     def record_status(self, entry: StatusEntry) -> None:
+        healthy, health_reason = evaluate_primary_stream_health(entry.payload)
+
+        with self._lock:
+            self._last_timestamp = entry.timestamp
+            self._primary_stream_healthy = healthy
+            self._primary_stream_reason = health_reason
+
+        if healthy:
+            _, camera_snapshot = self._extract_camera_status(entry.payload)
+            with self._lock:
+                self._last_camera_status = camera_snapshot
+            self._force_stop_fallback(
+                "Envio principal saudável (RTMPS a enviar); "
+                "a garantir paragem de youtube-fallback.service."
+            )
+            return
+
+        demo_mode = _extract_demo_mode(entry.payload)
         camera_present, camera_snapshot = self._extract_camera_status(entry.payload)
+
+        if demo_mode:
+            with self._lock:
+                self._last_camera_status = camera_snapshot
+            # Em demonstração a câmara não é necessária; ausência de sinal
+            # não deve manter barras. Sem envio saudável → fallback do emissor.
+            self._ensure_emitter_failure_fallback()
+            return
+
         ping_result = self._refresh_camera_ping()
         if ping_result is False:
             camera_present = False
@@ -649,7 +728,6 @@ class StatusMonitor:
             camera_snapshot["network_ping"] = ping_snapshot
 
         with self._lock:
-            self._last_timestamp = entry.timestamp
             self._last_camera_status = camera_snapshot
             fallback_active = self._fallback_active
             fallback_reason = self._fallback_reason
@@ -658,8 +736,9 @@ class StatusMonitor:
             self._ensure_camera_fallback(fallback_active, fallback_reason)
             return
 
-        if fallback_active:
-            self._stop_fallback("Heartbeat recebido; solicitando parada do fallback.")
+        # Câmara OK mas envio principal ainda não saudável (ex.: A iniciar):
+        # manter/ativar fallback do emissor até surgir "A enviar".
+        self._ensure_emitter_failure_fallback()
 
     def snapshot(self) -> Dict[str, Any]:
         with self._lock:
@@ -673,6 +752,8 @@ class StatusMonitor:
             )
             fallback_reason = self._fallback_reason
             fallback_active = self._fallback_active
+            primary_stream_healthy = self._primary_stream_healthy
+            primary_stream_reason = self._primary_stream_reason
             last_timestamp = (
                 isoformat(self._last_timestamp) if self._last_timestamp else None
             )
@@ -723,6 +804,8 @@ class StatusMonitor:
             "fallback_reason": fallback_reason,
             "mode_file": self._mode_file.as_posix(),
             "last_camera_signal": snapshot,
+            "primary_stream_healthy": primary_stream_healthy,
+            "primary_stream_reason": primary_stream_reason,
         }
 
     def _watchdog_loop(self) -> None:
@@ -959,14 +1042,28 @@ class StatusMonitor:
 
         return reachable, rtt_ms, error
 
-    def _stop_fallback(self, message: str) -> None:
+    def _force_stop_fallback(self, message: str) -> None:
+        """Garante paragem real do serviço, mesmo se fallback_active interno for False."""
+
+        with self._lock:
+            was_flagged_active = self._fallback_active
+        was_service_active = False
+        is_active = getattr(self._service_manager, "is_active", None)
+        if callable(is_active):
+            try:
+                was_service_active = bool(is_active())
+            except Exception:  # noqa: BLE001
+                was_service_active = was_flagged_active
+        else:
+            was_service_active = was_flagged_active
+
         LOGGER.info(message)
         if self._service_manager.ensure_stopped():
             with self._lock:
                 self._fallback_active = False
                 self._fallback_reason = None
             self._write_mode_file("life")
-            if self._refresher:
+            if (was_flagged_active or was_service_active) and self._refresher:
                 self._refresher.request_refresh()
         else:
             LOGGER.warning(
@@ -974,6 +1071,61 @@ class StatusMonitor:
             )
             with self._lock:
                 self._fallback_active = True
+
+    def _stop_fallback(self, message: str) -> None:
+        self._force_stop_fallback(message)
+
+    def _ensure_emitter_failure_fallback(self) -> None:
+        """Ativa fallback life enquanto o emissor principal não está a enviar."""
+
+        with self._lock:
+            fallback_active = self._fallback_active
+            fallback_reason = self._fallback_reason
+
+        if fallback_active and fallback_reason in {
+            "no_heartbeats",
+            "primary_unhealthy",
+        }:
+            if self._service_manager.ensure_started():
+                with self._lock:
+                    self._fallback_active = True
+                    if self._fallback_reason != "no_heartbeats":
+                        self._fallback_reason = "primary_unhealthy"
+            return
+
+        if fallback_active and fallback_reason == "no_camera_signal":
+            LOGGER.info(
+                "Envio principal não saudável com câmara OK; "
+                "a mudar fallback de SMPTE para life."
+            )
+            self._write_mode_file("life")
+            if self._service_manager.restart():
+                with self._lock:
+                    self._fallback_active = True
+                    self._fallback_reason = "primary_unhealthy"
+            else:
+                LOGGER.warning(
+                    "Falha ao reiniciar fallback em modo life; "
+                    "nova tentativa no próximo heartbeat."
+                )
+            return
+
+        LOGGER.info(
+            "Envio principal não saudável; a ativar fallback life até RTMPS 'A enviar'."
+        )
+        self._write_mode_file("life")
+        if self._service_manager.ensure_started():
+            with self._lock:
+                self._fallback_active = True
+                self._fallback_reason = "primary_unhealthy"
+            LOGGER.info("Fallback ativado por envio principal não saudável.")
+        else:
+            LOGGER.warning(
+                "Não foi possível iniciar o fallback; nova tentativa no próximo heartbeat."
+            )
+            with self._lock:
+                self._fallback_active = False
+                self._fallback_reason = None
 
     def _ensure_camera_fallback(
         self, fallback_active: bool, fallback_reason: Optional[str]

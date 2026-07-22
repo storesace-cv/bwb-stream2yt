@@ -30,6 +30,7 @@ class DummyServiceManager:
     def __init__(self) -> None:
         self.start_calls = 0
         self.stop_calls = 0
+        self.restart_calls = 0
         self.active = False
 
     def ensure_started(self) -> bool:
@@ -41,6 +42,14 @@ class DummyServiceManager:
         self.stop_calls += 1
         self.active = False
         return True
+
+    def restart(self) -> bool:
+        self.restart_calls += 1
+        self.active = True
+        return True
+
+    def is_active(self) -> bool:
+        return self.active
 
 
 class DummyRefresher:
@@ -63,12 +72,17 @@ def monitor(tmp_path: Path) -> StatusMonitor:
 
 
 def make_entry(
-    machine: str = "pc-1", camera_signal: Optional[Dict[str, object]] = None
+    machine: str = "pc-1",
+    camera_signal: Optional[Dict[str, object]] = None,
+    *,
+    status_overrides: Optional[Dict[str, object]] = None,
 ) -> StatusEntry:
     now = utc_now()
     payload = {"machine_id": machine, "status": {"ffmpeg_running": True}}
     if camera_signal is not None:
         payload["status"]["camera_signal"] = camera_signal
+    if status_overrides:
+        payload["status"].update(status_overrides)
     return StatusEntry(
         timestamp=now,
         machine_id=machine,
@@ -76,6 +90,33 @@ def make_entry(
         remote_addr="127.0.0.1",
         raw_body="{}",
     )
+
+
+def make_healthy_status(
+    *,
+    demo_mode: bool = False,
+    camera_present: Optional[bool] = True,
+    rtmps_state: str = "A enviar",
+    **overrides: object,
+) -> Dict[str, object]:
+    status: Dict[str, object] = {
+        "thread_running": True,
+        "ffmpeg_running": True,
+        "stop_requested": False,
+        "in_day_window": True,
+        "yt_url_present": True,
+        "demo_mode": demo_mode,
+        "ffmpeg_progress": {
+            "session_active": True,
+            "rtmps_send_state": rtmps_state,
+        },
+    }
+    if camera_present is None:
+        pass
+    else:
+        status["camera_signal"] = {"present": camera_present}
+    status.update(overrides)
+    return status
 
 
 def test_triggers_fallback_after_threshold(monitor: StatusMonitor) -> None:
@@ -99,10 +140,13 @@ def test_stops_fallback_after_single_heartbeat(monitor: StatusMonitor) -> None:
     assert monitor.fallback_active is True
     assert service.start_calls == 1
 
-    monitor.record_status(make_entry(camera_signal={"present": True}))
+    monitor.record_status(
+        make_entry(status_overrides=make_healthy_status(camera_present=True))
+    )
     assert monitor.fallback_active is False
     assert service.stop_calls == 1
     assert monitor.settings.mode_file.read_text(encoding="utf-8").strip() == "life"
+    assert monitor.snapshot()["primary_stream_healthy"] is True
 
 
 def test_camera_absence_triggers_smpte(monitor: StatusMonitor) -> None:
@@ -123,7 +167,9 @@ def test_camera_recovery_stops_fallback(monitor: StatusMonitor) -> None:
     monitor.record_status(make_entry(camera_signal={"present": False}))
     assert monitor.fallback_active is True
 
-    monitor.record_status(make_entry(camera_signal={"present": True}))
+    monitor.record_status(
+        make_entry(status_overrides=make_healthy_status(camera_present=True))
+    )
     assert monitor.fallback_active is False
     snapshot = monitor.snapshot()
     assert snapshot["fallback_reason"] is None
@@ -147,7 +193,9 @@ def test_stop_fallback_triggers_refresh(tmp_path: Path) -> None:
     with monitor._lock:  # type: ignore[attr-defined]
         monitor._fallback_active = True
 
-    monitor.record_status(make_entry(camera_signal={"present": True}))
+    monitor.record_status(
+        make_entry(status_overrides=make_healthy_status(camera_present=True))
+    )
 
     assert refresher.calls == 1
 
@@ -382,3 +430,148 @@ def test_camera_ping_cached_between_heartbeats(monkeypatch, tmp_path: Path) -> N
     second_snapshot = monitor.snapshot()["last_camera_signal"]
     assert second_snapshot["present"] is True
     assert second_snapshot["network_ping"]["reachable"] is True
+
+
+def test_evaluate_primary_stream_health_requires_all_fields() -> None:
+    healthy, reason = status_monitor.evaluate_primary_stream_health(
+        {"status": make_healthy_status()}
+    )
+    assert healthy is True
+    assert reason == "streaming"
+
+    cases = [
+        ({"ffmpeg_running": False}, "ffmpeg_not_running"),
+        ({"stop_requested": True}, "stop_requested"),
+        (
+            {
+                "ffmpeg_progress": {
+                    "session_active": True,
+                    "rtmps_send_state": "A iniciar",
+                }
+            },
+            "rtmps_state:A iniciar",
+        ),
+        (
+            {
+                "ffmpeg_progress": {
+                    "session_active": True,
+                    "rtmps_send_state": "Sem progresso",
+                }
+            },
+            "rtmps_state:Sem progresso",
+        ),
+        (
+            {"ffmpeg_progress": {"session_active": True, "rtmps_send_state": "Erro"}},
+            "rtmps_state:Erro",
+        ),
+    ]
+    for overrides, expected_reason in cases:
+        payload_status = make_healthy_status()
+        payload_status.update(overrides)
+        ok, reason = status_monitor.evaluate_primary_stream_health(
+            {"status": payload_status}
+        )
+        assert ok is False
+        assert reason == expected_reason
+
+
+def test_demo_mode_healthy_stops_fallback_without_camera(
+    monitor: StatusMonitor,
+) -> None:
+    service = monitor._service_manager  # type: ignore[attr-defined]
+    with monitor._lock:  # type: ignore[attr-defined]
+        monitor._fallback_active = True
+        monitor._fallback_reason = "no_camera_signal"
+        service.active = True
+
+    monitor.record_status(
+        make_entry(
+            status_overrides=make_healthy_status(
+                demo_mode=True, camera_present=None, rtmps_state="A enviar"
+            )
+        )
+    )
+
+    assert monitor.fallback_active is False
+    assert service.stop_calls == 1
+    snapshot = monitor.snapshot()
+    assert snapshot["primary_stream_healthy"] is True
+    assert snapshot["fallback_reason"] is None
+
+
+def test_rtsp_healthy_stops_fallback(monitor: StatusMonitor) -> None:
+    service = monitor._service_manager  # type: ignore[attr-defined]
+    service.active = True
+    with monitor._lock:  # type: ignore[attr-defined]
+        monitor._fallback_active = True
+        monitor._fallback_reason = "primary_unhealthy"
+
+    monitor.record_status(
+        make_entry(status_overrides=make_healthy_status(camera_present=True))
+    )
+    assert monitor.fallback_active is False
+    assert service.stop_calls == 1
+    assert monitor.snapshot()["primary_stream_healthy"] is True
+
+
+def test_healthy_calls_ensure_stopped_even_if_internal_flag_false(
+    monitor: StatusMonitor,
+) -> None:
+    service = monitor._service_manager  # type: ignore[attr-defined]
+    service.active = True
+    with monitor._lock:  # type: ignore[attr-defined]
+        monitor._fallback_active = False
+        monitor._fallback_reason = None
+
+    monitor.record_status(
+        make_entry(status_overrides=make_healthy_status(camera_present=True))
+    )
+
+    assert service.stop_calls == 1
+    assert service.active is False
+    assert monitor.fallback_active is False
+
+
+def test_starting_state_keeps_fallback(monitor: StatusMonitor) -> None:
+    monitor.record_status(
+        make_entry(
+            status_overrides=make_healthy_status(
+                camera_present=True, rtmps_state="A iniciar"
+            )
+        )
+    )
+    assert monitor.fallback_active is True
+    assert monitor.snapshot()["fallback_reason"] == "primary_unhealthy"
+    assert monitor.snapshot()["primary_stream_healthy"] is False
+    assert monitor.settings.mode_file.read_text(encoding="utf-8").strip() == "life"
+
+
+def test_demo_unhealthy_activates_emitter_fallback_not_camera_bars(
+    monitor: StatusMonitor,
+) -> None:
+    monitor.record_status(
+        make_entry(
+            status_overrides={
+                "demo_mode": True,
+                "thread_running": True,
+                "ffmpeg_running": False,
+                "stop_requested": False,
+                "in_day_window": True,
+                "yt_url_present": True,
+            }
+        )
+    )
+    assert monitor.fallback_active is True
+    assert monitor.snapshot()["fallback_reason"] == "primary_unhealthy"
+    assert monitor.settings.mode_file.read_text(encoding="utf-8").strip() == "life"
+
+
+def test_rtsp_camera_absent_still_activates_bars_when_unhealthy(
+    monitor: StatusMonitor,
+) -> None:
+    monitor.record_status(make_entry(camera_signal={"present": False}))
+    assert monitor.fallback_active is True
+    assert monitor.snapshot()["fallback_reason"] == "no_camera_signal"
+    assert (
+        monitor.settings.mode_file.read_text(encoding="utf-8").strip() == "smptehdbars"
+    )
