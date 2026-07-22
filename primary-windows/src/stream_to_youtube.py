@@ -36,6 +36,11 @@ from demo_video import (
     demo_video_missing_message,
     resolve_demo_video_path,
 )
+from send_quality import (
+    apply_profile_to_output_args,
+    get_send_quality_profile,
+    normalize_send_quality,
+)
 from observability import FFmpegProgressTracker
 
 
@@ -1585,6 +1590,26 @@ def apply_demo_video_source(
     )
 
 
+def apply_send_quality(
+    config: StreamingConfig, quality_key: Optional[str]
+) -> StreamingConfig:
+    """Aplica perfil manual de qualidade (sessão UI; não altera .env)."""
+
+    profile = get_send_quality_profile(quality_key)
+    output_args = apply_profile_to_output_args(config.output_args, profile)
+    bitrate_max = profile.maxrate_kbps
+    bitrate_min = min(config.bitrate_min_kbps, profile.bitrate_kbps)
+    if bitrate_min > bitrate_max:
+        bitrate_min = bitrate_max
+    return replace(
+        config,
+        output_args=output_args,
+        resolution=profile.short_resolution,
+        bitrate_min_kbps=bitrate_min,
+        bitrate_max_kbps=bitrate_max,
+    )
+
+
 def _resolve_heartbeat_config(base_dir: Path) -> HeartbeatConfig:
     enabled_flag = _env_flag("BWB_STATUS_ENABLED", True)
     endpoint_raw = os.environ.get("BWB_STATUS_ENDPOINT")
@@ -2749,6 +2774,7 @@ def _start_streaming_instance(
     *,
     demo_video_path: Optional[str] = None,
     input_args: Optional[list[str]] = None,
+    send_quality: Optional[str] = None,
 ) -> int:
     startup_logger = _StartupLogger(_resolve_startup_log_path())
 
@@ -2803,6 +2829,15 @@ def _start_streaming_instance(
                     )
                 elif input_args is not None:
                     config = replace(config, input_args=list(input_args))
+                if send_quality is not None:
+                    quality_key = normalize_send_quality(send_quality)
+                    config = apply_send_quality(config, quality_key)
+                    profile = get_send_quality_profile(quality_key)
+                    logger.log(
+                        "Qualidade de envio manual "
+                        f"{profile.label} ({profile.short_resolution}); "
+                        "sessão UI sem alterar .env."
+                    )
                 logger.log(
                     f"Configuração carregada; resolução reportada: {config.resolution}."
                 )
@@ -2854,6 +2889,7 @@ def start_streaming_instance(
     *,
     demo_video_path: Optional[str] = None,
     input_args: Optional[list[str]] = None,
+    send_quality: Optional[str] = None,
 ) -> int:
     """Public wrapper used by alternate launchers (e.g., Windows service)."""
 
@@ -2862,6 +2898,7 @@ def start_streaming_instance(
         full_diagnostics=full_diagnostics,
         demo_video_path=demo_video_path,
         input_args=input_args,
+        send_quality=send_quality,
     )
 
 

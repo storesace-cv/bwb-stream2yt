@@ -25,6 +25,13 @@ from demo_video import (
     demo_video_missing_message,
     resolve_demo_video_path,
 )
+from send_quality import (
+    DEFAULT_SEND_QUALITY,
+    format_quality_status,
+    get_send_quality_profile,
+    iter_send_quality_profiles,
+    normalize_send_quality,
+)
 
 YOUTUBE_CONFIRMED_STATUS = "Não verificado"
 INSTANCE_ACTIVE_HINT = (
@@ -170,6 +177,7 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
         from PySide6.QtGui import QImage, QPixmap
         from PySide6.QtWidgets import (
             QApplication,
+            QButtonGroup,
             QCheckBox,
             QGridLayout,
             QHBoxLayout,
@@ -178,6 +186,7 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
             QMainWindow,
             QMessageBox,
             QPushButton,
+            QRadioButton,
             QVBoxLayout,
             QWidget,
         )
@@ -218,9 +227,11 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
             self._preview_frame_dirty = False
             self._demo_enabled = False
             self._demo_path = resolve_demo_video_path()
+            self._quality_key = DEFAULT_SEND_QUALITY
+            self._quality_restart_lock = threading.Lock()
 
             self.setWindowTitle("stream2yt — Primary")
-            self.resize(720, 640)
+            self.resize(720, 680)
 
             root = QWidget(self)
             self.setCentralWidget(root)
@@ -242,6 +253,28 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
             demo_row.addWidget(self._demo_checkbox)
             demo_row.addWidget(self._demo_path_label, stretch=1)
             layout.addLayout(demo_row)
+
+            quality_row = QHBoxLayout()
+            quality_row.addWidget(QLabel("Qualidade de envio:"))
+            self._quality_group = QButtonGroup(self)
+            self._quality_group.setExclusive(True)
+            self._quality_buttons: Dict[str, QRadioButton] = {}
+            for profile in iter_send_quality_profiles():
+                button = QRadioButton(profile.label)
+                button.setProperty("quality_key", profile.key)
+                if profile.key == self._quality_key:
+                    button.setChecked(True)
+                self._quality_group.addButton(button)
+                self._quality_buttons[profile.key] = button
+                quality_row.addWidget(button)
+            quality_row.addStretch(1)
+            self._quality_group.buttonClicked.connect(self._on_quality_button_clicked)
+            layout.addLayout(quality_row)
+
+            self._quality_status = QLabel(
+                format_quality_status(get_send_quality_profile(self._quality_key))
+            )
+            layout.addWidget(self._quality_status)
 
             status_grid = QGridLayout()
             self._camera_value = QLabel("A verificar")
@@ -330,10 +363,70 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
             self._btn_stop.setEnabled(not self._busy)
             self._btn_diag.setEnabled(not self._busy)
             self._demo_checkbox.setEnabled(not self._busy and not session_alive)
+            quality_enabled = not self._busy
+            for button in self._quality_buttons.values():
+                button.setEnabled(quality_enabled)
 
         def _set_busy(self, busy: bool) -> None:
             self._busy = busy
             self._refresh_button_states()
+
+        def _sync_quality_buttons(self) -> None:
+            button = self._quality_buttons.get(self._quality_key)
+            if button is None:
+                return
+            self._quality_group.blockSignals(True)
+            button.setChecked(True)
+            self._quality_group.blockSignals(False)
+
+        def _update_quality_status_label(self) -> None:
+            profile = get_send_quality_profile(self._quality_key)
+            self._quality_status.setText(format_quality_status(profile))
+
+        def _on_quality_button_clicked(self, button) -> None:
+            key = normalize_send_quality(str(button.property("quality_key") or ""))
+            if key == self._quality_key:
+                return
+
+            previous = self._quality_key
+            self._quality_key = key
+            self._update_quality_status_label()
+
+            if not self._session_thread_alive():
+                return
+
+            if self._busy or not self._quality_restart_lock.acquire(blocking=False):
+                self._quality_key = previous
+                self._sync_quality_buttons()
+                self._update_quality_status_label()
+                return
+
+            self._set_busy(True)
+            self._message.setText(
+                f"A aplicar qualidade {get_send_quality_profile(key).label}…"
+            )
+            threading.Thread(
+                target=self._quality_restart_worker_thread,
+                name="UiQualityRestart",
+                daemon=True,
+            ).start()
+
+        def _quality_restart_worker_thread(self) -> None:
+            try:
+                stop_active_worker(timeout=15.0)
+                if self._start_thread is not None and self._start_thread.is_alive():
+                    self._start_thread.join(timeout=25.0)
+                time.sleep(0.3)
+            except Exception as exc:  # noqa: BLE001
+                self._post("message", f"Falha ao mudar qualidade: {exc}")
+                self._post("busy", False)
+                self._quality_restart_lock.release()
+                return
+
+            self._post("busy", False)
+            self._post("message", "A iniciar transmissão…")
+            self._post("start_requested", True)
+            self._quality_restart_lock.release()
 
         def _post(self, kind: str, payload: Any = None) -> None:
             self._ui_queue.put((kind, payload))
@@ -588,6 +681,7 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
                 code = start_streaming_instance(
                     resolution=self._resolution,
                     demo_video_path=demo_path,
+                    send_quality=self._quality_key,
                 )
             except Exception as exc:  # noqa: BLE001
                 self._post("message", f"Falha ao iniciar: {exc}")
