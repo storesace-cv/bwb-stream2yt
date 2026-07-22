@@ -105,6 +105,14 @@ ENV_TEMPLATE_CONTENT = """# Configurações para stream_to_youtube.py
 #BWB_STATUS_TOKEN=
 #BWB_STATUS_LOG_FILE=logs/heartbeat-status.jsonl
 #BWB_STATUS_LOG_RETENTION_SECONDS=3600
+
+# Janela diária de transmissão.
+# Hora inicial, inclusive.
+#YT_DAY_START_HOUR=8
+# Hora final, exclusiva. Use 24 para permitir até ao fim do dia.
+#YT_DAY_END_HOUR=19
+# Offset horário aplicado sobre UTC.
+#YT_TZ_OFFSET_HOURS=1
 """
 
 

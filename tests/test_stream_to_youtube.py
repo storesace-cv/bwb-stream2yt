@@ -626,3 +626,105 @@ def test_main_accepts_fulldiags_flag(monkeypatch):
 
     assert exc.value.code == 0
     assert calls == [(None, True)]
+
+
+def _active_env_assignments(content: str) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for line in content.splitlines():
+        parsed = module._parse_env_assignment(line)
+        if not parsed:
+            continue
+        key, value, commented = parsed
+        if commented:
+            continue
+        values[key] = value
+    return values
+
+
+def test_sync_env_preserves_active_day_window_settings(tmp_path):
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "\n".join(
+            [
+                "YT_URL=rtmps://a.rtmps.youtube.com/live2/KEY",
+                "YT_DAY_START_HOUR=0",
+                "YT_DAY_END_HOUR=24",
+                "YT_TZ_OFFSET_HOURS=0",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    module._sync_env_against_template(env_path, module.ENV_TEMPLATE_CONTENT)
+
+    updated = env_path.read_text(encoding="utf-8")
+    active = _active_env_assignments(updated)
+
+    assert active["YT_DAY_START_HOUR"] == "0"
+    assert active["YT_DAY_END_HOUR"] == "24"
+    assert active["YT_TZ_OFFSET_HOURS"] == "0"
+    assert "desactualizados" not in updated
+    assert "YT_DAY_START_HOUR=0" in updated
+    assert "YT_DAY_END_HOUR=24" in updated
+    assert "YT_TZ_OFFSET_HOURS=0" in updated
+    assert "# YT_DAY_START_HOUR=" not in updated
+    assert "# YT_DAY_END_HOUR=" not in updated
+    assert "# YT_TZ_OFFSET_HOURS=" not in updated
+    assert active["YT_DAY_START_HOUR"] != "8"
+    assert active["YT_DAY_END_HOUR"] != "19"
+    assert active["YT_TZ_OFFSET_HOURS"] != "1"
+
+    backups = list(tmp_path.glob(".env.bak.*"))
+    assert len(backups) == 1
+
+
+def test_sync_env_adds_day_window_options_to_legacy_env(tmp_path):
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "\n".join(
+            [
+                "YT_URL=rtmps://a.rtmps.youtube.com/live2/KEY",
+                "YT_AUTOTUNE=0",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    module._sync_env_against_template(env_path, module.ENV_TEMPLATE_CONTENT)
+
+    updated = env_path.read_text(encoding="utf-8")
+    active = _active_env_assignments(updated)
+
+    assert "YT_DAY_START_HOUR" in updated
+    assert "YT_DAY_END_HOUR" in updated
+    assert "YT_TZ_OFFSET_HOURS" in updated
+    assert "Janela diária de transmissão" in updated
+    assert active["YT_URL"] == "rtmps://a.rtmps.youtube.com/live2/KEY"
+    assert active["YT_AUTOTUNE"] == "0"
+    assert active["YT_DAY_START_HOUR"] == "8"
+    assert active["YT_DAY_END_HOUR"] == "19"
+    assert active["YT_TZ_OFFSET_HOURS"] == "1"
+
+    if "desactualizados" in updated:
+        outdated_section = updated.split("desactualizados", 1)[-1]
+        assert "YT_DAY_START_HOUR" not in outdated_section
+        assert "YT_DAY_END_HOUR" not in outdated_section
+        assert "YT_TZ_OFFSET_HOURS" not in outdated_section
+
+    backups = list(tmp_path.glob(".env.bak.*"))
+    assert len(backups) == 1
+
+
+def test_sync_env_day_keys_present_in_example_and_embedded_templates():
+    example = (SRC_DIR / ".env.example").read_text(encoding="utf-8")
+    for key in ("YT_DAY_START_HOUR", "YT_DAY_END_HOUR", "YT_TZ_OFFSET_HOURS"):
+        assert key in example
+        assert key in module.ENV_TEMPLATE_CONTENT
+    assert "#YT_DAY_START_HOUR=8" in example
+    assert "#YT_DAY_END_HOUR=19" in example
+    assert "#YT_TZ_OFFSET_HOURS=1" in example
+    assert "#YT_DAY_START_HOUR=8" in module.ENV_TEMPLATE_CONTENT
+    assert "#YT_DAY_END_HOUR=19" in module.ENV_TEMPLATE_CONTENT
+    assert "#YT_TZ_OFFSET_HOURS=1" in module.ENV_TEMPLATE_CONTENT
