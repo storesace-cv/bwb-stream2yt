@@ -21,6 +21,11 @@ else:
 
 SRC_DIR = (BASE_DIR / ".." / "src").resolve()
 SCRIPT = SRC_DIR / "ui_launcher.py"
+ICON_PATH = (BASE_DIR / ".." / "assets" / "stream2yt-ui.ico").resolve()
+
+datas = []
+if ICON_PATH.is_file():
+    datas.append((str(ICON_PATH), "assets"))
 
 hiddenimports = [
     "PySide6.QtCore",
@@ -38,7 +43,7 @@ analysis = Analysis(
     [str(SCRIPT)],
     pathex=[str(SRC_DIR)],
     binaries=[],
-    datas=[],
+    datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
@@ -66,6 +71,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=str(ICON_PATH) if ICON_PATH.is_file() else None,
 )
 coll = COLLECT(
     exe,

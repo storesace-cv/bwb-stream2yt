@@ -1,3 +1,5 @@
+# Área local de troca (nunca versionar)
+/local/
 
 # Python
 __pycache__/

@@ -11,6 +11,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from preview_rtsp import (
@@ -48,6 +49,35 @@ INTERNET_OFFLINE_MESSAGE = (
 INTERNET_CHECK_URL = "https://www.youtube.com/generate_204"
 INTERNET_CHECK_TIMEOUT_SECONDS = 3.0
 INTERNET_CHECK_INTERVAL_SECONDS = 15.0
+APP_ICON_FILENAME = "stream2yt-ui.ico"
+
+
+def resolve_app_icon_path() -> Optional[Path]:
+    """Localiza o ícone da UI em desenvolvimento ou no bundle PyInstaller."""
+
+    candidates: list[Path] = []
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        base = Path(meipass)
+        candidates.append(base / "assets" / APP_ICON_FILENAME)
+        candidates.append(base / APP_ICON_FILENAME)
+
+    if getattr(sys, "frozen", False):
+        exe_dir = Path(sys.executable).resolve().parent
+        candidates.append(exe_dir / "assets" / APP_ICON_FILENAME)
+        candidates.append(exe_dir / APP_ICON_FILENAME)
+
+    src_dir = Path(__file__).resolve().parent
+    candidates.append(src_dir.parent / "assets" / APP_ICON_FILENAME)
+    candidates.append(src_dir / "assets" / APP_ICON_FILENAME)
+
+    for candidate in candidates:
+        try:
+            if candidate.is_file():
+                return candidate
+        except OSError:
+            continue
+    return None
 
 
 def check_internet_connectivity(
@@ -174,7 +204,7 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
 
     try:
         from PySide6.QtCore import Qt, QTimer, Signal
-        from PySide6.QtGui import QImage, QPixmap
+        from PySide6.QtGui import QIcon, QImage, QPixmap
         from PySide6.QtWidgets import (
             QApplication,
             QButtonGroup,
@@ -813,6 +843,15 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
 
     app = QApplication.instance() or QApplication(sys.argv)
     window = PrimaryMainWindow(resolution)
+    icon_path = resolve_app_icon_path()
+    if icon_path is not None:
+        try:
+            icon = QIcon(str(icon_path))
+            if not icon.isNull():
+                app.setWindowIcon(icon)
+                window.setWindowIcon(icon)
+        except Exception:  # noqa: BLE001
+            pass
     window.shutdown_finished.connect(app.quit)
     window.show()
     return int(app.exec())
