@@ -381,7 +381,9 @@ class ServiceManager:
                 capture_output=True,
                 text=True,
             )
-            if status.returncode != 0 or status.stdout.strip() == "inactive":
+            # Só confiar em "inactive" quando is-active teve sucesso.
+            # Se sudo/is-active falhar, continuar e tentar stop (idempotente).
+            if status.returncode == 0 and status.stdout.strip() == "inactive":
                 LOGGER.debug("Serviço %s já está inativo", self.name)
                 return True
 

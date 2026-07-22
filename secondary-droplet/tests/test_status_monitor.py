@@ -575,3 +575,25 @@ def test_rtsp_camera_absent_still_activates_bars_when_unhealthy(
     assert (
         monitor.settings.mode_file.read_text(encoding="utf-8").strip() == "smptehdbars"
     )
+
+
+def test_ensure_stopped_tries_stop_when_is_active_fails(monkeypatch) -> None:
+    manager = status_monitor.ServiceManager(name="youtube-fallback.service")
+    calls: list[tuple[str, ...]] = []
+
+    def fake_run(cmd, check=False, capture_output=True, text=True):  # noqa: ANN001
+        calls.append(tuple(cmd))
+        if "is-active" in cmd:
+            return SimpleNamespace(
+                returncode=1, stdout="", stderr="sudo: a password is required"
+            )
+        if "stop" in cmd:
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+        return SimpleNamespace(returncode=1, stdout="", stderr="unexpected")
+
+    monkeypatch.setattr(status_monitor.subprocess, "run", fake_run)
+    monkeypatch.setattr(status_monitor.os, "geteuid", lambda: 1000)
+
+    assert manager.ensure_stopped() is True
+    assert any("is-active" in call for call in calls)
+    assert any("stop" in call for call in calls)
