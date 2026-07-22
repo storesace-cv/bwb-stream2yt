@@ -11,7 +11,12 @@ from typing import Optional
 
 import pytest
 
-MODULE_PATH = Path(__file__).resolve().parents[1] / "primary-windows" / "src" / "stream_to_youtube.py"
+MODULE_PATH = (
+    Path(__file__).resolve().parents[1]
+    / "primary-windows"
+    / "src"
+    / "stream_to_youtube.py"
+)
 SRC_DIR = MODULE_PATH.parent
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
@@ -55,7 +60,9 @@ class DummyWorker:
         self._running = True
         self.started.set()
 
-    def stop(self, timeout: float | None = None) -> None:  # pragma: no cover - timeout unused
+    def stop(
+        self, timeout: float | None = None
+    ) -> None:  # pragma: no cover - timeout unused
         if self._running:
             self.stop_called.set()
         self._running = False
@@ -214,7 +221,9 @@ def test_run_forever_stops_when_sentinel_tripped(tmp_path, monkeypatch):
     module._clear_stop_request()
 
     worker = DummyWorker()
-    runner = threading.Thread(target=module.run_forever, kwargs={"existing_worker": worker})
+    runner = threading.Thread(
+        target=module.run_forever, kwargs={"existing_worker": worker}
+    )
     runner.start()
     try:
         assert worker.started.wait(1.0)
@@ -239,7 +248,9 @@ def test_clear_stale_stop_request_removes_obsolete_flag(tmp_path, monkeypatch):
     pid_path.write_text("9999", encoding="utf-8")
 
     events = []
-    monkeypatch.setattr(module, "log_event", lambda *args, **kwargs: events.append(args))
+    monkeypatch.setattr(
+        module, "log_event", lambda *args, **kwargs: events.append(args)
+    )
     monkeypatch.setattr(module, "_stop_sentinel_path", lambda: sentinel)
     monkeypatch.setattr(module, "_pid_file_path", lambda: pid_path)
     monkeypatch.setattr(module, "_is_pid_running", lambda pid: False)
@@ -278,7 +289,9 @@ def test_clear_stale_stop_request_discards_old_flag_even_with_active_pid(
     os.utime(sentinel, (old_mtime, old_mtime))
 
     events = []
-    monkeypatch.setattr(module, "log_event", lambda *args, **kwargs: events.append(args))
+    monkeypatch.setattr(
+        module, "log_event", lambda *args, **kwargs: events.append(args)
+    )
     monkeypatch.setattr(module, "_stop_sentinel_path", lambda: sentinel)
     monkeypatch.setattr(module, "_pid_file_path", lambda: pid_path)
     monkeypatch.setattr(module, "_is_pid_running", lambda pid: True)
@@ -300,6 +313,7 @@ def test_startup_log_removed_after_successful_launch(tmp_path, monkeypatch):
     monkeypatch.setattr(module, "_pid_file_path", lambda: pid_path)
     monkeypatch.setattr(module, "_clear_stale_stop_request", lambda: None)
     monkeypatch.setattr(module, "_ensure_signal_handlers", lambda: None)
+
     def _fake_run_forever(*args, **kwargs):
         callback = kwargs.get("startup_confirmed_callback")
         if callback:
@@ -375,7 +389,9 @@ def test_stop_streaming_instance_waits_for_orderly_shutdown(tmp_path, monkeypatc
     module._clear_stop_request()
 
     worker = DummyWorker()
-    runner = threading.Thread(target=module.run_forever, kwargs={"existing_worker": worker})
+    runner = threading.Thread(
+        target=module.run_forever, kwargs={"existing_worker": worker}
+    )
     runner.start()
     try:
         assert worker.started.wait(1.0)
@@ -459,7 +475,9 @@ def test_write_full_diagnostics_creates_file(tmp_path, monkeypatch):
                 "ffprobe_available": True,
             }
 
-        def confirm_signal(self, force: bool = False):  # noqa: D401 - signature matches real monitor
+        def confirm_signal(
+            self, force: bool = False
+        ):  # noqa: D401 - signature matches real monitor
             return True
 
         def snapshot(self):

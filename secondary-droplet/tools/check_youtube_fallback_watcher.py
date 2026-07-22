@@ -42,7 +42,9 @@ def iter_ticks(lines: Iterable[str]) -> Sequence[Tuple[dt.datetime, str]]:
     return entries
 
 
-def summarize_deltas(timestamps: Sequence[dt.datetime]) -> Tuple[Optional[float], Optional[float], Optional[float]]:
+def summarize_deltas(
+    timestamps: Sequence[dt.datetime],
+) -> Tuple[Optional[float], Optional[float], Optional[float]]:
     if len(timestamps) < 2:
         return None, None, None
     deltas = [
@@ -130,7 +132,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.show > 0 and len(ticks) >= 2:
         print("\nÚltimos deltas:")
-        for (prev_ts, _), (curr_ts, line) in zip(ticks[-(args.show + 1):-1], ticks[-args.show:]):
+        for (prev_ts, _), (curr_ts, line) in zip(
+            ticks[-(args.show + 1) : -1], ticks[-args.show :]
+        ):
             delta = (curr_ts - prev_ts).total_seconds()
             print(f"  {curr_ts.isoformat()} Δ={delta:.3f}s :: {line}")
 

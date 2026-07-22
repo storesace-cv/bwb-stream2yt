@@ -22,7 +22,6 @@ import urllib.parse
 from contextlib import suppress
 from dataclasses import dataclass, replace
 from pathlib import Path
-import textwrap
 import re
 from typing import Any, Callable, Dict, Optional, TextIO
 
@@ -220,7 +219,9 @@ class _StartupLogger:
             self._handle = None
         return self
 
-    def __exit__(self, exc_type, exc, tb) -> None:  # noqa: D401 - context manager contract
+    def __exit__(
+        self, exc_type, exc, tb
+    ) -> None:  # noqa: D401 - context manager contract
         handle = self._handle
         if handle is not None:
             handle.close()
@@ -367,9 +368,7 @@ def _acquire_single_instance_mutex() -> None:
     handle = kernel32.CreateMutexW(None, False, _INSTANCE_MUTEX_NAME)
     if not handle:
         error_code = ctypes.get_last_error()
-        raise OSError(
-            f"Falha ao criar mutex de instância única (erro {error_code})."
-        )
+        raise OSError(f"Falha ao criar mutex de instância única (erro {error_code}).")
 
     ERROR_ALREADY_EXISTS = 183
     last_error = ctypes.get_last_error()
@@ -519,9 +518,7 @@ def _clear_stale_stop_request() -> None:
 
     _clear_stop_request()
     if stale_due_to_age:
-        reason = (
-            "Sentinela de parada antiga detectada; removendo devido a expiração."
-        )
+        reason = "Sentinela de parada antiga detectada; removendo devido a expiração."
     else:
         reason = (
             "Sentinela de parada obsoleta detectada; removendo antes da inicialização."
@@ -870,35 +867,36 @@ def _collect_full_diagnostics(config: "StreamingConfig") -> str:
     elif active_worker is None:
         summary_lines.append("- Worker em execução: não inicializado")
     elif worker_error:
-        summary_lines.append(
-            f"- Worker em execução: desconhecido ({worker_error})"
-        )
+        summary_lines.append(f"- Worker em execução: desconhecido ({worker_error})")
 
     if camera_result is True:
-        detail = camera_snapshot.get("last_success") or "último probe bem-sucedido desconhecido"
-        summary_lines.append(f"- Sinal da câmara: disponível (último sucesso: {detail})")
+        detail = (
+            camera_snapshot.get("last_success")
+            or "último probe bem-sucedido desconhecido"
+        )
+        summary_lines.append(
+            f"- Sinal da câmara: disponível (último sucesso: {detail})"
+        )
     elif camera_result is False:
         detail = camera_error or "motivo desconhecido"
         summary_lines.append(f"- Sinal da câmara: indisponível ({detail})")
     else:
         detail = camera_error or "ver secção abaixo"
-        summary_lines.append(f"- Sinal da câmara: não foi possível determinar ({detail})")
+        summary_lines.append(
+            f"- Sinal da câmara: não foi possível determinar ({detail})"
+        )
 
     if ping_snapshot:
         reachable = ping_snapshot.get("reachable")
         if reachable is True:
             rtt_ms = ping_snapshot.get("rtt_ms")
             if isinstance(rtt_ms, (int, float)):
-                summary_lines.append(
-                    f"- Ping da câmara: alcançável ({rtt_ms:.1f} ms)"
-                )
+                summary_lines.append(f"- Ping da câmara: alcançável ({rtt_ms:.1f} ms)")
             else:
                 summary_lines.append("- Ping da câmara: alcançável")
         elif reachable is False:
             detail = ping_snapshot.get("last_error") or "sem resposta"
-            summary_lines.append(
-                f"- Ping da câmara: sem resposta ({detail})"
-            )
+            summary_lines.append(f"- Ping da câmara: sem resposta ({detail})")
         else:
             detail = ping_snapshot.get("last_error") or "não executado"
             summary_lines.append(
@@ -1138,7 +1136,9 @@ def _sync_env_against_template(env_path: Path, template_content: str) -> None:
     if backup_created:
         header_lines.append(f"# Backup anterior: {backup_path.name}")
     else:
-        header_lines.append("# ⚠️ Não foi possível criar o backup automático; revise manualmente antes de prosseguir.")
+        header_lines.append(
+            "# ⚠️ Não foi possível criar o backup automático; revise manualmente antes de prosseguir."
+        )
     header_lines.append("# Reveja os valores abaixo e ajuste conforme necessário.")
     header_lines.append("")
 
@@ -1197,7 +1197,9 @@ def _sync_env_against_template(env_path: Path, template_content: str) -> None:
         log_event("primary", message)
         return
 
-    message = "Arquivo .env atualizado automaticamente para alinhar com o template atual."
+    message = (
+        "Arquivo .env atualizado automaticamente para alinhar com o template atual."
+    )
     print(f"[primary] {message}")
     log_event("primary", message)
 
@@ -2139,9 +2141,7 @@ class CameraSignalMonitor:
         with self._lock:
             self._ffprobe_available = False
             if not self._ffprobe_warning_emitted:
-                message = (
-                    f"ffprobe ausente em {self._ffprobe}; desativando verificação do sinal da câmara."
-                )
+                message = f"ffprobe ausente em {self._ffprobe}; desativando verificação do sinal da câmara."
                 self._ffprobe_warning_emitted = True
             else:
                 message = ""
@@ -2185,13 +2185,12 @@ class CameraSignalMonitor:
 
     def _log_state_change(self, present: bool, error_text: Optional[str]) -> None:
         if present:
-            message = (
-                "Sinal da câmara restabelecido; retomando transmissão principal assim que possível."
-            )
+            message = "Sinal da câmara restabelecido; retomando transmissão principal assim que possível."
         else:
             detail = error_text or "sem vídeo detectado"
             message = (
-                "Sinal da câmara indisponível (%s); aguardando antes de transmitir." % detail
+                "Sinal da câmara indisponível (%s); aguardando antes de transmitir."
+                % detail
             )
 
         self._log("primary", message)
@@ -2340,7 +2339,10 @@ class StreamingWorker:
                         break
                     continue
 
-                if not self._config.demo_mode and not self._camera_monitor.confirm_signal():
+                if (
+                    not self._config.demo_mode
+                    and not self._camera_monitor.confirm_signal()
+                ):
                     wait_seconds = max(self._camera_monitor.retry_delay, 5.0)
                     if self._stop_event.wait(wait_seconds):
                         break
@@ -2393,9 +2395,7 @@ class StreamingWorker:
                         self._last_exit_code = None
                     except OSError as exc:
                         self._process = None
-                        self._progress.mark_error(
-                            str(exc), code="ffmpeg_start_failed"
-                        )
+                        self._progress.mark_error(str(exc), code="ffmpeg_start_failed")
                         log_event("primary", f"Falha ao iniciar ffmpeg: {exc}")
                         if self._stop_event.wait(5):
                             break
@@ -2820,7 +2820,9 @@ def _start_streaming_instance(
                     raise
 
             if not config.yt_url:
-                message = "Credenciais YT_URL/YT_KEY ausentes; streaming worker finalizado."
+                message = (
+                    "Credenciais YT_URL/YT_KEY ausentes; streaming worker finalizado."
+                )
                 logger.log(message)
                 print(f"[primary] {message}", file=sys.stderr)
                 log_event("primary", message)
@@ -3061,63 +3063,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-_STARTUP_LOG_ENV = "BWB_SERVICE_STARTUP_LOG"
-_DEFAULT_STARTUP_LOG_RELATIVE = Path(r"C:\bwb\apps\youtube\logs") / "stream2yt-service-startup.log"
-
-
-def _resolve_startup_log_path() -> Path:
-    override = os.environ.get(_STARTUP_LOG_ENV, "").strip()
-    if override:
-        expanded = os.path.expandvars(override)
-        candidate = Path(expanded).expanduser()
-        if not candidate.is_absolute():
-            candidate = (_script_base_dir() / candidate).resolve()
-        return candidate
-    return _DEFAULT_STARTUP_LOG_RELATIVE
-
-
-class _StartupLogger:
-    """Helper that captures startup diagnostics and cleans up on success."""
-
-    def __init__(self, path: Path) -> None:
-        self._path = path
-        self._handle: Optional[TextIO] = None
-        self._remove_on_exit = False
-
-    def __enter__(self) -> "_StartupLogger":
-        try:
-            self._path.parent.mkdir(parents=True, exist_ok=True)
-            self._handle = self._path.open("w", encoding="utf-8")
-            self.log(
-                "Log de arranque inicializado; a recolher diagnóstico do stream2yt-service."
-            )
-        except OSError:
-            self._handle = None
-        return self
-
-    def __exit__(self, exc_type, exc, tb) -> None:  # noqa: D401 - context manager contract
-        handle = self._handle
-        if handle is not None:
-            handle.close()
-            self._handle = None
-        if self._remove_on_exit:
-            with suppress(OSError):
-                self._path.unlink()
-
-    def log(self, message: str) -> None:
-        handle = self._handle
-        if handle is None:
-            return
-        timestamp = (
-            datetime.datetime.now(datetime.timezone.utc)
-            .replace(microsecond=0)
-            .isoformat()
-        )
-        try:
-            handle.write(f"[{timestamp}] {message}\n")
-            handle.flush()
-        except OSError:
-            pass
-
-    def mark_success(self) -> None:
-        self._remove_on_exit = True

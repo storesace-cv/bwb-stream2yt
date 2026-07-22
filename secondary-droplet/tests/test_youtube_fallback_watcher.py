@@ -7,7 +7,9 @@ from types import SimpleNamespace
 import pytest
 
 
-MODULE_PATH = Path(__file__).resolve().parent.parent / "bin" / "youtube_fallback_watcher.py"
+MODULE_PATH = (
+    Path(__file__).resolve().parent.parent / "bin" / "youtube_fallback_watcher.py"
+)
 SPEC = importlib.util.spec_from_file_location("youtube_fallback_watcher", MODULE_PATH)
 assert SPEC and SPEC.loader is not None
 module = importlib.util.module_from_spec(SPEC)

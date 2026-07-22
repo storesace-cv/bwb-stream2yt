@@ -159,9 +159,10 @@ def determine_expectation(
 def format_secondary_state(monitor_flag: bool, systemctl_output: str) -> str:
     monitor_label = "ATIVO" if monitor_flag else "INATIVO"
     service_label = "ATIVO" if systemctl_output == "active" else "INATIVO"
-    return (
-        "Monitor reporta fallback: %s | systemd: %s (%s)."
-        % (monitor_label, service_label, systemctl_output)
+    return "Monitor reporta fallback: %s | systemd: %s (%s)." % (
+        monitor_label,
+        service_label,
+        systemctl_output,
     )
 
 
@@ -371,9 +372,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     print()
     print("== Resultados ==")
-    print(
-        "Janela analisada: %s -> %s" % (start_time.isoformat(), end_time.isoformat())
-    )
+    print("Janela analisada: %s -> %s" % (start_time.isoformat(), end_time.isoformat()))
     print(f"Heartbeats recebidos: {total}")
     if machines:
         print("Máquinas de origem: %s" % ", ".join(machines))
@@ -398,7 +397,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             % intervals
         )
 
-    expectation, expect_active = determine_expectation(entries, end_time, missed_threshold)
+    expectation, expect_active = determine_expectation(
+        entries, end_time, missed_threshold
+    )
     print(expectation)
 
     print(format_secondary_state(fallback_flag, systemctl_output))

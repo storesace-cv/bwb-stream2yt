@@ -147,11 +147,15 @@ class MonitorSettings:
 
         bind = _get_env("YTR_BIND", "BWB_STATUS_BIND") or "0.0.0.0"
         port = _int(("YTR_PORT", "BWB_STATUS_PORT"), 8080)
-        missed_threshold = _int(("YTR_MISSED_THRESHOLD", "BWB_STATUS_MISSED_THRESHOLD"), 40)
+        missed_threshold = _int(
+            ("YTR_MISSED_THRESHOLD", "BWB_STATUS_MISSED_THRESHOLD"), 40
+        )
         check_interval = _int(("YTR_CHECK_INTERVAL", "BWB_STATUS_CHECK_INTERVAL"), 5)
 
         log_override = _get_env("YTR_LOG_FILE", "BWB_STATUS_LOG_FILE")
-        secondary_override = _get_env("YTR_SECONDARY_SERVICE", "BWB_STATUS_SECONDARY_SERVICE")
+        secondary_override = _get_env(
+            "YTR_SECONDARY_SERVICE", "BWB_STATUS_SECONDARY_SERVICE"
+        )
         mode_override = _get_env(
             "YTR_FALLBACK_MODE_FILE", "BWB_STATUS_FALLBACK_MODE_FILE"
         )
@@ -222,9 +226,7 @@ class MonitorSettings:
 
         refresh_flag = _maybe_bool("YTR_REFRESH_ON_STOP")
         refresh_on_stop = (
-            refresh_flag
-            if refresh_flag is not None
-            else cls.refresh_on_stop
+            refresh_flag if refresh_flag is not None else cls.refresh_on_stop
         )
 
         refresh_token_raw = _get_env(
@@ -423,23 +425,17 @@ class YouTubeRefresher:
                 )
                 return
             self._last_request = now
-            thread = threading.Thread(
-                target=self._run, name="yt-refresh", daemon=True
-            )
+            thread = threading.Thread(target=self._run, name="yt-refresh", daemon=True)
             self._current_thread = thread
 
         thread.start()
 
     def _run(self) -> None:
         try:
-            LOGGER.info(
-                "Solicitando refresh da ingestão primária via API do YouTube."
-            )
+            LOGGER.info("Solicitando refresh da ingestão primária via API do YouTube.")
             self._perform_refresh()
         except Exception as exc:  # noqa: BLE001
-            LOGGER.exception(
-                "Erro ao executar refresh da ingestão primária: %s", exc
-            )
+            LOGGER.exception("Erro ao executar refresh da ingestão primária: %s", exc)
         finally:
             with self._lock:
                 self._current_thread = None
@@ -461,9 +457,7 @@ class YouTubeRefresher:
             LOGGER.warning("Transmissão activa sem ID; refresh ignorado.")
             return
 
-        lifecycle = str(
-            broadcast.get("status", {}).get("lifeCycleStatus", "")
-        ).lower()
+        lifecycle = str(broadcast.get("status", {}).get("lifeCycleStatus", "")).lower()
 
         targets: list[str] = []
         for target in self._transitions:
@@ -541,9 +535,7 @@ class YouTubeRefresher:
         order = {"live": 0, "testing": 1, "ready": 2, "created": 3, "scheduled": 4}
 
         def _priority(entry: Dict[str, Any]) -> int:
-            lifecycle = str(
-                entry.get("status", {}).get("lifeCycleStatus", "")
-            ).lower()
+            lifecycle = str(entry.get("status", {}).get("lifeCycleStatus", "")).lower()
             return order.get(lifecycle, 99)
 
         return min(items, key=_priority)
@@ -751,9 +743,7 @@ class StatusMonitor:
             if not fallback_active or fallback_reason != "no_heartbeats":
                 self._activate_missing_heartbeats(int(elapsed))
         else:
-            LOGGER.debug(
-                "Heartbeat recente ha %.1fs; fallback desnecessario", elapsed
-            )
+            LOGGER.debug("Heartbeat recente ha %.1fs; fallback desnecessario", elapsed)
 
     def _write_mode_file(self, mode: str) -> None:
         path = self._mode_file
@@ -762,9 +752,7 @@ class StatusMonitor:
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
         except OSError as exc:
-            LOGGER.warning(
-                "Não foi possível preparar diretório para %s: %s", path, exc
-            )
+            LOGGER.warning("Não foi possível preparar diretório para %s: %s", path, exc)
             return
         try:
             path.write_text(f"{mode.strip().lower()}\n", encoding="utf-8")
@@ -778,7 +766,11 @@ class StatusMonitor:
                     "Garanta que yt-restapi.service pré-cria /run/youtube-fallback/mode "
                     "com permissões de escrita para a conta yt-restapi ou defina "
                     "YTR_FALLBACK_MODE_FILE para um caminho acessível.",
-                    pwd.getpwuid(os.geteuid()).pw_name if hasattr(pwd, "getpwuid") else os.geteuid(),
+                    (
+                        pwd.getpwuid(os.geteuid()).pw_name
+                        if hasattr(pwd, "getpwuid")
+                        else os.geteuid()
+                    ),
                     path,
                 )
 
@@ -912,7 +904,9 @@ class StatusMonitor:
 
         return reachable
 
-    def _ping_host(self, host: str) -> tuple[Optional[bool], Optional[float], Optional[str]]:
+    def _ping_host(
+        self, host: str
+    ) -> tuple[Optional[bool], Optional[float], Optional[str]]:
         command = self._ping_command
         if not command:
             return None, None, "comando ping não encontrado"
@@ -1030,9 +1024,7 @@ class StatusMonitor:
                 self._fallback_reason = None
 
     def _activate_missing_heartbeats(self, elapsed: int) -> None:
-        LOGGER.warning(
-            "Sem heartbeats há %s segundos; solicitando fallback.", elapsed
-        )
+        LOGGER.warning("Sem heartbeats há %s segundos; solicitando fallback.", elapsed)
         self._write_mode_file("life")
         if self._service_manager.ensure_started():
             with self._lock:
@@ -1217,9 +1209,7 @@ def run_server(settings: MonitorSettings, args: argparse.Namespace) -> None:
                 "Libere a porta ou ajuste BWB_STATUS_PORT/--port antes de reiniciar o monitor."
             )
         else:
-            LOGGER.exception(
-                "Falha ao iniciar servidor HTTP em %s:%s", bind, port
-            )
+            LOGGER.exception("Falha ao iniciar servidor HTTP em %s:%s", bind, port)
         monitor.shutdown()
         raise SystemExit(1) from exc
 

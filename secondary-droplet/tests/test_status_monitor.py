@@ -12,7 +12,6 @@ from typing import Dict, Optional
 import pytest
 
 
-
 MODULE_PATH = Path(__file__).resolve().parent.parent / "bin" / "bwb_status_monitor.py"
 SPEC = importlib.util.spec_from_file_location("bwb_status_monitor", MODULE_PATH)
 assert SPEC and SPEC.loader is not None
@@ -116,8 +115,7 @@ def test_camera_absence_triggers_smpte(monitor: StatusMonitor) -> None:
     assert snapshot["fallback_reason"] == "no_camera_signal"
     assert snapshot["last_camera_signal"]["present"] is False
     assert (
-        monitor.settings.mode_file.read_text(encoding="utf-8").strip()
-        == "smptehdbars"
+        monitor.settings.mode_file.read_text(encoding="utf-8").strip() == "smptehdbars"
     )
 
 
@@ -290,7 +288,9 @@ def test_post_requires_bearer_token(tmp_path: Path):
         monitor.shutdown()
 
 
-def test_snapshot_marks_camera_signal_stale(monkeypatch, monitor: StatusMonitor) -> None:
+def test_snapshot_marks_camera_signal_stale(
+    monkeypatch, monitor: StatusMonitor
+) -> None:
     base_time = dt.datetime(2025, 10, 13, 0, 0, tzinfo=dt.timezone.utc)
     monkeypatch.setattr(status_monitor, "utc_now", lambda: base_time)
 

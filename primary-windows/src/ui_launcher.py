@@ -3,8 +3,6 @@
 
 from __future__ import annotations
 
-import sys
-
 from stream_to_youtube import _ensure_signal_handlers
 from ui_app import run_ui_app
 

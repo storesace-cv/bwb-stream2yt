@@ -159,7 +159,9 @@ def test_error_state():
     assert tracker.rtmps_send_state() == STATE_ERROR
     snap = tracker.metrics_snapshot()
     assert snap["error_detail"] == "código 1"
-    assert any(event["code"] == "ffmpeg_exit_error" for event in tracker.events.recent())
+    assert any(
+        event["code"] == "ffmpeg_exit_error" for event in tracker.events.recent()
+    )
 
 
 def test_event_bus_ring_buffer_and_human_messages():

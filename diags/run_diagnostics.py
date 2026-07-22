@@ -82,7 +82,9 @@ def run_command(args: Sequence[str]) -> CommandResult:
         return CommandResult(args, 127, "", "comando não encontrado")
     except Exception as exc:  # noqa: BLE001 - include unexpected exceptions
         return CommandResult(args, 1, "", f"falha inesperada: {exc}")
-    return CommandResult(args, completed.returncode, completed.stdout.strip(), completed.stderr.strip())
+    return CommandResult(
+        args, completed.returncode, completed.stdout.strip(), completed.stderr.strip()
+    )
 
 
 def ensure_history_dir(path: Path) -> None:
@@ -131,7 +133,9 @@ def parse_systemctl_show(output: str) -> Dict[str, str]:
     return data
 
 
-def systemctl_show(service: str, properties: Iterable[str]) -> Tuple[Dict[str, str], CommandResult]:
+def systemctl_show(
+    service: str, properties: Iterable[str]
+) -> Tuple[Dict[str, str], CommandResult]:
     args = ["systemctl", "show", service]
     for prop in properties:
         args.append(f"-p{prop}")
@@ -215,7 +219,9 @@ def gather_service_inspection(service: str) -> Dict[str, object]:
     status = run_command((*SERVICE_STATUS_ARGS, service))
     is_enabled = run_command(("systemctl", "is-enabled", service))
     is_active = run_command(("systemctl", "is-active", service))
-    journal = run_command((*SERVICE_JOURNAL_ARGS, "-u", service, "-n", str(SERVICE_LOG_LINES)))
+    journal = run_command(
+        (*SERVICE_JOURNAL_ARGS, "-u", service, "-n", str(SERVICE_LOG_LINES))
+    )
     unit_cat = run_command(("systemctl", "cat", service))
 
     raw_exec = show_data.get("ExecStart", "")
@@ -248,14 +254,18 @@ def gather_binary_details(binary: Optional[str]) -> List[str]:
         lines.append("ExecStart não apresenta um executável identificável.")
         return lines
 
-    which_result = run_command(("which", binary)) if not Path(binary).is_absolute() else None
+    which_result = (
+        run_command(("which", binary)) if not Path(binary).is_absolute() else None
+    )
     if which_result:
         if which_result.returncode == 0 and which_result.stdout:
             resolved = Path(which_result.stdout.splitlines()[-1].strip())
             lines.append(f"which {binary}: {which_result.stdout}")
         else:
             resolved = Path(binary)
-            lines.append(f"which {binary} falhou: {which_result.stderr or which_result.stdout}")
+            lines.append(
+                f"which {binary} falhou: {which_result.stderr or which_result.stdout}"
+            )
     else:
         resolved = Path(binary)
 
@@ -266,7 +276,9 @@ def gather_binary_details(binary: Optional[str]) -> List[str]:
     if readlink_result.returncode == 0 and readlink_result.stdout:
         lines.append(f"Destino real: {readlink_result.stdout}")
     else:
-        lines.append(f"readlink -f falhou: {readlink_result.stderr or readlink_result.stdout}")
+        lines.append(
+            f"readlink -f falhou: {readlink_result.stderr or readlink_result.stdout}"
+        )
 
     ldd_result = run_command(("ldd", str(resolved)))
     lines.append(ldd_result.format())
@@ -283,7 +295,11 @@ def gather_environment_info(paths: Mapping[str, Path]) -> List[str]:
     defaults_content = load_file(paths["defaults"])
     sections.append(f"--- {paths['defaults']} ---\n{defaults_content}".rstrip())
 
-    progress_content = load_file(paths["progress"]) if paths["progress"].exists() else "<sem progresso disponível>"
+    progress_content = (
+        load_file(paths["progress"])
+        if paths["progress"].exists()
+        else "<sem progresso disponível>"
+    )
     sections.append(f"--- {paths['progress']} ---\n{progress_content}".rstrip())
 
     log_path = paths["log"]
@@ -314,7 +330,9 @@ def gather_network_info(port: int) -> List[CommandResult]:
     ss_result = run_command(("ss", "-ltnp"))
     results.append(ss_result)
     if ss_result.stdout:
-        matching = [line for line in ss_result.stdout.splitlines() if f":{port}" in line]
+        matching = [
+            line for line in ss_result.stdout.splitlines() if f":{port}" in line
+        ]
         combined = "\n".join(matching) if matching else "<nenhum processo a ouvir>"
         results.append(CommandResult(("ss", f"grep-port-{port}"), 0, combined, ""))
     else:
@@ -336,18 +354,24 @@ def gather_resource_info() -> List[CommandResult]:
     return [run_command(cmd) for cmd in commands]
 
 
-def gather_process_checks(services: Sequence[str], inspections: Mapping[str, Dict[str, object]]) -> List[str]:
+def gather_process_checks(
+    services: Sequence[str], inspections: Mapping[str, Dict[str, object]]
+) -> List[str]:
     lines: List[str] = []
     for service in services:
         inspection = inspections.get(service)
         show_data_value = inspection.get("show_data") if inspection else None
-        show_data: Dict[str, str] = show_data_value if isinstance(show_data_value, dict) else {}
+        show_data: Dict[str, str] = (
+            show_data_value if isinstance(show_data_value, dict) else {}
+        )
         main_pid = show_data.get("MainPID")
         if main_pid and main_pid != "0":
             ps_result = run_command(("ps", "-fp", main_pid))
             lines.append(ps_result.format())
         else:
-            lines.append(f"Sem processo activo para {service} (MainPID={main_pid or 'desconhecido'}).")
+            lines.append(
+                f"Sem processo activo para {service} (MainPID={main_pid or 'desconhecido'})."
+            )
         grep_boot = run_command(
             (
                 "bash",
@@ -367,7 +391,9 @@ def gather_process_checks(services: Sequence[str], inspections: Mapping[str, Dic
         lines.append("Processos zombie detectados:")
         lines.append(zombies.stdout)
     else:
-        lines.append("Sem processos zombie detectados (comando: ps -eo pid,ppid,stat,comm | awk '$3 ~ /Z/ {print}' ).")
+        lines.append(
+            "Sem processos zombie detectados (comando: ps -eo pid,ppid,stat,comm | awk '$3 ~ /Z/ {print}' )."
+        )
         if zombies.stderr:
             lines.append(f"stderr: {zombies.stderr}")
     for service in services:
@@ -379,7 +405,9 @@ def gather_process_checks(services: Sequence[str], inspections: Mapping[str, Dic
             )
         )
         if duplicates.stdout:
-            lines.append(f"Instâncias systemd correspondentes a {service}:\n{duplicates.stdout}")
+            lines.append(
+                f"Instâncias systemd correspondentes a {service}:\n{duplicates.stdout}"
+            )
         else:
             lines.append(f"Sem instâncias duplicadas para {service}.")
             if duplicates.stderr:
@@ -434,7 +462,9 @@ def summarise_final(
         for entry in errors[:10]:
             lines.append(f"  - {entry}")
     else:
-        lines.append("Journalctl não contém entradas com palavras-chave de erro nas últimas linhas.")
+        lines.append(
+            "Journalctl não contém entradas com palavras-chave de erro nas últimas linhas."
+        )
 
     is_active_rc = fallback["is_active"].returncode  # type: ignore[index]
     state_desc = fallback["is_active"].stdout or fallback["is_active"].stderr  # type: ignore[index]
@@ -450,7 +480,9 @@ def summarise_final(
         "Sugestão: validar logs acima, considerar 'systemctl restart youtube-fallback' após corrigir causa raiz."
     )
     timestamp = _dt.datetime.now(_dt.timezone.utc).isoformat()
-    lines.append(f"Análise concluída em {timestamp}Z. Duração total: {duration_s:.1f}s.")
+    lines.append(
+        f"Análise concluída em {timestamp}Z. Duração total: {duration_s:.1f}s."
+    )
     return lines
 
 
@@ -491,7 +523,8 @@ def gather_diagnostics(args: argparse.Namespace) -> str:
         lines.append(inspection["is_active"].format())
         show_data: Dict[str, str] = inspection["show_data"]  # type: ignore[assignment]
         lines.append(
-            "Resumo: ActiveState=%s SubState=%s MainPID=%s User=%s" % (
+            "Resumo: ActiveState=%s SubState=%s MainPID=%s User=%s"
+            % (
                 show_data.get("ActiveState", "?"),
                 show_data.get("SubState", "?"),
                 show_data.get("MainPID", "?"),
@@ -522,11 +555,20 @@ def gather_diagnostics(args: argparse.Namespace) -> str:
         lines.append("")
     venv_path = args.repo_root / ".venv"
     if venv_path.exists():
-        lines.append(f"Ambiente virtual detectado: {format_path_permissions(venv_path)}")
-        lines.append(run_command(("bash", "-lc", f"source {venv_path}/bin/activate && python -m pip check")).format())
+        lines.append(
+            f"Ambiente virtual detectado: {format_path_permissions(venv_path)}"
+        )
+        lines.append(
+            run_command(
+                (
+                    "bash",
+                    "-lc",
+                    f"source {venv_path}/bin/activate && python -m pip check",
+                )
+            ).format()
+        )
     else:
         lines.append("Sem ambiente virtual '.venv' detectado na raiz do repositório.")
-
 
     lines.append("== 5. Configuração da Unit e Environment ==")
     for service, inspection in inspections.items():
@@ -563,7 +605,9 @@ def gather_diagnostics(args: argparse.Namespace) -> str:
         lines.append(f"Utilizador {user}: {'existe' if exists else 'não existe'}.")
         log_path = args.log_path
         can_write = log_path.exists() and os.access(log_path.parent, os.W_OK)
-        lines.append(f"Acesso ao directório de logs ({log_path.parent}): {'ok' if can_write else 'sem escrita'}")
+        lines.append(
+            f"Acesso ao directório de logs ({log_path.parent}): {'ok' if can_write else 'sem escrita'}"
+        )
     if expected_port < 1024:
         lines.append(
             f"Porta configurada ({expected_port}) é privilegiada: requer privilégios de root ou capabilities."

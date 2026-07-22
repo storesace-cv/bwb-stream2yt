@@ -199,7 +199,9 @@ class FFmpegProgressTracker:
             self._last_state = STATE_STOPPED
         self._event_bus.emit_human("session_stopped", detail=detail)
 
-    def mark_error(self, detail: Optional[str] = None, *, code: str = "ffmpeg_exit_error") -> None:
+    def mark_error(
+        self, detail: Optional[str] = None, *, code: str = "ffmpeg_exit_error"
+    ) -> None:
         with self._lock:
             self._session_active = False
             self._error_active = True

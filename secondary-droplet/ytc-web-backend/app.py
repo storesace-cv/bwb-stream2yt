@@ -1,4 +1,5 @@
 """Microserviço FastAPI que expõe o estado actual do canal YouTube."""
+
 from __future__ import annotations
 
 import logging
@@ -21,6 +22,7 @@ SCOPES = (
     "https://www.googleapis.com/auth/youtube",
 )
 
+
 def _env_int(name: str, default: int) -> int:
     value = os.getenv(name)
     if value is None:
@@ -28,9 +30,12 @@ def _env_int(name: str, default: int) -> int:
     try:
         parsed = int(value)
     except ValueError:
-        logger.warning("Variável %s com valor inválido '%s'; usando %s", name, value, default)
+        logger.warning(
+            "Variável %s com valor inválido '%s'; usando %s", name, value, default
+        )
         return default
     return parsed
+
 
 TOKEN_PATH = os.getenv("YT_OAUTH_TOKEN_PATH", "/root/token.json")
 CACHE_TTL_SECONDS = max(5, _env_int("YTC_WEB_CACHE_TTL", 30))
@@ -40,8 +45,14 @@ app = FastAPI()
 
 _cache: Dict[str, Any] = {"expires": 0.0, "payload": None}
 
+
 def _iso_now() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return (
+        datetime.now(timezone.utc)
+        .replace(microsecond=0)
+        .isoformat()
+        .replace("+00:00", "Z")
+    )
 
 
 def _status_from_lifecycle(lifecycle: Optional[str]) -> str:
@@ -74,7 +85,8 @@ def _build_payload() -> Dict[str, Any]:
         (
             it
             for it in items
-            if it.get("status", {}).get("lifeCycleStatus") in {"live", "testing", "ready"}
+            if it.get("status", {}).get("lifeCycleStatus")
+            in {"live", "testing", "ready"}
         ),
         None,
     )
@@ -99,11 +111,7 @@ def _build_payload() -> Dict[str, Any]:
 
     stream_id = target.get("contentDetails", {}).get("boundStreamId")
     if stream_id:
-        streams = (
-            yt.liveStreams()
-            .list(part="id,status,cdn", id=stream_id)
-            .execute()
-        )
+        streams = yt.liveStreams().list(part="id,status,cdn", id=stream_id).execute()
         stream_items = streams.get("items", [])
         if stream_items:
             stream = stream_items[0]

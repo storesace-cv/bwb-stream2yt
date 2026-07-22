@@ -9,8 +9,6 @@ import time
 import types
 from pathlib import Path
 
-import pytest
-
 SRC_DIR = Path(__file__).resolve().parents[1] / "primary-windows" / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
@@ -27,7 +25,9 @@ from preview_rtsp import build_preview_command  # noqa: E402
 from ui_app import derive_camera_status, replace_active_preview  # noqa: E402
 
 MODULE_PATH = SRC_DIR / "stream_to_youtube.py"
-SPEC = importlib.util.spec_from_file_location("_stream_to_youtube_demo_test", MODULE_PATH)
+SPEC = importlib.util.spec_from_file_location(
+    "_stream_to_youtube_demo_test", MODULE_PATH
+)
 assert SPEC and SPEC.loader
 module = importlib.util.module_from_spec(SPEC)
 sys.modules["_stream_to_youtube_demo_test"] = module
@@ -48,9 +48,7 @@ SPEC.loader.exec_module(module)
 
 def test_default_demo_path():
     assert resolve_demo_video_path(environ={}) == DEFAULT_DEMO_VIDEO_PATH
-    assert DEFAULT_DEMO_VIDEO_PATH.endswith(
-        "bbb_sunflower_1080p_30fps_normal.mp4"
-    )
+    assert DEFAULT_DEMO_VIDEO_PATH.endswith("bbb_sunflower_1080p_30fps_normal.mp4")
 
 
 def test_demo_path_env_override(monkeypatch):
