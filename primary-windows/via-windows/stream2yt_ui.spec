@@ -29,6 +29,7 @@ hiddenimports = [
     "ui_app",
     "observability",
     "preview_rtsp",
+    "process_launch",
     "stream_to_youtube",
     "autotune",
 ]

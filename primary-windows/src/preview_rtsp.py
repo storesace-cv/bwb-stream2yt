@@ -8,6 +8,8 @@ import threading
 import time
 from typing import Callable, List, Optional, Sequence
 
+from process_launch import hidden_process_kwargs
+
 SOI = b"\xff\xd8"
 EOI = b"\xff\xd9"
 
@@ -215,6 +217,7 @@ class PreviewSession:
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     bufsize=0,
+                    **hidden_process_kwargs(),
                 )
             except OSError as exc:
                 self._emit_status(

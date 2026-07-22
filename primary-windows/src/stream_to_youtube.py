@@ -41,6 +41,7 @@ from send_quality import (
     get_send_quality_profile,
     normalize_send_quality,
 )
+from process_launch import hidden_process_kwargs
 from observability import FFmpegProgressTracker
 
 
@@ -2124,6 +2125,7 @@ class CameraSignalMonitor:
                 text=True,
                 timeout=timeout,
                 check=False,
+                **hidden_process_kwargs(),
             )
         except FileNotFoundError as exc:
             error_text = f"ffprobe não encontrado: {exc}"
@@ -2415,6 +2417,7 @@ class StreamingWorker:
                             encoding="utf-8",
                             errors="replace",
                             bufsize=1,
+                            **hidden_process_kwargs(),
                         )
                         self._last_launch_time = time.time()
                         self._last_exit_code = None
