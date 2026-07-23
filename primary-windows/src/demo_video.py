@@ -43,8 +43,7 @@ def build_demo_input_args(video_path: Optional[str] = None) -> List[str]:
 
 
 def demo_video_missing_message(video_path: Optional[str] = None) -> str:
-    path = resolve_demo_video_path(explicit=video_path)
-    return f"Vídeo de demonstração não encontrado: {path}"
+    return "O vídeo de demonstração selecionado não foi encontrado."
 
 
 def demo_video_exists(video_path: Optional[str] = None) -> bool:

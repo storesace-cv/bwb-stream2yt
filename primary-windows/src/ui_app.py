@@ -26,8 +26,25 @@ from demo_video import (
     demo_video_missing_message,
     resolve_demo_video_path,
 )
+from ui_settings import (
+    VIDEO_SOURCE_CAMERA,
+    VIDEO_SOURCE_DEMO,
+    UiSettings,
+    create_qsettings_store,
+    format_audio_status,
+    format_schedule_status,
+    format_source_status,
+    load_ui_settings,
+    save_ui_settings,
+    validate_ui_settings,
+)
+from stream_audio import (
+    AUDIO_MODE_SILENT,
+    AUDIO_MODE_SOURCE,
+    NO_AUDIO_AVAILABLE_MESSAGE,
+    audio_mode_label,
+)
 from send_quality import (
-    DEFAULT_SEND_QUALITY,
     format_quality_status,
     get_send_quality_profile,
     iter_send_quality_profiles,
@@ -50,6 +67,8 @@ INTERNET_CHECK_URL = "https://www.youtube.com/generate_204"
 INTERNET_CHECK_TIMEOUT_SECONDS = 3.0
 INTERNET_CHECK_INTERVAL_SECONDS = 15.0
 APP_ICON_FILENAME = "stream2yt-ui.ico"
+
+SETTINGS_BLOCKED_MESSAGE = "Pare a transmissão antes de alterar as definições."
 
 
 def resolve_app_icon_path() -> Optional[Path]:
@@ -209,7 +228,12 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
             QApplication,
             QButtonGroup,
             QCheckBox,
+            QDialog,
+            QDialogButtonBox,
+            QFileDialog,
+            QFormLayout,
             QGridLayout,
+            QGroupBox,
             QHBoxLayout,
             QLabel,
             QListWidget,
@@ -217,6 +241,7 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
             QMessageBox,
             QPushButton,
             QRadioButton,
+            QSpinBox,
             QVBoxLayout,
             QWidget,
         )
@@ -232,9 +257,214 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
         collect_diagnostics_text,
         get_active_worker_snapshot,
         load_config,
+        prepare_ui_session_config,
         start_streaming_instance,
         stop_active_worker,
     )
+
+    class SettingsDialog(QDialog):
+        """Diálogo modal para configurar fonte, qualidade, áudio e horário."""
+
+        def __init__(
+            self,
+            parent: Optional[QWidget],
+            settings: UiSettings,
+            streaming_active: bool,
+        ) -> None:
+            super().__init__(parent)
+            self.setWindowTitle("Configurar definições")
+            self.setMinimumWidth(440)
+            self._streaming_active = streaming_active
+            self._demo_path = str(settings.demo_video_path or resolve_demo_video_path())
+            self._result: Optional[UiSettings] = None
+
+            layout = QVBoxLayout(self)
+
+            if streaming_active:
+                blocked_label = QLabel(SETTINGS_BLOCKED_MESSAGE)
+                blocked_label.setWordWrap(True)
+                blocked_label.setStyleSheet("color: #a33; font-weight: bold;")
+                layout.addWidget(blocked_label)
+
+            source_group = QGroupBox("Fonte de vídeo")
+            source_layout = QVBoxLayout(source_group)
+            self._source_group = QButtonGroup(self)
+            self._radio_camera = QRadioButton("Câmara")
+            self._radio_demo = QRadioButton("Vídeo de demonstração")
+            self._source_group.addButton(self._radio_camera)
+            self._source_group.addButton(self._radio_demo)
+            if settings.demo_enabled:
+                self._radio_demo.setChecked(True)
+            else:
+                self._radio_camera.setChecked(True)
+            source_layout.addWidget(self._radio_camera)
+            source_layout.addWidget(self._radio_demo)
+
+            path_row = QHBoxLayout()
+            self._demo_path_label = QLabel(self._demo_path)
+            self._demo_path_label.setWordWrap(True)
+            self._demo_path_label.setStyleSheet("color: #666;")
+            self._browse_button = QPushButton("Procurar…")
+            self._browse_button.clicked.connect(self._on_browse)
+            path_row.addWidget(self._demo_path_label, stretch=1)
+            path_row.addWidget(self._browse_button)
+            source_layout.addLayout(path_row)
+            layout.addWidget(source_group)
+
+            self._radio_demo.toggled.connect(self._update_browse_enabled)
+
+            quality_group = QGroupBox("Qualidade")
+            quality_layout = QVBoxLayout(quality_group)
+            self._quality_group = QButtonGroup(self)
+            self._quality_buttons: Dict[str, QRadioButton] = {}
+            for profile in iter_send_quality_profiles():
+                label_text = (
+                    f"{profile.label} — {profile.short_resolution}, "
+                    f"{profile.fps} FPS, {profile.bitrate_kbps} kbps"
+                )
+                button = QRadioButton(label_text)
+                button.setProperty("quality_key", profile.key)
+                if profile.key == settings.send_quality:
+                    button.setChecked(True)
+                self._quality_group.addButton(button)
+                self._quality_buttons[profile.key] = button
+                quality_layout.addWidget(button)
+            layout.addWidget(quality_group)
+
+            audio_group = QGroupBox("Áudio")
+            audio_layout = QVBoxLayout(audio_group)
+            self._audio_group = QButtonGroup(self)
+            self._radio_audio_silent = QRadioButton(audio_mode_label(AUDIO_MODE_SILENT))
+            self._radio_audio_source = QRadioButton(audio_mode_label(AUDIO_MODE_SOURCE))
+            self._audio_group.addButton(self._radio_audio_silent)
+            self._audio_group.addButton(self._radio_audio_source)
+            if settings.audio_mode == AUDIO_MODE_SOURCE:
+                self._radio_audio_source.setChecked(True)
+            else:
+                self._radio_audio_silent.setChecked(True)
+            audio_layout.addWidget(self._radio_audio_silent)
+            silent_hint = QLabel("A transmissão não incluirá qualquer som.")
+            silent_hint.setStyleSheet("color: #666;")
+            silent_hint.setWordWrap(True)
+            audio_layout.addWidget(silent_hint)
+            audio_layout.addWidget(self._radio_audio_source)
+            source_hint = QLabel(
+                "A transmissão incluirá o som captado pela fonte selecionada, "
+                "quando disponível."
+            )
+            source_hint.setStyleSheet("color: #666;")
+            source_hint.setWordWrap(True)
+            audio_layout.addWidget(source_hint)
+            layout.addWidget(audio_group)
+
+            schedule_group = QGroupBox("Horário")
+            schedule_layout = QVBoxLayout(schedule_group)
+            self._schedule_checkbox = QCheckBox("Limitar envio por horário")
+            self._schedule_checkbox.setChecked(settings.schedule_limited)
+            schedule_layout.addWidget(self._schedule_checkbox)
+
+            form = QFormLayout()
+            self._start_spin = QSpinBox()
+            self._start_spin.setRange(0, 23)
+            self._start_spin.setValue(settings.day_start_hour)
+            self._end_spin = QSpinBox()
+            self._end_spin.setRange(1, 24)
+            self._end_spin.setValue(settings.day_end_hour)
+            self._tz_spin = QSpinBox()
+            self._tz_spin.setRange(-12, 14)
+            self._tz_spin.setValue(settings.tz_offset_hours)
+            form.addRow("Hora de início", self._start_spin)
+            form.addRow("Hora de fim", self._end_spin)
+            form.addRow("Fuso horário (UTC)", self._tz_spin)
+            schedule_layout.addLayout(form)
+            layout.addWidget(schedule_group)
+
+            self._schedule_checkbox.toggled.connect(self._update_schedule_enabled)
+
+            self._button_box = QDialogButtonBox(self)
+            self._save_button = self._button_box.addButton(
+                "Guardar", QDialogButtonBox.AcceptRole
+            )
+            self._button_box.addButton("Cancelar", QDialogButtonBox.RejectRole)
+            self._button_box.accepted.connect(self._on_accept)
+            self._button_box.rejected.connect(self.reject)
+            layout.addWidget(self._button_box)
+
+            self._update_browse_enabled()
+            self._update_schedule_enabled()
+
+            if streaming_active:
+                editable_widgets = [
+                    self._radio_camera,
+                    self._radio_demo,
+                    self._browse_button,
+                    self._radio_audio_silent,
+                    self._radio_audio_source,
+                    self._schedule_checkbox,
+                    self._start_spin,
+                    self._end_spin,
+                    self._tz_spin,
+                ]
+                editable_widgets.extend(self._quality_buttons.values())
+                for widget in editable_widgets:
+                    widget.setEnabled(False)
+                self._save_button.setEnabled(False)
+
+        def _update_browse_enabled(self) -> None:
+            if self._streaming_active:
+                return
+            self._browse_button.setEnabled(self._radio_demo.isChecked())
+
+        def _update_schedule_enabled(self) -> None:
+            if self._streaming_active:
+                return
+            enabled = self._schedule_checkbox.isChecked()
+            self._start_spin.setEnabled(enabled)
+            self._end_spin.setEnabled(enabled)
+            self._tz_spin.setEnabled(enabled)
+
+        def _on_browse(self) -> None:
+            path, _ = QFileDialog.getOpenFileName(
+                self,
+                "Selecionar vídeo de demonstração",
+                self._demo_path,
+                "Vídeos (*.mp4)",
+            )
+            if path:
+                self._demo_path = path
+                self._demo_path_label.setText(path)
+
+        def _on_accept(self) -> None:
+            if self._streaming_active:
+                return
+            selected_quality: Optional[str] = None
+            for key, button in self._quality_buttons.items():
+                if button.isChecked():
+                    selected_quality = key
+                    break
+            draft = UiSettings(
+                video_source=(
+                    VIDEO_SOURCE_DEMO
+                    if self._radio_demo.isChecked()
+                    else VIDEO_SOURCE_CAMERA
+                ),
+                demo_video_path=self._demo_path,
+                send_quality=normalize_send_quality(selected_quality),
+                audio_mode=(
+                    AUDIO_MODE_SOURCE
+                    if self._radio_audio_source.isChecked()
+                    else AUDIO_MODE_SILENT
+                ),
+                schedule_limited=self._schedule_checkbox.isChecked(),
+                day_start_hour=self._start_spin.value(),
+                day_end_hour=self._end_spin.value(),
+                tz_offset_hours=self._tz_spin.value(),
+            )
+            self._result = validate_ui_settings(draft)
+            self.accept()
+
+        def result_settings(self) -> Optional[UiSettings]:
+            return self._result
 
     class PrimaryMainWindow(QMainWindow):
         shutdown_finished = Signal()
@@ -255,13 +485,16 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
             self._preview_switch_lock = threading.RLock()
             self._latest_preview_jpeg: Optional[bytes] = None
             self._preview_frame_dirty = False
-            self._demo_enabled = False
-            self._demo_path = resolve_demo_video_path()
-            self._quality_key = DEFAULT_SEND_QUALITY
-            self._quality_restart_lock = threading.Lock()
+            self._settings_store = create_qsettings_store()
+            self._settings: UiSettings = load_ui_settings(self._settings_store)
 
             self.setWindowTitle("stream2yt — Primary")
-            self.resize(720, 680)
+            self.resize(720, 720)
+
+            menu_bar = self.menuBar()
+            settings_menu = menu_bar.addMenu("Definições")
+            self._action_settings = settings_menu.addAction("Configurar…")
+            self._action_settings.triggered.connect(self._on_open_settings)
 
             root = QWidget(self)
             self.setCentralWidget(root)
@@ -273,38 +506,25 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
             self._preview.setStyleSheet("border: 1px solid #888; padding: 8px;")
             layout.addWidget(self._preview)
 
-            demo_row = QHBoxLayout()
-            self._demo_checkbox = QCheckBox("Usar vídeo de demonstração")
-            self._demo_checkbox.setChecked(False)
-            self._demo_checkbox.toggled.connect(self._on_demo_toggled)
-            self._demo_path_label = QLabel(self._demo_path)
-            self._demo_path_label.setStyleSheet("color: #666;")
-            self._demo_path_label.setWordWrap(True)
-            demo_row.addWidget(self._demo_checkbox)
-            demo_row.addWidget(self._demo_path_label, stretch=1)
-            layout.addLayout(demo_row)
-
-            quality_row = QHBoxLayout()
-            quality_row.addWidget(QLabel("Qualidade de envio:"))
-            self._quality_group = QButtonGroup(self)
-            self._quality_group.setExclusive(True)
-            self._quality_buttons: Dict[str, QRadioButton] = {}
-            for profile in iter_send_quality_profiles():
-                button = QRadioButton(profile.label)
-                button.setProperty("quality_key", profile.key)
-                if profile.key == self._quality_key:
-                    button.setChecked(True)
-                self._quality_group.addButton(button)
-                self._quality_buttons[profile.key] = button
-                quality_row.addWidget(button)
-            quality_row.addStretch(1)
-            self._quality_group.buttonClicked.connect(self._on_quality_button_clicked)
-            layout.addLayout(quality_row)
-
-            self._quality_status = QLabel(
-                format_quality_status(get_send_quality_profile(self._quality_key))
+            info_group = QGroupBox("Definições atuais")
+            info_layout = QVBoxLayout(info_group)
+            self._source_value = QLabel(format_source_status(self._settings))
+            self._quality_value = QLabel(
+                format_quality_status(
+                    get_send_quality_profile(self._settings.send_quality)
+                )
             )
-            layout.addWidget(self._quality_status)
+            self._audio_value = QLabel(format_audio_status(self._settings))
+            self._schedule_value = QLabel(format_schedule_status(self._settings))
+            for value_label in (
+                self._source_value,
+                self._quality_value,
+                self._audio_value,
+                self._schedule_value,
+            ):
+                value_label.setWordWrap(True)
+                info_layout.addWidget(value_label)
+            layout.addWidget(info_group)
 
             status_grid = QGridLayout()
             self._camera_value = QLabel("A verificar")
@@ -392,103 +612,48 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
             self._btn_restart.setEnabled(not self._busy)
             self._btn_stop.setEnabled(not self._busy)
             self._btn_diag.setEnabled(not self._busy)
-            self._demo_checkbox.setEnabled(not self._busy and not session_alive)
-            quality_enabled = not self._busy
-            for button in self._quality_buttons.values():
-                button.setEnabled(quality_enabled)
 
         def _set_busy(self, busy: bool) -> None:
             self._busy = busy
             self._refresh_button_states()
 
-        def _sync_quality_buttons(self) -> None:
-            button = self._quality_buttons.get(self._quality_key)
-            if button is None:
-                return
-            self._quality_group.blockSignals(True)
-            button.setChecked(True)
-            self._quality_group.blockSignals(False)
-
-        def _update_quality_status_label(self) -> None:
-            profile = get_send_quality_profile(self._quality_key)
-            self._quality_status.setText(format_quality_status(profile))
-
-        def _on_quality_button_clicked(self, button) -> None:
-            key = normalize_send_quality(str(button.property("quality_key") or ""))
-            if key == self._quality_key:
-                return
-
-            previous = self._quality_key
-            self._quality_key = key
-            self._update_quality_status_label()
-
-            if not self._session_thread_alive():
-                return
-
-            if self._busy or not self._quality_restart_lock.acquire(blocking=False):
-                self._quality_key = previous
-                self._sync_quality_buttons()
-                self._update_quality_status_label()
-                return
-
-            self._set_busy(True)
-            self._message.setText(
-                f"A aplicar qualidade {get_send_quality_profile(key).label}…"
+        def _refresh_settings_labels(self) -> None:
+            self._source_value.setText(format_source_status(self._settings))
+            self._quality_value.setText(
+                format_quality_status(
+                    get_send_quality_profile(self._settings.send_quality)
+                )
             )
-            threading.Thread(
-                target=self._quality_restart_worker_thread,
-                name="UiQualityRestart",
-                daemon=True,
-            ).start()
-
-        def _quality_restart_worker_thread(self) -> None:
-            try:
-                stop_active_worker(timeout=15.0)
-                if self._start_thread is not None and self._start_thread.is_alive():
-                    self._start_thread.join(timeout=25.0)
-                time.sleep(0.3)
-            except Exception as exc:  # noqa: BLE001
-                self._post("message", f"Falha ao mudar qualidade: {exc}")
-                self._post("busy", False)
-                self._quality_restart_lock.release()
-                return
-
-            self._post("busy", False)
-            self._post("message", "A iniciar transmissão…")
-            self._post("start_requested", True)
-            self._quality_restart_lock.release()
+            self._audio_value.setText(format_audio_status(self._settings))
+            self._schedule_value.setText(format_schedule_status(self._settings))
 
         def _post(self, kind: str, payload: Any = None) -> None:
             self._ui_queue.put((kind, payload))
 
-        def _on_demo_toggled(self, checked: bool) -> None:
-            if self._busy or self._session_thread_alive():
-                self._demo_checkbox.blockSignals(True)
-                self._demo_checkbox.setChecked(self._demo_enabled)
-                self._demo_checkbox.blockSignals(False)
+        def _on_open_settings(self) -> None:
+            streaming_active = self._busy or self._session_thread_alive()
+            dialog = SettingsDialog(self, self._settings, streaming_active)
+            if dialog.exec() != QDialog.Accepted:
+                return
+            new_settings = dialog.result_settings()
+            if new_settings is None:
                 return
 
-            self._demo_path = resolve_demo_video_path()
-            self._demo_path_label.setText(self._demo_path)
+            previous = self._settings
+            self._settings = new_settings
+            save_ui_settings(self._settings_store, new_settings)
+            self._refresh_settings_labels()
 
-            if checked and not demo_video_exists(self._demo_path):
-                self._message.setText(demo_video_missing_message(self._demo_path))
-                self._demo_checkbox.blockSignals(True)
-                self._demo_checkbox.setChecked(False)
-                self._demo_checkbox.blockSignals(False)
-                self._demo_enabled = False
-                return
-
-            self._demo_enabled = bool(checked)
-            if checked:
-                self._message.setText("A mudar preview para vídeo de demonstração…")
-            else:
-                self._message.setText("A mudar preview para a câmara RTSP…")
-            threading.Thread(
-                target=self._restart_preview_source,
-                name="UiPreviewSwitch",
-                daemon=True,
-            ).start()
+            if (
+                previous.video_source != new_settings.video_source
+                or previous.demo_video_path != new_settings.demo_video_path
+            ) and not streaming_active:
+                self._message.setText("A mudar preview…")
+                threading.Thread(
+                    target=self._restart_preview_source,
+                    name="UiPreviewSwitch",
+                    daemon=True,
+                ).start()
 
         def _boot_preview(self) -> None:
             self._replace_preview_locked()
@@ -526,11 +691,10 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
             try:
                 config = load_config(
                     resolution=self._resolution,
-                    require_input_source=not self._demo_enabled,
+                    require_input_source=not self._settings.demo_enabled,
                 )
-                if self._demo_enabled:
-                    path = resolve_demo_video_path()
-                    self._demo_path = path
+                if self._settings.demo_enabled:
+                    path = self._settings.demo_video_path
                     if not demo_video_exists(path):
                         self._post("preview_status", demo_video_missing_message(path))
                         return None
@@ -655,7 +819,7 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
                 self._message.setText("")
 
         def _apply_snapshot(self, snapshot: Optional[Dict[str, Any]]) -> None:
-            demo_active = self._demo_enabled or bool(
+            demo_active = self._settings.demo_enabled or bool(
                 snapshot and snapshot.get("demo_mode")
             )
             self._camera_value.setText(
@@ -691,10 +855,8 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
                 if self._session_thread_alive():
                     self._message.setText(INSTANCE_ACTIVE_HINT)
                 return
-            if self._demo_enabled:
-                path = resolve_demo_video_path()
-                self._demo_path = path
-                self._demo_path_label.setText(path)
+            if self._settings.demo_enabled:
+                path = self._settings.demo_video_path
                 if not demo_video_exists(path):
                     self._message.setText(demo_video_missing_message(path))
                     return
@@ -709,12 +871,18 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
             thread.start()
 
         def _start_worker_thread(self) -> None:
-            demo_path = resolve_demo_video_path() if self._demo_enabled else None
+            settings = self._settings
+            demo_path = settings.demo_video_path if settings.demo_enabled else None
+            start_hour, end_hour, tz_offset = settings.effective_day_window()
             try:
                 code = start_streaming_instance(
                     resolution=self._resolution,
                     demo_video_path=demo_path,
-                    send_quality=self._quality_key,
+                    send_quality=settings.send_quality,
+                    audio_mode=settings.audio_mode,
+                    day_start_hour=start_hour,
+                    day_end_hour=end_hour,
+                    tz_offset_hours=tz_offset,
                 )
             except Exception as exc:  # noqa: BLE001
                 self._post("message", f"Falha ao iniciar: {exc}")
@@ -731,6 +899,8 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
                     "message",
                     demo_video_missing_message(demo_path),
                 )
+            elif code == 4:
+                self._post("message", NO_AUDIO_AVAILABLE_MESSAGE)
             elif code != 0:
                 self._post("message", f"Arranque terminou com código {code}.")
             else:
@@ -796,13 +966,51 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
             ).start()
 
         def _diagnostics_thread(self) -> None:
+            settings = self._settings
+            demo_path = settings.demo_video_path if settings.demo_enabled else None
+            start_hour, end_hour, tz_offset = settings.effective_day_window()
+            audio_note = ""
+            config = None
             try:
-                report = collect_diagnostics_text(resolution=self._resolution)
+                config = prepare_ui_session_config(
+                    resolution=self._resolution,
+                    demo_video_path=demo_path,
+                    send_quality=settings.send_quality,
+                    audio_mode=settings.audio_mode,
+                    day_start_hour=start_hour,
+                    day_end_hour=end_hour,
+                    tz_offset_hours=tz_offset,
+                    apply_audio=True,
+                )
+            except Exception as exc:  # noqa: BLE001
+                audio_note = f"Aviso de áudio: {exc}"
+                try:
+                    config = prepare_ui_session_config(
+                        resolution=self._resolution,
+                        demo_video_path=demo_path,
+                        send_quality=settings.send_quality,
+                        audio_mode=settings.audio_mode,
+                        day_start_hour=start_hour,
+                        day_end_hour=end_hour,
+                        tz_offset_hours=tz_offset,
+                        apply_audio=False,
+                    )
+                except Exception as inner_exc:  # noqa: BLE001
+                    self._post("message", f"Falha no diagnóstico: {inner_exc}")
+                    self._post("busy", False)
+                    return
+
+            try:
+                report = collect_diagnostics_text(config=config)
             except Exception as exc:  # noqa: BLE001
                 self._post("message", f"Falha no diagnóstico: {exc}")
-            else:
-                self._post("diagnostics", report)
-                self._post("message", "Diagnóstico concluído.")
+                self._post("busy", False)
+                return
+
+            if audio_note:
+                report = f"{audio_note}\n\n{report}"
+            self._post("diagnostics", report)
+            self._post("message", "Diagnóstico concluído.")
             self._post("busy", False)
 
         def _show_diagnostics(self, report: str) -> None:

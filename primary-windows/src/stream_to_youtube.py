@@ -43,6 +43,12 @@ from send_quality import (
 )
 from process_launch import hidden_process_kwargs
 from observability import FFmpegProgressTracker
+from stream_audio import (
+    NO_AUDIO_AVAILABLE_MESSAGE,
+    apply_audio_mode_to_config,
+    audio_mode_label,
+    normalize_audio_mode,
+)
 
 
 DEFAULT_STATUS_ENDPOINT = "http://104.248.134.44:8080/status"
@@ -931,6 +937,12 @@ def _collect_full_diagnostics(config: "StreamingConfig") -> str:
         "## Configuração carregada",
         f"- Resolução atual: {config.resolution}",
         f"- Intervalo diário: {config.day_start_hour:02d}h–{config.day_end_hour:02d}h (UTC{'+' if config.tz_offset_hours >= 0 else ''}{config.tz_offset_hours})",
+        f"- Modo de áudio: {audio_mode_label(config.audio_mode) if config.audio_mode else 'predefinição (headless/.env)'}",
+        (
+            f"- Deteção de áudio na fonte: "
+            f"{'sim' if config.audio_detected is True else 'não' if config.audio_detected is False else 'não avaliada'}"
+        ),
+        f"- Fonte demo: {'sim' if config.demo_mode else 'não'}",
         f"- Bitrate mínimo/máximo (kbps): {config.bitrate_min_kbps}/{config.bitrate_max_kbps}",
         f"- Intervalo do autotune (s): {config.autotune_interval:.1f}",
         f"- Margem de segurança do autotune: {config.autotune_safety_margin:.2f}",
@@ -1578,6 +1590,29 @@ class StreamingConfig:
     heartbeat: HeartbeatConfig
     camera_probe: CameraProbeConfig
     demo_mode: bool = False
+    audio_mode: Optional[str] = None
+    audio_detected: Optional[bool] = None
+
+
+def apply_schedule_override(
+    config: StreamingConfig,
+    *,
+    day_start_hour: Optional[int] = None,
+    day_end_hour: Optional[int] = None,
+    tz_offset_hours: Optional[int] = None,
+) -> StreamingConfig:
+    """Substitui a janela horária só na sessão (não altera os.environ/.env)."""
+
+    updates: dict[str, int] = {}
+    if day_start_hour is not None:
+        updates["day_start_hour"] = int(day_start_hour)
+    if day_end_hour is not None:
+        updates["day_end_hour"] = int(day_end_hour)
+    if tz_offset_hours is not None:
+        updates["tz_offset_hours"] = int(tz_offset_hours)
+    if not updates:
+        return config
+    return replace(config, **updates)
 
 
 def apply_demo_video_source(
@@ -1612,6 +1647,45 @@ def apply_send_quality(
         bitrate_min_kbps=bitrate_min,
         bitrate_max_kbps=bitrate_max,
     )
+
+
+def prepare_ui_session_config(
+    *,
+    resolution: Optional[str] = None,
+    demo_video_path: Optional[str] = None,
+    send_quality: Optional[str] = None,
+    audio_mode: Optional[str] = None,
+    day_start_hour: Optional[int] = None,
+    day_end_hour: Optional[int] = None,
+    tz_offset_hours: Optional[int] = None,
+    apply_audio: bool = True,
+) -> StreamingConfig:
+    """Monta a config efetiva da UI sem iniciar o worker e sem alterar .env."""
+
+    config = load_config(
+        resolution=resolution,
+        require_input_source=demo_video_path is None,
+    )
+    if demo_video_path is not None:
+        config = apply_demo_video_source(config, demo_video_path)
+    if send_quality is not None:
+        config = apply_send_quality(config, send_quality)
+    if (
+        day_start_hour is not None
+        or day_end_hour is not None
+        or tz_offset_hours is not None
+    ):
+        config = apply_schedule_override(
+            config,
+            day_start_hour=day_start_hour,
+            day_end_hour=day_end_hour,
+            tz_offset_hours=tz_offset_hours,
+        )
+    if apply_audio and audio_mode is not None:
+        config = apply_audio_mode_to_config(config, audio_mode)
+    elif audio_mode is not None:
+        config = replace(config, audio_mode=normalize_audio_mode(audio_mode))
+    return config
 
 
 def _resolve_heartbeat_config(base_dir: Path) -> HeartbeatConfig:
@@ -1809,7 +1883,17 @@ def in_day_window(config: StreamingConfig, now_utc=None):
     if now_utc is None:
         now_utc = datetime.datetime.utcnow()
     local = now_utc + datetime.timedelta(hours=config.tz_offset_hours)
-    return config.day_start_hour <= local.hour < config.day_end_hour
+    hour = local.hour
+    start = int(config.day_start_hour)
+    end = int(config.day_end_hour)
+    if start == 0 and end >= 24:
+        return True
+    if start < end:
+        return start <= hour < end
+    if start > end:
+        # Intervalo que atravessa a meia-noite (ex.: 22→06).
+        return hour >= start or hour < end
+    return False
 
 
 class HeartbeatReporter:
@@ -2787,6 +2871,10 @@ def _start_streaming_instance(
     demo_video_path: Optional[str] = None,
     input_args: Optional[list[str]] = None,
     send_quality: Optional[str] = None,
+    audio_mode: Optional[str] = None,
+    day_start_hour: Optional[int] = None,
+    day_end_hour: Optional[int] = None,
+    tz_offset_hours: Optional[int] = None,
 ) -> int:
     startup_logger = _StartupLogger(_resolve_startup_log_path())
 
@@ -2853,6 +2941,34 @@ def _start_streaming_instance(
                         f"{profile.label} ({profile.short_resolution}); "
                         "sessão UI sem alterar .env."
                     )
+                if (
+                    day_start_hour is not None
+                    or day_end_hour is not None
+                    or tz_offset_hours is not None
+                ):
+                    config = apply_schedule_override(
+                        config,
+                        day_start_hour=day_start_hour,
+                        day_end_hour=day_end_hour,
+                        tz_offset_hours=tz_offset_hours,
+                    )
+                    logger.log(
+                        "Horário de sessão UI aplicado "
+                        f"({config.day_start_hour:02d}h–{config.day_end_hour:02d}h, "
+                        f"UTC{config.tz_offset_hours:+d}); sem alterar .env."
+                    )
+                if audio_mode is not None:
+                    try:
+                        config = apply_audio_mode_to_config(config, audio_mode)
+                    except ValueError as exc:
+                        message = str(exc) or NO_AUDIO_AVAILABLE_MESSAGE
+                        logger.log(message)
+                        print(f"[primary] {message}", file=sys.stderr)
+                        log_event("primary", message)
+                        return 4
+                    logger.log(
+                        f"Modo de áudio da sessão: {audio_mode_label(config.audio_mode)}."
+                    )
                 logger.log(
                     f"Configuração carregada; resolução reportada: {config.resolution}."
                 )
@@ -2905,6 +3021,10 @@ def start_streaming_instance(
     demo_video_path: Optional[str] = None,
     input_args: Optional[list[str]] = None,
     send_quality: Optional[str] = None,
+    audio_mode: Optional[str] = None,
+    day_start_hour: Optional[int] = None,
+    day_end_hour: Optional[int] = None,
+    tz_offset_hours: Optional[int] = None,
 ) -> int:
     """Public wrapper used by alternate launchers (e.g., Windows service)."""
 
@@ -2914,6 +3034,10 @@ def start_streaming_instance(
         demo_video_path=demo_video_path,
         input_args=input_args,
         send_quality=send_quality,
+        audio_mode=audio_mode,
+        day_start_hour=day_start_hour,
+        day_end_hour=day_end_hour,
+        tz_offset_hours=tz_offset_hours,
     )
 
 
@@ -3001,11 +3125,15 @@ def get_active_worker_snapshot() -> Optional[Dict[str, Any]]:
         return None
 
 
-def collect_diagnostics_text(resolution: Optional[str] = None) -> str:
+def collect_diagnostics_text(
+    resolution: Optional[str] = None,
+    *,
+    config: Optional["StreamingConfig"] = None,
+) -> str:
     """Build the full diagnostics report for UI or tooling."""
 
-    config = load_config(resolution=resolution)
-    return _collect_full_diagnostics(config)
+    resolved = config if config is not None else load_config(resolution=resolution)
+    return _collect_full_diagnostics(resolved)
 
 
 def main() -> None:
