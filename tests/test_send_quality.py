@@ -192,7 +192,7 @@ def test_apply_send_quality_works_with_demo(tmp_path):
 def test_start_streaming_uses_selected_quality(tmp_path, monkeypatch):
     captured = {}
 
-    def fake_load_config(resolution=None):
+    def fake_load_config(resolution=None, **_kwargs):
         return _build_config(tmp_path)
 
     def fake_run_forever(config, **kwargs):
@@ -221,7 +221,7 @@ def test_start_streaming_uses_selected_quality(tmp_path, monkeypatch):
 def test_start_streaming_without_quality_keeps_env_behavior(tmp_path, monkeypatch):
     captured = {}
 
-    def fake_load_config(resolution=None):
+    def fake_load_config(resolution=None, **_kwargs):
         return _build_config(tmp_path, resolution="720p", bitrate_max_kbps=4500)
 
     def fake_run_forever(config, **kwargs):
@@ -248,7 +248,7 @@ def test_quality_selection_does_not_rewrite_env(tmp_path, monkeypatch):
     original = "YT_URL=rtmps://example/live2/key\nYT_RESOLUTION=1080p\n"
     env_path.write_text(original, encoding="utf-8")
 
-    def fake_load_config(resolution=None):
+    def fake_load_config(resolution=None, **_kwargs):
         return _build_config(tmp_path)
 
     monkeypatch.setattr(module, "load_config", fake_load_config)

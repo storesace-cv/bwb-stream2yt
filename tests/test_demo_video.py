@@ -247,7 +247,7 @@ def test_start_streaming_demo_missing_file_returns_3(tmp_path, monkeypatch):
 def test_start_streaming_without_demo_keeps_rtsp_path(tmp_path, monkeypatch):
     captured = {}
 
-    def fake_load_config(resolution=None):
+    def fake_load_config(resolution=None, **_kwargs):
         return module.StreamingConfig(
             yt_url="rtmps://example/live2/key",
             input_args=["-i", "rtsp://cam/stream"],
@@ -304,7 +304,7 @@ def test_start_streaming_demo_uses_mp4_without_changing_env(tmp_path, monkeypatc
     video.write_bytes(b"data")
     captured = {}
 
-    def fake_load_config(resolution=None):
+    def fake_load_config(resolution=None, **_kwargs):
         return module.StreamingConfig(
             yt_url="rtmps://example/live2/key",
             input_args=["-i", "rtsp://cam/stream"],

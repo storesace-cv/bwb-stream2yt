@@ -322,7 +322,9 @@ def test_startup_log_removed_after_successful_launch(tmp_path, monkeypatch):
     monkeypatch.setattr(module, "run_forever", _fake_run_forever)
 
     config = _build_streaming_config(tmp_path)
-    monkeypatch.setattr(module, "load_config", lambda resolution=None: config)
+    monkeypatch.setattr(
+        module, "load_config", lambda resolution=None, **_kwargs: config
+    )
 
     exit_code = module._start_streaming_instance()
     assert exit_code == 0
@@ -343,7 +345,9 @@ def test_startup_log_preserved_when_credentials_missing(tmp_path, monkeypatch):
     monkeypatch.setattr(module, "_ensure_signal_handlers", lambda: None)
 
     config = _build_streaming_config(tmp_path, yt_url=None)
-    monkeypatch.setattr(module, "load_config", lambda resolution=None: config)
+    monkeypatch.setattr(
+        module, "load_config", lambda resolution=None, **_kwargs: config
+    )
 
     exit_code = module._start_streaming_instance()
     assert exit_code == 2
@@ -373,7 +377,9 @@ def test_startup_log_preserved_when_worker_quits_early(tmp_path, monkeypatch):
     monkeypatch.setattr(module, "run_forever", _fake_run_forever)
 
     config = _build_streaming_config(tmp_path)
-    monkeypatch.setattr(module, "load_config", lambda resolution=None: config)
+    monkeypatch.setattr(
+        module, "load_config", lambda resolution=None, **_kwargs: config
+    )
 
     exit_code = module._start_streaming_instance()
     assert exit_code == 0

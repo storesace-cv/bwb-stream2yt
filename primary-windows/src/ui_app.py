@@ -524,7 +524,10 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
 
         def _create_preview_session(self):
             try:
-                config = load_config(resolution=self._resolution)
+                config = load_config(
+                    resolution=self._resolution,
+                    require_input_source=not self._demo_enabled,
+                )
                 if self._demo_enabled:
                     path = resolve_demo_video_path()
                     self._demo_path = path
