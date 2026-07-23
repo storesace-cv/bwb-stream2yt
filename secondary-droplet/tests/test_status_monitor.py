@@ -24,6 +24,7 @@ StatusEntry = status_monitor.StatusEntry
 StatusMonitor = status_monitor.StatusMonitor
 utc_now = status_monitor.utc_now
 run_server = status_monitor.run_server
+CLOUD_TRANSITION_GRACE_SECONDS = status_monitor.CLOUD_TRANSITION_GRACE_SECONDS
 
 
 class DummyServiceManager:
@@ -597,3 +598,113 @@ def test_ensure_stopped_tries_stop_when_is_active_fails(monkeypatch) -> None:
     assert manager.ensure_stopped() is True
     assert any("is-active" in call for call in calls)
     assert any("stop" in call for call in calls)
+
+
+class FakeMonotonic:
+    def __init__(self) -> None:
+        self.value = 0.0
+
+    def __call__(self) -> float:
+        return self.value
+
+
+def _grace_monitor(tmp_path: Path, clock: FakeMonotonic) -> StatusMonitor:
+    return StatusMonitor(
+        settings=MonitorSettings(
+            missed_threshold=2,
+            check_interval=1,
+            log_file=tmp_path / "monitor.log",
+            mode_file=tmp_path / "fallback.mode",
+        ),
+        service_manager=DummyServiceManager(),
+        monotonic=clock,
+    )
+
+
+def _transition_entry(
+    transition_id: str,
+    *,
+    active: bool = True,
+    stop_requested: bool = False,
+    started_at: float = 0,
+    deadline: float = 999999,
+) -> StatusEntry:
+    return make_entry(
+        status_overrides=make_healthy_status(
+            camera_present=True,
+            rtmps_state="A iniciar",
+            failover_transition_active=active,
+            failover_transition_id=transition_id,
+            failover_transition_started_at=started_at,
+            failover_transition_deadline=deadline,
+            stop_requested=stop_requested,
+        )
+    )
+
+
+def test_transition_grace_constant_and_droplet_clock_limit(tmp_path: Path) -> None:
+    clock = FakeMonotonic()
+    monitor = _grace_monitor(tmp_path, clock)
+    assert CLOUD_TRANSITION_GRACE_SECONDS == 35.0
+    monitor.record_status(_transition_entry("one", started_at=-1000, deadline=10**9))
+    assert monitor.fallback_active is False
+    clock.value = 35.0
+    monitor.record_status(_transition_entry("one", started_at=-(10**6), deadline=10**9))
+    assert monitor.fallback_active is False
+    clock.value = 35.1
+    monitor.record_status(_transition_entry("one"))
+    assert monitor.fallback_active is True
+
+
+def test_same_or_changed_transition_id_cannot_extend_grace(tmp_path: Path) -> None:
+    clock = FakeMonotonic()
+    monitor = _grace_monitor(tmp_path, clock)
+    monitor.record_status(_transition_entry("one"))
+    clock.value = 20
+    monitor.record_status(_transition_entry("one"))
+    monitor.record_status(_transition_entry("artificial-new-id"))
+    clock.value = 35.1
+    monitor.record_status(_transition_entry("another-id"))
+    assert monitor.fallback_active is True
+
+
+def test_transition_grace_clears_on_healthy_inactive_or_stop(tmp_path: Path) -> None:
+    clock = FakeMonotonic()
+    monitor = _grace_monitor(tmp_path, clock)
+    monitor.record_status(_transition_entry("one"))
+    monitor.record_status(
+        make_entry(status_overrides=make_healthy_status(camera_present=True))
+    )
+    assert monitor.fallback_active is False
+    monitor.record_status(_transition_entry("two", active=False))
+    assert monitor.fallback_active is True
+
+    monitor = _grace_monitor(tmp_path, clock)
+    monitor.record_status(_transition_entry("three", stop_requested=True))
+    assert monitor.fallback_active is True
+
+
+def test_stale_heartbeat_has_no_transition_grace(tmp_path: Path, monkeypatch) -> None:
+    clock = FakeMonotonic()
+    monitor = _grace_monitor(tmp_path, clock)
+    monitor.record_status(_transition_entry("one"))
+    base = utc_now()
+    monitor._last_timestamp = base - dt.timedelta(seconds=3)  # noqa: SLF001
+    monkeypatch.setattr(status_monitor, "utc_now", lambda: base)
+    monitor._evaluate_threshold()  # noqa: SLF001
+    assert monitor.fallback_active is True
+
+
+def test_heartbeat_without_transition_fields_keeps_old_behavior(
+    tmp_path: Path,
+) -> None:
+    clock = FakeMonotonic()
+    monitor = _grace_monitor(tmp_path, clock)
+    monitor.record_status(
+        make_entry(
+            status_overrides=make_healthy_status(
+                camera_present=True, rtmps_state="A iniciar"
+            )
+        )
+    )
+    assert monitor.fallback_active is True

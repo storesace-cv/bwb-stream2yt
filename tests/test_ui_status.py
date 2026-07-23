@@ -95,7 +95,7 @@ def test_check_internet_connectivity_204(monkeypatch):
         assert timeout == 3.0
         return _FakeResponse(204)
 
-    monkeypatch.setattr("ui_app.urllib.request.urlopen", fake_urlopen)
+    monkeypatch.setattr("connectivity.urllib.request.urlopen", fake_urlopen)
     assert check_internet_connectivity() == INTERNET_ONLINE
 
 
@@ -109,7 +109,7 @@ def test_check_internet_connectivity_http_below_500(monkeypatch):
             fp=None,
         )
 
-    monkeypatch.setattr("ui_app.urllib.request.urlopen", fake_urlopen)
+    monkeypatch.setattr("connectivity.urllib.request.urlopen", fake_urlopen)
     assert check_internet_connectivity() == INTERNET_ONLINE
 
 
@@ -117,7 +117,7 @@ def test_check_internet_connectivity_urlerror_timeout(monkeypatch):
     def fake_urlopen(request, timeout=None):
         raise urllib.error.URLError(TimeoutError("timed out"))
 
-    monkeypatch.setattr("ui_app.urllib.request.urlopen", fake_urlopen)
+    monkeypatch.setattr("connectivity.urllib.request.urlopen", fake_urlopen)
     assert check_internet_connectivity() == INTERNET_OFFLINE
 
 

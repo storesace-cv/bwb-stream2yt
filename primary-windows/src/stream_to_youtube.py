@@ -30,6 +30,11 @@ from autotune import (
     AUTOTUNE_UNAVAILABLE_REASON,
     estimate_upload_bitrate,
 )
+from connectivity import (
+    ConnectivityResult,
+    FAILOVER_INTERNET_TIMEOUT_SECONDS,
+    check_internet_connectivity,
+)
 from demo_video import (
     build_demo_input_args,
     demo_video_exists,
@@ -42,8 +47,18 @@ from send_quality import (
     normalize_send_quality,
 )
 from process_launch import hidden_process_kwargs
-from observability import FFmpegProgressTracker
+from observability import STATE_SENDING, FFmpegProgressTracker
+from source_failover import (
+    CAMERA_PROBE_TIMEOUT_S,
+    FFMPEG_STOP_TIMEOUT_S,
+    FIRST_PROGRESS_WAIT_S,
+    FailoverAction,
+    FailoverDecision,
+    FailoverState,
+    SourceFailoverController,
+)
 from stream_audio import (
+    AUDIO_PROBE_FAILED_MESSAGE,
     NO_AUDIO_AVAILABLE_MESSAGE,
     apply_audio_mode_to_config,
     audio_mode_label,
@@ -880,6 +895,13 @@ def _collect_full_diagnostics(config: "StreamingConfig") -> str:
             worker_snapshot.get("ffmpeg_running")
         )
         summary_lines.append(f"- Worker em execução: {'sim' if running else 'não'}")
+        if worker_snapshot.get("failover_enabled"):
+            summary_lines.append(
+                "- Failover câmara→demo: ativo (estado: "
+                f"{worker_snapshot.get('failover_state')}; "
+                f"fonte efetiva: {worker_snapshot.get('effective_source')}; "
+                f"trocas: {worker_snapshot.get('failover_switch_count')})"
+            )
     elif active_worker is None:
         summary_lines.append("- Worker em execução: não inicializado")
     elif worker_error:
@@ -1626,6 +1648,8 @@ class StreamingConfig:
     demo_mode: bool = False
     audio_mode: Optional[str] = None
     audio_detected: Optional[bool] = None
+    camera_failover_to_demo: bool = False
+    contingency_demo_path: Optional[str] = None
 
 
 def apply_schedule_override(
@@ -1693,6 +1717,8 @@ def prepare_ui_session_config(
     day_end_hour: Optional[int] = None,
     tz_offset_hours: Optional[int] = None,
     apply_audio: bool = True,
+    camera_failover_to_demo: Optional[bool] = None,
+    contingency_demo_path: Optional[str] = None,
 ) -> StreamingConfig:
     """Monta a config efetiva da UI sem iniciar o worker e sem alterar .env."""
 
@@ -1719,6 +1745,20 @@ def prepare_ui_session_config(
         config = apply_audio_mode_to_config(config, audio_mode)
     elif audio_mode is not None:
         config = replace(config, audio_mode=normalize_audio_mode(audio_mode))
+    if camera_failover_to_demo is not None or contingency_demo_path is not None:
+        config = replace(
+            config,
+            camera_failover_to_demo=(
+                bool(camera_failover_to_demo)
+                if camera_failover_to_demo is not None
+                else config.camera_failover_to_demo
+            ),
+            contingency_demo_path=(
+                contingency_demo_path
+                if contingency_demo_path is not None
+                else config.contingency_demo_path
+            ),
+        )
     return config
 
 
@@ -2360,9 +2400,50 @@ class CameraSignalMonitor:
 class StreamingWorker:
     """Background controller that keeps ffmpeg alive while streaming."""
 
-    def __init__(self, config: StreamingConfig) -> None:
+    def __init__(
+        self,
+        config: StreamingConfig,
+        *,
+        failover_enabled: bool = False,
+        contingency_demo_path: Optional[str] = None,
+        camera_config: Optional[StreamingConfig] = None,
+        contingency_demo_config: Optional[StreamingConfig] = None,
+    ) -> None:
         if not config.yt_url:
             raise ValueError("Streaming worker requires a resolved YouTube ingest URL.")
+
+        # Failover câmara↔demo de contingência (opcional). Quando ativo, a fonte
+        # "camera" é sempre a configurada e a demo de contingência é derivada dela.
+        self._failover_controller: Optional[SourceFailoverController] = None
+        self._camera_config: Optional[StreamingConfig] = None
+        self._contingency_demo_config: Optional[StreamingConfig] = None
+        self._failover_demo_path: Optional[str] = None
+        self._failover_last_launch_attempt: float = 0.0
+
+        failover_enabled = bool(failover_enabled) and not config.demo_mode
+        if failover_enabled:
+            base_camera_config = camera_config if camera_config is not None else config
+            demo_path = resolve_demo_video_path(
+                explicit=contingency_demo_path
+                or base_camera_config.contingency_demo_path
+            )
+            demo_config = contingency_demo_config
+            if demo_config is None:
+                demo_config = apply_demo_video_source(base_camera_config, demo_path)
+                if base_camera_config.audio_mode is not None:
+                    try:
+                        demo_config = apply_audio_mode_to_config(
+                            demo_config, base_camera_config.audio_mode
+                        )
+                    except ValueError:
+                        # Contingência não deve falhar por ausência de áudio na fonte demo;
+                        # mantém o modo silencioso já aplicado por apply_demo_video_source.
+                        pass
+            self._camera_config = base_camera_config
+            self._contingency_demo_config = demo_config
+            self._failover_demo_path = demo_path
+            config = base_camera_config
+
         self._config = config
         self._thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
@@ -2378,16 +2459,32 @@ class StreamingWorker:
         self._last_launch_time: Optional[float] = None
         self._restart_count = 0
         self._last_exit_code: Optional[int] = None
+
+        camera_probe_source = self._camera_config or config
+        probe_timeout = camera_probe_source.camera_probe.timeout
+        if failover_enabled and probe_timeout:
+            probe_timeout = min(probe_timeout, CAMERA_PROBE_TIMEOUT_S)
+        elif failover_enabled:
+            probe_timeout = CAMERA_PROBE_TIMEOUT_S
         self._camera_monitor = CameraSignalMonitor(
-            config.camera_probe.ffprobe,
-            config.input_args,
-            config.camera_probe.interval,
-            config.camera_probe.timeout,
-            config.camera_probe.required,
+            camera_probe_source.camera_probe.ffprobe,
+            camera_probe_source.input_args,
+            camera_probe_source.camera_probe.interval,
+            probe_timeout,
+            camera_probe_source.camera_probe.required,
         )
         self._progress = FFmpegProgressTracker()
         self._progress_thread: Optional[threading.Thread] = None
         self._stderr_thread: Optional[threading.Thread] = None
+
+        if failover_enabled:
+            demo_path = self._failover_demo_path or ""
+            self._failover_controller = SourceFailoverController(
+                enabled=True,
+                demo_path=demo_path,
+                demo_exists=lambda: demo_video_exists(demo_path),
+            )
+            self._failover_controller.start_camera_session()
 
     def start(self) -> None:
         if self.is_running:
@@ -2408,6 +2505,8 @@ class StreamingWorker:
             return
 
         self._stop_event.set()
+        if self._failover_controller is not None:
+            self._failover_controller.stop()
         self._terminate_process()
 
         if timeout is not None:
@@ -2460,9 +2559,42 @@ class StreamingWorker:
         }
         snapshot["camera_signal"] = self._camera_monitor.snapshot()
         snapshot["ffmpeg_progress"] = self._progress.snapshot_for_status()
+
+        if self._failover_controller is not None:
+            failover_snapshot = self._failover_controller.snapshot()
+            transition = failover_snapshot.transition
+            snapshot.update(
+                {
+                    "failover_enabled": True,
+                    "failover_state": failover_snapshot.state.value,
+                    "configured_source": failover_snapshot.configured_source,
+                    "effective_source": failover_snapshot.effective_source,
+                    "failover_transition_active": transition.active,
+                    "failover_transition_id": transition.transition_id,
+                    "failover_transition_started_at": transition.started_at,
+                    "failover_transition_deadline": transition.deadline,
+                    "failover_target": transition.target,
+                    "last_camera_ok_at": failover_snapshot.last_camera_ok_at,
+                    "last_failover_reason": failover_snapshot.last_failover_reason,
+                    "last_failover_duration_ms": failover_snapshot.last_failover_duration_ms,
+                    "failover_switch_count": failover_snapshot.failover_switch_count,
+                    "failover_ui_message": failover_snapshot.ui_message,
+                }
+            )
+            snapshot["demo_mode"] = bool(
+                self._config.demo_mode
+                or failover_snapshot.effective_source == "contingency_demo"
+            )
+        else:
+            snapshot["failover_enabled"] = False
+
         return snapshot
 
     def _run_loop(self) -> None:
+        if self._failover_controller is not None:
+            self._run_failover_loop()
+            return
+
         effective_inputs = build_effective_ffmpeg_input_args(self._config)
         print(
             "===== START {} =====".format(
@@ -2719,7 +2851,7 @@ class StreamingWorker:
 
         return code
 
-    def _terminate_process(self) -> None:
+    def _terminate_process(self, timeout: float = 5.0) -> None:
         with self._process_lock:
             proc = self._process
 
@@ -2734,7 +2866,7 @@ class StreamingWorker:
                 pass
 
             try:
-                proc.wait(timeout=5)
+                proc.wait(timeout=timeout)
             except subprocess.TimeoutExpired:
                 try:
                     proc.kill()
@@ -2755,6 +2887,333 @@ class StreamingWorker:
             state = self._progress.metrics_snapshot().get("rtmps_send_state")
             if state not in ("Erro", "Parado"):
                 self._progress.mark_session_stopped()
+
+    # ------------------------------------------------------------------
+    # Failover câmara ↔ vídeo de contingência
+    # ------------------------------------------------------------------
+
+    def _run_failover_loop(self) -> None:
+        controller = self._failover_controller
+        assert controller is not None
+
+        print(
+            "===== START {} (failover ativo) =====".format(
+                datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            )
+        )
+        log_event("primary", "Streaming loop started (failover câmara/demo ativo)")
+
+        try:
+            while not self._stop_event.is_set():
+                reference_config = self._camera_config or self._config
+                if not in_day_window(reference_config):
+                    print("[primary] Night period — holding (no transmit).")
+                    self._terminate_process(timeout=FFMPEG_STOP_TIMEOUT_S)
+                    if self._stop_event.wait(30):
+                        break
+                    continue
+
+                self._poll_process_exit()
+
+                state = controller.state
+                metrics = self._progress.metrics_snapshot()
+                ffmpeg_running = self._is_process_running()
+                rtmps_state = metrics.get("rtmps_send_state", "Parado")
+                seconds_since_progress = self._seconds_since_progress(metrics)
+
+                camera_present: Optional[bool] = None
+                if state in (
+                    FailoverState.CAMERA_FAILURE_PENDING,
+                    FailoverState.CAMERA_RECOVERY_PENDING,
+                ):
+                    camera_present = self._probe_camera_presence(force=True)
+
+                internet_online = True
+                if state in (
+                    FailoverState.CAMERA_FAILURE_PENDING,
+                    FailoverState.FAILOVER_TRANSITION,
+                    FailoverState.INTERNET_OFFLINE,
+                ):
+                    internet_online = self._check_internet_online()
+
+                decision = controller.evaluate(
+                    ffmpeg_running=ffmpeg_running,
+                    rtmps_state=rtmps_state,
+                    last_exit_code=self._last_exit_code,
+                    internet_online=internet_online,
+                    camera_present=camera_present,
+                    seconds_since_progress=seconds_since_progress,
+                    stop_requested=self._stop_event.is_set(),
+                )
+
+                if decision.action == FailoverAction.STOP:
+                    break
+
+                self._apply_failover_action(decision)
+
+                if self._stop_event.wait(1.0):
+                    break
+        finally:
+            self._terminate_process(timeout=FFMPEG_STOP_TIMEOUT_S)
+            log_event("primary", "Streaming loop finished (failover)")
+
+    def _active_config_for_state(
+        self, state: FailoverState
+    ) -> Optional[StreamingConfig]:
+        if state in (FailoverState.CAMERA_ACTIVE, FailoverState.CAMERA_FAILURE_PENDING):
+            return self._camera_config
+        if state in (FailoverState.DEMO_ACTIVE, FailoverState.CAMERA_RECOVERY_PENDING):
+            return self._contingency_demo_config
+        return None
+
+    def _apply_failover_action(
+        self, decision: FailoverDecision, _depth: int = 0
+    ) -> None:
+        action = decision.action
+        state = decision.snapshot.state
+
+        if action == FailoverAction.STOP:
+            return
+
+        if action == FailoverAction.KEEP:
+            if state == FailoverState.INTERNET_OFFLINE:
+                return
+            target = self._active_config_for_state(state)
+            self._ensure_process_for_config(target)
+            return
+
+        if action == FailoverAction.BEGIN_CONFIRM:
+            self._ensure_process_for_config(self._camera_config)
+            return
+
+        if action == FailoverAction.MARK_OFFLINE:
+            return
+
+        if action == FailoverAction.ENTER_TRANSITION_TO_DEMO:
+            self._terminate_process(timeout=FFMPEG_STOP_TIMEOUT_S)
+            target_config = self._contingency_demo_config
+            if target_config is None:
+                log_event(
+                    "primary",
+                    "Falha ao mudar para vídeo de contingência: caminho indisponível.",
+                )
+                if _depth < 3:
+                    follow_up = self._failover_controller.mark_demo_started_failed(
+                        camera_present=None
+                    )
+                    self._apply_failover_action(follow_up, _depth + 1)
+                return
+            self._switch_active_config(target_config)
+            launched = self._launch_ffmpeg()
+            if launched and self._await_rtmps_sending(FIRST_PROGRESS_WAIT_S):
+                log_event("primary", "Vídeo de contingência a enviar com sucesso.")
+                return
+            camera_present = self._probe_camera_presence(force=True)
+            self._terminate_process(timeout=FFMPEG_STOP_TIMEOUT_S)
+            if _depth < 3:
+                follow_up = self._failover_controller.mark_demo_started_failed(
+                    camera_present=camera_present
+                )
+                self._apply_failover_action(follow_up, _depth + 1)
+            return
+
+        if action == FailoverAction.ENTER_TRANSITION_TO_CAMERA:
+            self._terminate_process(timeout=FFMPEG_STOP_TIMEOUT_S)
+            camera_config = self._camera_config
+            if camera_config is None:
+                return
+            self._switch_active_config(camera_config)
+            launched = self._launch_ffmpeg()
+            if launched and self._await_rtmps_sending(FIRST_PROGRESS_WAIT_S):
+                log_event("primary", "Câmara restabelecida e a enviar com sucesso.")
+                return
+            self._terminate_process(timeout=FFMPEG_STOP_TIMEOUT_S)
+            if _depth < 3:
+                follow_up = self._failover_controller.mark_camera_start_failed()
+                self._apply_failover_action(follow_up, _depth + 1)
+            return
+
+        if action in (FailoverAction.ACTIVATE_DEMO, FailoverAction.ACTIVATE_CAMERA):
+            # ffmpeg já está a correr e a enviar; apenas o estado do controlador avança.
+            log_event(
+                "primary",
+                "Fonte efetiva ativa: %s"
+                % (
+                    "demo de contingência"
+                    if action == FailoverAction.ACTIVATE_DEMO
+                    else "câmara"
+                ),
+            )
+            return
+
+        if action == FailoverAction.ROLLBACK_TO_DEMO:
+            self._terminate_process(timeout=FFMPEG_STOP_TIMEOUT_S)
+            target_config = self._contingency_demo_config
+            if target_config is not None:
+                self._switch_active_config(target_config)
+                self._launch_ffmpeg()
+            return
+
+        if action == FailoverAction.ROLLBACK_TRY_CAMERA:
+            self._terminate_process(timeout=FFMPEG_STOP_TIMEOUT_S)
+            camera_config = self._camera_config
+            if camera_config is not None:
+                self._switch_active_config(camera_config)
+                self._launch_ffmpeg()
+            return
+
+        if action == FailoverAction.ABORT_TO_CLOUD:
+            # Sem fonte ativa por agora; deixa o cooldown do controlador ritmar
+            # as próximas tentativas de recuperação da câmara (sem loop agressivo).
+            self._terminate_process(timeout=FFMPEG_STOP_TIMEOUT_S)
+            return
+
+    def _switch_active_config(self, new_config: StreamingConfig) -> None:
+        self._config = new_config
+        self._base_output_args = list(new_config.output_args)
+        self._base_preset = _extract_arg_value(self._base_output_args, "-preset")
+        self._last_autotune_bitrate = None
+        self._last_autotune_preset = None
+        self._autotune_failed_once = False
+
+    def _ensure_process_for_config(
+        self,
+        config: Optional[StreamingConfig],
+        *,
+        min_relaunch_gap: float = 5.0,
+    ) -> None:
+        if config is None or self._stop_event.is_set():
+            return
+        if self._is_process_running():
+            return
+        now = time.monotonic()
+        if now - self._failover_last_launch_attempt < min_relaunch_gap:
+            return
+        self._failover_last_launch_attempt = now
+        if self._config is not config:
+            self._switch_active_config(config)
+        self._launch_ffmpeg()
+
+    def _launch_ffmpeg(self) -> bool:
+        output_args = self._prepare_output_args()
+        effective_inputs = build_effective_ffmpeg_input_args(self._config)
+        cmd = [
+            self._config.ffmpeg,
+            "-hide_banner",
+            "-loglevel",
+            "warning",
+            "-nostats",
+            "-progress",
+            "pipe:1",
+            *effective_inputs,
+            *output_args,
+            "-f",
+            "flv",
+            self._config.yt_url,
+        ]
+        label = "demo de contingência" if self._config.demo_mode else "câmara"
+        print("CMD:", *cmd)
+        log_event("primary", f"Launching ffmpeg process ({label})")
+
+        with self._process_lock:
+            try:
+                self._process = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    bufsize=1,
+                    **hidden_process_kwargs(),
+                )
+                self._last_launch_time = time.time()
+                self._last_exit_code = None
+            except OSError as exc:
+                self._process = None
+                self._progress.mark_error(str(exc), code="ffmpeg_start_failed")
+                log_event("primary", f"Falha ao iniciar ffmpeg: {exc}")
+                return False
+
+        launched = self._process
+        if launched is None:
+            return False
+        self._progress.mark_session_started()
+        self._start_io_threads(launched)
+        return True
+
+    def _is_process_running(self) -> bool:
+        with self._process_lock:
+            proc = self._process
+            return bool(proc and proc.poll() is None)
+
+    def _poll_process_exit(self) -> None:
+        with self._process_lock:
+            proc = self._process
+        if proc is None:
+            return
+        code = proc.poll()
+        if code is None:
+            return
+
+        self._stop_io_threads()
+        with self._process_lock:
+            if self._process is proc:
+                self._process = None
+
+        self._last_exit_code = code
+        if not self._stop_event.is_set():
+            self._restart_count += 1
+            if code != 0:
+                self._progress.mark_error(f"código {code}")
+            else:
+                self._progress.mark_session_stopped()
+        else:
+            self._progress.mark_session_stopped()
+
+    def _seconds_since_progress(self, metrics: Dict[str, Any]) -> Optional[float]:
+        now = time.monotonic()
+        last_progress = metrics.get("last_progress_mono")
+        if last_progress is not None:
+            return max(0.0, now - last_progress)
+        started = metrics.get("session_started_mono")
+        if started is not None:
+            return max(0.0, now - started)
+        return None
+
+    def _probe_camera_presence(self, *, force: bool = True) -> Optional[bool]:
+        try:
+            self._camera_monitor.confirm_signal(force=force)
+            snapshot = self._camera_monitor.snapshot()
+            present = snapshot.get("present")
+            return present if isinstance(present, bool) else None
+        except Exception:  # noqa: BLE001 - probing must never abort the loop
+            return None
+
+    def _check_internet_online(self) -> bool:
+        try:
+            result: ConnectivityResult = check_internet_connectivity(
+                timeout=FAILOVER_INTERNET_TIMEOUT_SECONDS
+            )
+            return bool(result.online)
+        except Exception:  # noqa: BLE001 - connectivity checks must never abort
+            return True
+
+    def _await_rtmps_sending(self, timeout: float) -> bool:
+        deadline = time.monotonic() + max(0.0, timeout)
+        while time.monotonic() < deadline:
+            if self._stop_event.is_set():
+                return False
+            self._poll_process_exit()
+            if not self._is_process_running():
+                return False
+            metrics = self._progress.metrics_snapshot()
+            if metrics.get("rtmps_send_state") == STATE_SENDING:
+                return True
+            if self._stop_event.wait(0.5):
+                return False
+        metrics = self._progress.metrics_snapshot()
+        return metrics.get("rtmps_send_state") == STATE_SENDING
 
     def _start_io_threads(self, proc: subprocess.Popen[str]) -> None:
         # Do not call _stop_io_threads here: self._process already points at
@@ -2830,7 +3289,11 @@ def run_forever(
     else:
         if config is None:
             config = load_config()
-        worker = StreamingWorker(config)
+        worker = StreamingWorker(
+            config,
+            failover_enabled=config.camera_failover_to_demo,
+            contingency_demo_path=config.contingency_demo_path,
+        )
         active_config = config
     _ACTIVE_WORKER = worker
     if not worker.is_running and not _stop_request_active():
@@ -2911,6 +3374,8 @@ def _start_streaming_instance(
     day_start_hour: Optional[int] = None,
     day_end_hour: Optional[int] = None,
     tz_offset_hours: Optional[int] = None,
+    camera_failover_to_demo: bool = False,
+    contingency_demo_path: Optional[str] = None,
 ) -> int:
     startup_logger = _StartupLogger(_resolve_startup_log_path())
 
@@ -2968,6 +3433,19 @@ def _start_streaming_instance(
                     )
                 elif input_args is not None:
                     config = replace(config, input_args=list(input_args))
+                if camera_failover_to_demo and demo_video_path is None:
+                    resolved_contingency = resolve_demo_video_path(
+                        explicit=contingency_demo_path
+                    )
+                    config = replace(
+                        config,
+                        camera_failover_to_demo=True,
+                        contingency_demo_path=resolved_contingency,
+                    )
+                    logger.log(
+                        "Failover câmara→vídeo de contingência ativo "
+                        f"({resolved_contingency})."
+                    )
                 if send_quality is not None:
                     quality_key = normalize_send_quality(send_quality)
                     config = apply_send_quality(config, quality_key)
@@ -3001,6 +3479,8 @@ def _start_streaming_instance(
                         logger.log(message)
                         print(f"[primary] {message}", file=sys.stderr)
                         log_event("primary", message)
+                        if message == AUDIO_PROBE_FAILED_MESSAGE:
+                            return 5
                         return 4
                     logger.log(
                         f"Modo de áudio da sessão: {audio_mode_label(config.audio_mode)}."
@@ -3061,6 +3541,8 @@ def start_streaming_instance(
     day_start_hour: Optional[int] = None,
     day_end_hour: Optional[int] = None,
     tz_offset_hours: Optional[int] = None,
+    camera_failover_to_demo: bool = False,
+    contingency_demo_path: Optional[str] = None,
 ) -> int:
     """Public wrapper used by alternate launchers (e.g., Windows service)."""
 
@@ -3074,6 +3556,8 @@ def start_streaming_instance(
         day_start_hour=day_start_hour,
         day_end_hour=day_end_hour,
         tz_offset_hours=tz_offset_hours,
+        camera_failover_to_demo=camera_failover_to_demo,
+        contingency_demo_path=contingency_demo_path,
     )
 
 
