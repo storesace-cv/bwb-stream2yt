@@ -41,6 +41,8 @@ FALLBACK_RESTART_CMD: tuple[str, ...] = (
 
 DEFAULT_MODE_FILE = Path("/run/youtube-fallback/mode")
 
+PRIMARY_HEALTHY_RTMPS_STATE = "A enviar"
+
 
 def utc_now() -> dt.datetime:
     return dt.datetime.now(dt.timezone.utc)
@@ -50,6 +52,44 @@ def isoformat(ts: dt.datetime) -> str:
     if ts.tzinfo is None:
         ts = ts.replace(tzinfo=dt.timezone.utc)
     return ts.astimezone(dt.timezone.utc).isoformat()
+
+
+def evaluate_primary_stream_health(payload: Dict[str, Any]) -> tuple[bool, str]:
+    """Avalia se o emissor Windows está efetivamente a enviar para o YouTube."""
+
+    status = payload.get("status")
+    if not isinstance(status, dict):
+        return False, "missing_status"
+
+    if status.get("thread_running") is not True:
+        return False, "thread_not_running"
+    if status.get("ffmpeg_running") is not True:
+        return False, "ffmpeg_not_running"
+    if status.get("stop_requested") is not False:
+        return False, "stop_requested"
+    if status.get("in_day_window") is not True:
+        return False, "outside_day_window"
+    if status.get("yt_url_present") is not True:
+        return False, "yt_url_missing"
+
+    progress = status.get("ffmpeg_progress")
+    if not isinstance(progress, dict):
+        return False, "missing_progress"
+    if progress.get("session_active") is not True:
+        return False, "session_inactive"
+
+    rtmps_state = progress.get("rtmps_send_state")
+    if rtmps_state != PRIMARY_HEALTHY_RTMPS_STATE:
+        return False, f"rtmps_state:{rtmps_state}"
+
+    return True, "streaming"
+
+
+def _extract_demo_mode(payload: Dict[str, Any]) -> bool:
+    status = payload.get("status")
+    if not isinstance(status, dict):
+        return False
+    return status.get("demo_mode") is True
 
 
 @dataclass
@@ -147,11 +187,15 @@ class MonitorSettings:
 
         bind = _get_env("YTR_BIND", "BWB_STATUS_BIND") or "0.0.0.0"
         port = _int(("YTR_PORT", "BWB_STATUS_PORT"), 8080)
-        missed_threshold = _int(("YTR_MISSED_THRESHOLD", "BWB_STATUS_MISSED_THRESHOLD"), 40)
+        missed_threshold = _int(
+            ("YTR_MISSED_THRESHOLD", "BWB_STATUS_MISSED_THRESHOLD"), 40
+        )
         check_interval = _int(("YTR_CHECK_INTERVAL", "BWB_STATUS_CHECK_INTERVAL"), 5)
 
         log_override = _get_env("YTR_LOG_FILE", "BWB_STATUS_LOG_FILE")
-        secondary_override = _get_env("YTR_SECONDARY_SERVICE", "BWB_STATUS_SECONDARY_SERVICE")
+        secondary_override = _get_env(
+            "YTR_SECONDARY_SERVICE", "BWB_STATUS_SECONDARY_SERVICE"
+        )
         mode_override = _get_env(
             "YTR_FALLBACK_MODE_FILE", "BWB_STATUS_FALLBACK_MODE_FILE"
         )
@@ -222,9 +266,7 @@ class MonitorSettings:
 
         refresh_flag = _maybe_bool("YTR_REFRESH_ON_STOP")
         refresh_on_stop = (
-            refresh_flag
-            if refresh_flag is not None
-            else cls.refresh_on_stop
+            refresh_flag if refresh_flag is not None else cls.refresh_on_stop
         )
 
         refresh_token_raw = _get_env(
@@ -339,7 +381,9 @@ class ServiceManager:
                 capture_output=True,
                 text=True,
             )
-            if status.returncode != 0 or status.stdout.strip() == "inactive":
+            # Só confiar em "inactive" quando is-active teve sucesso.
+            # Se sudo/is-active falhar, continuar e tentar stop (idempotente).
+            if status.returncode == 0 and status.stdout.strip() == "inactive":
                 LOGGER.debug("Serviço %s já está inativo", self.name)
                 return True
 
@@ -350,6 +394,16 @@ class ServiceManager:
 
             LOGGER.info("Serviço %s parado", self.name)
             return True
+
+    def is_active(self) -> bool:
+        with self._lock:
+            status = subprocess.run(
+                self._systemctl_cmd("is-active"),
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            return status.returncode == 0 and status.stdout.strip() == "active"
 
     def restart(self) -> bool:
         with self._lock:
@@ -423,23 +477,17 @@ class YouTubeRefresher:
                 )
                 return
             self._last_request = now
-            thread = threading.Thread(
-                target=self._run, name="yt-refresh", daemon=True
-            )
+            thread = threading.Thread(target=self._run, name="yt-refresh", daemon=True)
             self._current_thread = thread
 
         thread.start()
 
     def _run(self) -> None:
         try:
-            LOGGER.info(
-                "Solicitando refresh da ingestão primária via API do YouTube."
-            )
+            LOGGER.info("Solicitando refresh da ingestão primária via API do YouTube.")
             self._perform_refresh()
         except Exception as exc:  # noqa: BLE001
-            LOGGER.exception(
-                "Erro ao executar refresh da ingestão primária: %s", exc
-            )
+            LOGGER.exception("Erro ao executar refresh da ingestão primária: %s", exc)
         finally:
             with self._lock:
                 self._current_thread = None
@@ -461,9 +509,7 @@ class YouTubeRefresher:
             LOGGER.warning("Transmissão activa sem ID; refresh ignorado.")
             return
 
-        lifecycle = str(
-            broadcast.get("status", {}).get("lifeCycleStatus", "")
-        ).lower()
+        lifecycle = str(broadcast.get("status", {}).get("lifeCycleStatus", "")).lower()
 
         targets: list[str] = []
         for target in self._transitions:
@@ -541,9 +587,7 @@ class YouTubeRefresher:
         order = {"live": 0, "testing": 1, "ready": 2, "created": 3, "scheduled": 4}
 
         def _priority(entry: Dict[str, Any]) -> int:
-            lifecycle = str(
-                entry.get("status", {}).get("lifeCycleStatus", "")
-            ).lower()
+            lifecycle = str(entry.get("status", {}).get("lifeCycleStatus", "")).lower()
             return order.get(lifecycle, 99)
 
         return min(items, key=_priority)
@@ -600,6 +644,8 @@ class StatusMonitor:
         self._started_at = utc_now()
         self._fallback_active = False
         self._fallback_reason: Optional[str] = None
+        self._primary_stream_healthy = False
+        self._primary_stream_reason = "no_heartbeat"
         self._last_camera_status: Optional[Dict[str, Any]] = None
         self._mode_file = settings.mode_file
         self._stop_event = threading.Event()
@@ -644,7 +690,34 @@ class StatusMonitor:
             return self._fallback_active
 
     def record_status(self, entry: StatusEntry) -> None:
+        healthy, health_reason = evaluate_primary_stream_health(entry.payload)
+
+        with self._lock:
+            self._last_timestamp = entry.timestamp
+            self._primary_stream_healthy = healthy
+            self._primary_stream_reason = health_reason
+
+        if healthy:
+            _, camera_snapshot = self._extract_camera_status(entry.payload)
+            with self._lock:
+                self._last_camera_status = camera_snapshot
+            self._force_stop_fallback(
+                "Envio principal saudável (RTMPS a enviar); "
+                "a garantir paragem de youtube-fallback.service."
+            )
+            return
+
+        demo_mode = _extract_demo_mode(entry.payload)
         camera_present, camera_snapshot = self._extract_camera_status(entry.payload)
+
+        if demo_mode:
+            with self._lock:
+                self._last_camera_status = camera_snapshot
+            # Em demonstração a câmara não é necessária; ausência de sinal
+            # não deve manter barras. Sem envio saudável → fallback do emissor.
+            self._ensure_emitter_failure_fallback()
+            return
+
         ping_result = self._refresh_camera_ping()
         if ping_result is False:
             camera_present = False
@@ -657,7 +730,6 @@ class StatusMonitor:
             camera_snapshot["network_ping"] = ping_snapshot
 
         with self._lock:
-            self._last_timestamp = entry.timestamp
             self._last_camera_status = camera_snapshot
             fallback_active = self._fallback_active
             fallback_reason = self._fallback_reason
@@ -666,8 +738,9 @@ class StatusMonitor:
             self._ensure_camera_fallback(fallback_active, fallback_reason)
             return
 
-        if fallback_active:
-            self._stop_fallback("Heartbeat recebido; solicitando parada do fallback.")
+        # Câmara OK mas envio principal ainda não saudável (ex.: A iniciar):
+        # manter/ativar fallback do emissor até surgir "A enviar".
+        self._ensure_emitter_failure_fallback()
 
     def snapshot(self) -> Dict[str, Any]:
         with self._lock:
@@ -681,6 +754,8 @@ class StatusMonitor:
             )
             fallback_reason = self._fallback_reason
             fallback_active = self._fallback_active
+            primary_stream_healthy = self._primary_stream_healthy
+            primary_stream_reason = self._primary_stream_reason
             last_timestamp = (
                 isoformat(self._last_timestamp) if self._last_timestamp else None
             )
@@ -731,6 +806,8 @@ class StatusMonitor:
             "fallback_reason": fallback_reason,
             "mode_file": self._mode_file.as_posix(),
             "last_camera_signal": snapshot,
+            "primary_stream_healthy": primary_stream_healthy,
+            "primary_stream_reason": primary_stream_reason,
         }
 
     def _watchdog_loop(self) -> None:
@@ -751,9 +828,7 @@ class StatusMonitor:
             if not fallback_active or fallback_reason != "no_heartbeats":
                 self._activate_missing_heartbeats(int(elapsed))
         else:
-            LOGGER.debug(
-                "Heartbeat recente ha %.1fs; fallback desnecessario", elapsed
-            )
+            LOGGER.debug("Heartbeat recente ha %.1fs; fallback desnecessario", elapsed)
 
     def _write_mode_file(self, mode: str) -> None:
         path = self._mode_file
@@ -762,9 +837,7 @@ class StatusMonitor:
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
         except OSError as exc:
-            LOGGER.warning(
-                "Não foi possível preparar diretório para %s: %s", path, exc
-            )
+            LOGGER.warning("Não foi possível preparar diretório para %s: %s", path, exc)
             return
         try:
             path.write_text(f"{mode.strip().lower()}\n", encoding="utf-8")
@@ -778,7 +851,11 @@ class StatusMonitor:
                     "Garanta que yt-restapi.service pré-cria /run/youtube-fallback/mode "
                     "com permissões de escrita para a conta yt-restapi ou defina "
                     "YTR_FALLBACK_MODE_FILE para um caminho acessível.",
-                    pwd.getpwuid(os.geteuid()).pw_name if hasattr(pwd, "getpwuid") else os.geteuid(),
+                    (
+                        pwd.getpwuid(os.geteuid()).pw_name
+                        if hasattr(pwd, "getpwuid")
+                        else os.geteuid()
+                    ),
                     path,
                 )
 
@@ -912,7 +989,9 @@ class StatusMonitor:
 
         return reachable
 
-    def _ping_host(self, host: str) -> tuple[Optional[bool], Optional[float], Optional[str]]:
+    def _ping_host(
+        self, host: str
+    ) -> tuple[Optional[bool], Optional[float], Optional[str]]:
         command = self._ping_command
         if not command:
             return None, None, "comando ping não encontrado"
@@ -965,14 +1044,28 @@ class StatusMonitor:
 
         return reachable, rtt_ms, error
 
-    def _stop_fallback(self, message: str) -> None:
+    def _force_stop_fallback(self, message: str) -> None:
+        """Garante paragem real do serviço, mesmo se fallback_active interno for False."""
+
+        with self._lock:
+            was_flagged_active = self._fallback_active
+        was_service_active = False
+        is_active = getattr(self._service_manager, "is_active", None)
+        if callable(is_active):
+            try:
+                was_service_active = bool(is_active())
+            except Exception:  # noqa: BLE001
+                was_service_active = was_flagged_active
+        else:
+            was_service_active = was_flagged_active
+
         LOGGER.info(message)
         if self._service_manager.ensure_stopped():
             with self._lock:
                 self._fallback_active = False
                 self._fallback_reason = None
             self._write_mode_file("life")
-            if self._refresher:
+            if (was_flagged_active or was_service_active) and self._refresher:
                 self._refresher.request_refresh()
         else:
             LOGGER.warning(
@@ -980,6 +1073,61 @@ class StatusMonitor:
             )
             with self._lock:
                 self._fallback_active = True
+
+    def _stop_fallback(self, message: str) -> None:
+        self._force_stop_fallback(message)
+
+    def _ensure_emitter_failure_fallback(self) -> None:
+        """Ativa fallback life enquanto o emissor principal não está a enviar."""
+
+        with self._lock:
+            fallback_active = self._fallback_active
+            fallback_reason = self._fallback_reason
+
+        if fallback_active and fallback_reason in {
+            "no_heartbeats",
+            "primary_unhealthy",
+        }:
+            if self._service_manager.ensure_started():
+                with self._lock:
+                    self._fallback_active = True
+                    if self._fallback_reason != "no_heartbeats":
+                        self._fallback_reason = "primary_unhealthy"
+            return
+
+        if fallback_active and fallback_reason == "no_camera_signal":
+            LOGGER.info(
+                "Envio principal não saudável com câmara OK; "
+                "a mudar fallback de SMPTE para life."
+            )
+            self._write_mode_file("life")
+            if self._service_manager.restart():
+                with self._lock:
+                    self._fallback_active = True
+                    self._fallback_reason = "primary_unhealthy"
+            else:
+                LOGGER.warning(
+                    "Falha ao reiniciar fallback em modo life; "
+                    "nova tentativa no próximo heartbeat."
+                )
+            return
+
+        LOGGER.info(
+            "Envio principal não saudável; a ativar fallback life até RTMPS 'A enviar'."
+        )
+        self._write_mode_file("life")
+        if self._service_manager.ensure_started():
+            with self._lock:
+                self._fallback_active = True
+                self._fallback_reason = "primary_unhealthy"
+            LOGGER.info("Fallback ativado por envio principal não saudável.")
+        else:
+            LOGGER.warning(
+                "Não foi possível iniciar o fallback; nova tentativa no próximo heartbeat."
+            )
+            with self._lock:
+                self._fallback_active = False
+                self._fallback_reason = None
 
     def _ensure_camera_fallback(
         self, fallback_active: bool, fallback_reason: Optional[str]
@@ -1030,9 +1178,7 @@ class StatusMonitor:
                 self._fallback_reason = None
 
     def _activate_missing_heartbeats(self, elapsed: int) -> None:
-        LOGGER.warning(
-            "Sem heartbeats há %s segundos; solicitando fallback.", elapsed
-        )
+        LOGGER.warning("Sem heartbeats há %s segundos; solicitando fallback.", elapsed)
         self._write_mode_file("life")
         if self._service_manager.ensure_started():
             with self._lock:
@@ -1217,9 +1363,7 @@ def run_server(settings: MonitorSettings, args: argparse.Namespace) -> None:
                 "Libere a porta ou ajuste BWB_STATUS_PORT/--port antes de reiniciar o monitor."
             )
         else:
-            LOGGER.exception(
-                "Falha ao iniciar servidor HTTP em %s:%s", bind, port
-            )
+            LOGGER.exception("Falha ao iniciar servidor HTTP em %s:%s", bind, port)
         monitor.shutdown()
         raise SystemExit(1) from exc
 

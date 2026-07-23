@@ -448,7 +448,7 @@ ensure_yt_restapi_sudoers() {
     tmp=$(mktemp)
 
     cat <<'SUDOEOF' >"${tmp}"
-yt-restapi ALL=(root) NOPASSWD: /usr/bin/systemctl start youtube-fallback.service, /usr/bin/systemctl stop youtube-fallback.service, /usr/bin/systemctl status youtube-fallback.service, /usr/bin/systemctl restart youtube-fallback.service, /usr/bin/systemctl reload youtube-fallback.service
+yt-restapi ALL=(root) NOPASSWD: /usr/bin/systemctl start youtube-fallback.service, /usr/bin/systemctl stop youtube-fallback.service, /usr/bin/systemctl status youtube-fallback.service, /usr/bin/systemctl restart youtube-fallback.service, /usr/bin/systemctl reload youtube-fallback.service, /usr/bin/systemctl is-active youtube-fallback.service
 SUDOEOF
 
     install -m 440 -o root -g root "${tmp}" "${sudoers_file}"

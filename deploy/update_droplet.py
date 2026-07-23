@@ -60,7 +60,10 @@ def cleanup_legacy_services(*, dry_run: bool = False):
 
     for path in LEGACY_PATHS:
         ssh(["rm", "-f", path], check=False)
-    ssh(["/bin/sh", "-c", "rm -f /etc/systemd/system/bwb-status-monitor.service*"], check=False)
+    ssh(
+        ["/bin/sh", "-c", "rm -f /etc/systemd/system/bwb-status-monitor.service*"],
+        check=False,
+    )
 
 
 def main():
@@ -80,7 +83,9 @@ def main():
             continue
 
         if if_missing_only:
-            rc = ssh([f"test -f {shlex.quote(rpath)}"], check=False, capture_output=True)
+            rc = ssh(
+                [f"test -f {shlex.quote(rpath)}"], check=False, capture_output=True
+            )
             if rc.returncode == 0:
                 print("[skip exists]", rpath)
                 continue

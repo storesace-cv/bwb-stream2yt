@@ -7,7 +7,9 @@ from typing import Optional
 
 try:  # pragma: no cover - optional dependency on psutil.
     import psutil
-except ImportError:  # pragma: no cover - psutil may not be available in all environments.
+except (
+    ImportError
+):  # pragma: no cover - psutil may not be available in all environments.
     psutil = None  # type: ignore[assignment]
 
 

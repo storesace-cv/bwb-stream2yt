@@ -50,7 +50,9 @@ def _persist_resolution_choice(resolution: str) -> None:
     payload = {"resolution": resolution}
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(".tmp")
-    temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    temporary.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
     temporary.replace(path)
 
 
@@ -165,7 +167,9 @@ if os.name == "nt":  # pragma: no cover - tested on Windows hosts
             self._configured_resolution = resolution
 
             if warning:
-                servicemanager.LogErrorMsg(f"{self._svc_name_} config warning: {warning}")
+                servicemanager.LogErrorMsg(
+                    f"{self._svc_name_} config warning: {warning}"
+                )
                 log_event("service", warning)
 
             if resolution:
@@ -183,9 +187,7 @@ if os.name == "nt":  # pragma: no cover - tested on Windows hosts
             except Exception as exc:  # pragma: no cover - defensive logging
                 self._exit_code = 1
                 log_event("service", f"Exceção não tratada no worker do serviço: {exc}")
-                servicemanager.LogErrorMsg(
-                    f"{self._svc_name_} exception: {exc}"
-                )
+                servicemanager.LogErrorMsg(f"{self._svc_name_} exception: {exc}")
             finally:
                 win32event.SetEvent(self.hWaitStop)
 
@@ -208,7 +210,6 @@ if os.name == "nt":  # pragma: no cover - tested on Windows hosts
                     "service",
                     f"Serviço encerrado com código {self._exit_code}. Consulte os logs.",
                 )
-
 
     def main() -> None:
         """Entrypoint used by `python windows_service.py install/start` commands."""
@@ -249,8 +250,8 @@ if os.name == "nt":  # pragma: no cover - tested on Windows hosts
         finally:
             sys.argv = original_argv
 
-
 else:  # pragma: no cover - module is Windows-only
+
     class StreamToYouTubeService:  # type: ignore[no-redef]
         """Placeholder used when importing on non-Windows environments."""
 

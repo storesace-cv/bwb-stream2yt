@@ -150,8 +150,12 @@ class WatcherConfig:
         scene_bars = _override("SCENE_BARS", "YFW_SCENE_BARS") or DEFAULT_SCENE_BARS
 
         env_file_raw = _override("ENV_FILE", "YFW_ENV_FILE")
-        mode_file_raw = _override("MODE_FILE", "YFW_MODE_FILE", "YTR_FALLBACK_MODE_FILE")
-        service_name = _override("SERVICE_NAME", "YFW_SERVICE_NAME") or DEFAULT_SERVICE_NAME
+        mode_file_raw = _override(
+            "MODE_FILE", "YFW_MODE_FILE", "YTR_FALLBACK_MODE_FILE"
+        )
+        service_name = (
+            _override("SERVICE_NAME", "YFW_SERVICE_NAME") or DEFAULT_SERVICE_NAME
+        )
 
         check_interval = (
             cls._parse_positive_float(check_interval_raw, DEFAULT_CHECK_INTERVAL)
@@ -176,7 +180,9 @@ class WatcherConfig:
         )
 
         env_file = Path(env_file_raw).expanduser() if env_file_raw else DEFAULT_ENV_FILE
-        mode_file = Path(mode_file_raw).expanduser() if mode_file_raw else DEFAULT_MODE_FILE
+        mode_file = (
+            Path(mode_file_raw).expanduser() if mode_file_raw else DEFAULT_MODE_FILE
+        )
 
         return cls(
             api_url=api_url,
@@ -256,9 +262,7 @@ class SystemdService:
                 text=True,
             )
             if result.returncode != 0:
-                LOGGER.error(
-                    "Falha ao parar %s: %s", self.name, self._message(result)
-                )
+                LOGGER.error("Falha ao parar %s: %s", self.name, self._message(result))
                 return False
             LOGGER.info("Serviço %s parado", self.name)
             return True
@@ -338,7 +342,9 @@ class ModeFileManager:
         except FileNotFoundError:
             current = ""
         except OSError as exc:
-            LOGGER.warning("Não foi possível ler modo de fallback (%s): %s", self.path, exc)
+            LOGGER.warning(
+                "Não foi possível ler modo de fallback (%s): %s", self.path, exc
+            )
             current = ""
         if current == desired:
             return True
@@ -430,13 +436,15 @@ class APIWatcher:
                 pieces.append(f"camera={payload.get('camera')!r}")
             if "fallback_active" in payload:
                 pieces.append(f"fallback_active={payload.get('fallback_active')!r}")
+            if "primary_stream_healthy" in payload:
+                pieces.append(
+                    f"primary_stream_healthy={payload.get('primary_stream_healthy')!r}"
+                )
             if "fallback_reason" in payload and payload.get("fallback_reason"):
                 pieces.append(f"fallback_reason={payload.get('fallback_reason')!r}")
             seconds = payload.get("seconds_since_last_heartbeat")
             if isinstance(seconds, (int, float)):
-                pieces.append(
-                    f"seconds_since_last_heartbeat={seconds!r}"
-                )
+                pieces.append(f"seconds_since_last_heartbeat={seconds!r}")
             camera_snapshot = payload.get("last_camera_signal")
             if isinstance(camera_snapshot, dict):
                 present = camera_snapshot.get("present")
@@ -445,9 +453,7 @@ class APIWatcher:
                 else:
                     last_known = camera_snapshot.get("last_known_present")
                     if isinstance(last_known, bool):
-                        pieces.append(
-                            f"camera_snapshot_present_stale={last_known!r}"
-                        )
+                        pieces.append(f"camera_snapshot_present_stale={last_known!r}")
                 stale = camera_snapshot.get("stale")
                 if isinstance(stale, bool):
                     pieces.append(f"camera_snapshot_stale={stale!r}")
@@ -458,17 +464,13 @@ class APIWatcher:
                 if isinstance(ping_snapshot, dict):
                     reachable = ping_snapshot.get("reachable")
                     if isinstance(reachable, bool):
-                        pieces.append(
-                            f"camera_ping_reachable={reachable!r}"
-                        )
+                        pieces.append(f"camera_ping_reachable={reachable!r}")
                     ping_age = ping_snapshot.get("age_seconds")
                     if isinstance(ping_age, (int, float)):
                         pieces.append(f"camera_ping_age={ping_age:.1f}s")
                     last_error = ping_snapshot.get("last_error")
                     if last_error:
-                        pieces.append(
-                            f"camera_ping_error={str(last_error)[:60]!r}"
-                        )
+                        pieces.append(f"camera_ping_error={str(last_error)[:60]!r}")
             if not pieces:
                 pieces.append("payload=ok")
             return " ".join(pieces)
@@ -498,6 +500,9 @@ class APIWatcher:
             fallback_active = payload.get("fallback_active")
             if isinstance(fallback_active, bool):
                 self._last_success = now
+                if payload.get("primary_stream_healthy") is True:
+                    return Mode.OFF, "api_primary_saudavel"
+
                 fallback_reason = payload.get("fallback_reason")
                 camera_snapshot = payload.get("last_camera_signal")
                 camera_present = None
@@ -536,6 +541,9 @@ class APIWatcher:
 
                 if fallback_reason == "no_heartbeats":
                     return Mode.LIFE, "api_sem_heartbeats"
+
+                if fallback_reason == "primary_unhealthy":
+                    return Mode.LIFE, "api_primary_nao_saudavel"
 
                 return Mode.LIFE, "api_fallback_ativo"
 
@@ -602,7 +610,9 @@ class APIWatcher:
         if not self._env.set("SCENE", scene):
             LOGGER.warning("Não foi possível atualizar SCENE para %s", mode_enum.value)
         if not self._mode.write(mode_enum):
-            LOGGER.warning("Não foi possível escrever modo %s no ficheiro", mode_enum.value)
+            LOGGER.warning(
+                "Não foi possível escrever modo %s no ficheiro", mode_enum.value
+            )
 
 
 def fetch_status(url: str, timeout: float) -> FetcherResult:

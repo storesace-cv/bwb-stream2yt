@@ -7,7 +7,9 @@ from types import SimpleNamespace
 import pytest
 
 
-MODULE_PATH = Path(__file__).resolve().parent.parent / "bin" / "youtube_fallback_watcher.py"
+MODULE_PATH = (
+    Path(__file__).resolve().parent.parent / "bin" / "youtube_fallback_watcher.py"
+)
 SPEC = importlib.util.spec_from_file_location("youtube_fallback_watcher", MODULE_PATH)
 assert SPEC and SPEC.loader is not None
 module = importlib.util.module_from_spec(SPEC)
@@ -193,6 +195,29 @@ def test_watcher_understands_status_monitor_snapshot_off(
 
     assert bundle.watcher.process_once() is Mode.OFF
     assert bundle.service.stop_calls == 1
+
+
+def test_watcher_keeps_off_when_primary_healthy_even_if_camera_absent(
+    config: WatcherConfig,
+) -> None:
+    clock = FakeClock()
+    results = [
+        FetcherResult(
+            True,
+            {
+                "fallback_active": False,
+                "fallback_reason": None,
+                "primary_stream_healthy": True,
+                "primary_stream_reason": "streaming",
+                "last_camera_signal": {"present": False},
+            },
+        )
+    ]
+    bundle = make_watcher(config, results, clock)
+
+    assert bundle.watcher.process_once() is Mode.OFF
+    assert bundle.service.stop_calls == 1
+    assert bundle.service.start_calls == 0
 
 
 def test_watcher_stops_service_if_reactivated_externally(

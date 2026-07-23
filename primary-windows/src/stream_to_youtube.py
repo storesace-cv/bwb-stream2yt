@@ -20,9 +20,8 @@ import urllib.error
 import urllib.request
 import urllib.parse
 from contextlib import suppress
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
-import textwrap
 import re
 from typing import Any, Callable, Dict, Optional, TextIO
 
@@ -31,6 +30,19 @@ from autotune import (
     AUTOTUNE_UNAVAILABLE_REASON,
     estimate_upload_bitrate,
 )
+from demo_video import (
+    build_demo_input_args,
+    demo_video_exists,
+    demo_video_missing_message,
+    resolve_demo_video_path,
+)
+from send_quality import (
+    apply_profile_to_output_args,
+    get_send_quality_profile,
+    normalize_send_quality,
+)
+from process_launch import hidden_process_kwargs
+from observability import FFmpegProgressTracker
 
 
 DEFAULT_STATUS_ENDPOINT = "http://104.248.134.44:8080/status"
@@ -98,6 +110,14 @@ ENV_TEMPLATE_CONTENT = """# Configurações para stream_to_youtube.py
 #BWB_STATUS_TOKEN=
 #BWB_STATUS_LOG_FILE=logs/heartbeat-status.jsonl
 #BWB_STATUS_LOG_RETENTION_SECONDS=3600
+
+# Janela diária de transmissão.
+# Hora inicial, inclusive.
+#YT_DAY_START_HOUR=8
+# Hora final, exclusiva. Use 24 para permitir até ao fim do dia.
+#YT_DAY_END_HOUR=19
+# Offset horário aplicado sobre UTC.
+#YT_TZ_OFFSET_HOURS=1
 """
 
 
@@ -205,7 +225,9 @@ class _StartupLogger:
             self._handle = None
         return self
 
-    def __exit__(self, exc_type, exc, tb) -> None:  # noqa: D401 - context manager contract
+    def __exit__(
+        self, exc_type, exc, tb
+    ) -> None:  # noqa: D401 - context manager contract
         handle = self._handle
         if handle is not None:
             handle.close()
@@ -352,9 +374,7 @@ def _acquire_single_instance_mutex() -> None:
     handle = kernel32.CreateMutexW(None, False, _INSTANCE_MUTEX_NAME)
     if not handle:
         error_code = ctypes.get_last_error()
-        raise OSError(
-            f"Falha ao criar mutex de instância única (erro {error_code})."
-        )
+        raise OSError(f"Falha ao criar mutex de instância única (erro {error_code}).")
 
     ERROR_ALREADY_EXISTS = 183
     last_error = ctypes.get_last_error()
@@ -504,9 +524,7 @@ def _clear_stale_stop_request() -> None:
 
     _clear_stop_request()
     if stale_due_to_age:
-        reason = (
-            "Sentinela de parada antiga detectada; removendo devido a expiração."
-        )
+        reason = "Sentinela de parada antiga detectada; removendo devido a expiração."
     else:
         reason = (
             "Sentinela de parada obsoleta detectada; removendo antes da inicialização."
@@ -855,35 +873,36 @@ def _collect_full_diagnostics(config: "StreamingConfig") -> str:
     elif active_worker is None:
         summary_lines.append("- Worker em execução: não inicializado")
     elif worker_error:
-        summary_lines.append(
-            f"- Worker em execução: desconhecido ({worker_error})"
-        )
+        summary_lines.append(f"- Worker em execução: desconhecido ({worker_error})")
 
     if camera_result is True:
-        detail = camera_snapshot.get("last_success") or "último probe bem-sucedido desconhecido"
-        summary_lines.append(f"- Sinal da câmara: disponível (último sucesso: {detail})")
+        detail = (
+            camera_snapshot.get("last_success")
+            or "último probe bem-sucedido desconhecido"
+        )
+        summary_lines.append(
+            f"- Sinal da câmara: disponível (último sucesso: {detail})"
+        )
     elif camera_result is False:
         detail = camera_error or "motivo desconhecido"
         summary_lines.append(f"- Sinal da câmara: indisponível ({detail})")
     else:
         detail = camera_error or "ver secção abaixo"
-        summary_lines.append(f"- Sinal da câmara: não foi possível determinar ({detail})")
+        summary_lines.append(
+            f"- Sinal da câmara: não foi possível determinar ({detail})"
+        )
 
     if ping_snapshot:
         reachable = ping_snapshot.get("reachable")
         if reachable is True:
             rtt_ms = ping_snapshot.get("rtt_ms")
             if isinstance(rtt_ms, (int, float)):
-                summary_lines.append(
-                    f"- Ping da câmara: alcançável ({rtt_ms:.1f} ms)"
-                )
+                summary_lines.append(f"- Ping da câmara: alcançável ({rtt_ms:.1f} ms)")
             else:
                 summary_lines.append("- Ping da câmara: alcançável")
         elif reachable is False:
             detail = ping_snapshot.get("last_error") or "sem resposta"
-            summary_lines.append(
-                f"- Ping da câmara: sem resposta ({detail})"
-            )
+            summary_lines.append(f"- Ping da câmara: sem resposta ({detail})")
         else:
             detail = ping_snapshot.get("last_error") or "não executado"
             summary_lines.append(
@@ -1123,7 +1142,9 @@ def _sync_env_against_template(env_path: Path, template_content: str) -> None:
     if backup_created:
         header_lines.append(f"# Backup anterior: {backup_path.name}")
     else:
-        header_lines.append("# ⚠️ Não foi possível criar o backup automático; revise manualmente antes de prosseguir.")
+        header_lines.append(
+            "# ⚠️ Não foi possível criar o backup automático; revise manualmente antes de prosseguir."
+        )
     header_lines.append("# Reveja os valores abaixo e ajuste conforme necessário.")
     header_lines.append("")
 
@@ -1182,7 +1203,9 @@ def _sync_env_against_template(env_path: Path, template_content: str) -> None:
         log_event("primary", message)
         return
 
-    message = "Arquivo .env atualizado automaticamente para alinhar com o template atual."
+    message = (
+        "Arquivo .env atualizado automaticamente para alinhar com o template atual."
+    )
     print(f"[primary] {message}")
     log_event("primary", message)
 
@@ -1551,6 +1574,41 @@ class StreamingConfig:
     autotune_safety_margin: float
     heartbeat: HeartbeatConfig
     camera_probe: CameraProbeConfig
+    demo_mode: bool = False
+
+
+def apply_demo_video_source(
+    config: StreamingConfig, video_path: Optional[str] = None
+) -> StreamingConfig:
+    """Devolve uma cópia da config com entrada MP4 em loop (não altera .env)."""
+
+    path = resolve_demo_video_path(explicit=video_path)
+    return replace(
+        config,
+        input_args=build_demo_input_args(path),
+        demo_mode=True,
+        camera_probe=replace(config.camera_probe, required=False),
+    )
+
+
+def apply_send_quality(
+    config: StreamingConfig, quality_key: Optional[str]
+) -> StreamingConfig:
+    """Aplica perfil manual de qualidade (sessão UI; não altera .env)."""
+
+    profile = get_send_quality_profile(quality_key)
+    output_args = apply_profile_to_output_args(config.output_args, profile)
+    bitrate_max = profile.maxrate_kbps
+    bitrate_min = min(config.bitrate_min_kbps, profile.bitrate_kbps)
+    if bitrate_min > bitrate_max:
+        bitrate_min = bitrate_max
+    return replace(
+        config,
+        output_args=output_args,
+        resolution=profile.short_resolution,
+        bitrate_min_kbps=bitrate_min,
+        bitrate_max_kbps=bitrate_max,
+    )
 
 
 def _resolve_heartbeat_config(base_dir: Path) -> HeartbeatConfig:
@@ -2067,6 +2125,7 @@ class CameraSignalMonitor:
                 text=True,
                 timeout=timeout,
                 check=False,
+                **hidden_process_kwargs(),
             )
         except FileNotFoundError as exc:
             error_text = f"ffprobe não encontrado: {exc}"
@@ -2109,9 +2168,7 @@ class CameraSignalMonitor:
         with self._lock:
             self._ffprobe_available = False
             if not self._ffprobe_warning_emitted:
-                message = (
-                    f"ffprobe ausente em {self._ffprobe}; desativando verificação do sinal da câmara."
-                )
+                message = f"ffprobe ausente em {self._ffprobe}; desativando verificação do sinal da câmara."
                 self._ffprobe_warning_emitted = True
             else:
                 message = ""
@@ -2155,13 +2212,12 @@ class CameraSignalMonitor:
 
     def _log_state_change(self, present: bool, error_text: Optional[str]) -> None:
         if present:
-            message = (
-                "Sinal da câmara restabelecido; retomando transmissão principal assim que possível."
-            )
+            message = "Sinal da câmara restabelecido; retomando transmissão principal assim que possível."
         else:
             detail = error_text or "sem vídeo detectado"
             message = (
-                "Sinal da câmara indisponível (%s); aguardando antes de transmitir." % detail
+                "Sinal da câmara indisponível (%s); aguardando antes de transmitir."
+                % detail
             )
 
         self._log("primary", message)
@@ -2202,6 +2258,9 @@ class StreamingWorker:
             config.camera_probe.timeout,
             config.camera_probe.required,
         )
+        self._progress = FFmpegProgressTracker()
+        self._progress_thread: Optional[threading.Thread] = None
+        self._stderr_thread: Optional[threading.Thread] = None
 
     def start(self) -> None:
         if self.is_running:
@@ -2270,8 +2329,10 @@ class StreamingWorker:
             "resolution": self._config.resolution,
             "yt_url_present": bool(self._config.yt_url),
             "heartbeat_configured": self._config.heartbeat.enabled,
+            "demo_mode": bool(self._config.demo_mode),
         }
         snapshot["camera_signal"] = self._camera_monitor.snapshot()
+        snapshot["ffmpeg_progress"] = self._progress.snapshot_for_status()
         return snapshot
 
     def _run_loop(self) -> None:
@@ -2286,6 +2347,9 @@ class StreamingWorker:
             "-hide_banner",
             "-loglevel",
             "warning",
+            "-nostats",
+            "-progress",
+            "pipe:1",
             *self._config.input_args,
             *self._config.output_args,
             "-f",
@@ -2302,7 +2366,10 @@ class StreamingWorker:
                         break
                     continue
 
-                if not self._camera_monitor.confirm_signal():
+                if (
+                    not self._config.demo_mode
+                    and not self._camera_monitor.confirm_signal()
+                ):
                     wait_seconds = max(self._camera_monitor.retry_delay, 5.0)
                     if self._stop_event.wait(wait_seconds):
                         break
@@ -2314,6 +2381,9 @@ class StreamingWorker:
                     "-hide_banner",
                     "-loglevel",
                     "warning",
+                    "-nostats",
+                    "-progress",
+                    "pipe:1",
                     *self._config.input_args,
                     *output_args,
                     "-f",
@@ -2326,6 +2396,9 @@ class StreamingWorker:
                     "-hide_banner",
                     "-loglevel",
                     "warning",
+                    "-nostats",
+                    "-progress",
+                    "pipe:1",
                     *self._config.input_args,
                     *output_args,
                     "-f",
@@ -2336,14 +2409,31 @@ class StreamingWorker:
 
                 with self._process_lock:
                     try:
-                        self._process = subprocess.Popen(cmd)
+                        self._process = subprocess.Popen(
+                            cmd,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                            text=True,
+                            encoding="utf-8",
+                            errors="replace",
+                            bufsize=1,
+                            **hidden_process_kwargs(),
+                        )
                         self._last_launch_time = time.time()
                         self._last_exit_code = None
                     except OSError as exc:
+                        self._process = None
+                        self._progress.mark_error(str(exc), code="ffmpeg_start_failed")
                         log_event("primary", f"Falha ao iniciar ffmpeg: {exc}")
                         if self._stop_event.wait(5):
                             break
                         continue
+
+                launched = self._process
+                if launched is None:
+                    continue
+                self._progress.mark_session_started()
+                self._start_io_threads(launched)
 
                 code = self._wait_process()
                 if code is None:
@@ -2480,6 +2570,8 @@ class StreamingWorker:
                     self._terminate_process()
                     return None
 
+        self._stop_io_threads()
+
         with self._process_lock:
             self._process = None
 
@@ -2489,6 +2581,12 @@ class StreamingWorker:
         self._last_exit_code = code
         if not self._stop_event.is_set():
             self._restart_count += 1
+            if code != 0:
+                self._progress.mark_error(f"código {code}")
+            else:
+                self._progress.mark_session_stopped()
+        else:
+            self._progress.mark_session_stopped()
 
         return code
 
@@ -2497,6 +2595,7 @@ class StreamingWorker:
             proc = self._process
 
         if proc is None:
+            self._stop_io_threads()
             return
 
         if proc.poll() is None:
@@ -2513,11 +2612,77 @@ class StreamingWorker:
                 except Exception:
                     pass
                 else:
-                    proc.wait()
+                    with suppress(Exception):
+                        proc.wait()
+
+        self._stop_io_threads()
 
         with self._process_lock:
-            self._process = None
+            if self._process is proc:
+                self._process = None
             self._last_launch_time = None
+
+        if self._stop_event.is_set():
+            state = self._progress.metrics_snapshot().get("rtmps_send_state")
+            if state not in ("Erro", "Parado"):
+                self._progress.mark_session_stopped()
+
+    def _start_io_threads(self, proc: subprocess.Popen[str]) -> None:
+        # Do not call _stop_io_threads here: self._process already points at
+        # this new proc, and cleanup would close its stdout/stderr before readers start.
+        # Previous session I/O is cleaned in _wait_process / _terminate_process.
+        self._progress_thread = threading.Thread(
+            target=self._read_progress_stdout,
+            args=(proc,),
+            name="FFmpegProgressReader",
+            daemon=True,
+        )
+        self._stderr_thread = threading.Thread(
+            target=self._drain_ffmpeg_stderr,
+            args=(proc,),
+            name="FFmpegStderrReader",
+            daemon=True,
+        )
+        self._progress_thread.start()
+        self._stderr_thread.start()
+
+    def _read_progress_stdout(self, proc: subprocess.Popen[str]) -> None:
+        stream = proc.stdout
+        if stream is None:
+            return
+        try:
+            for line in stream:
+                self._progress.feed_line(line)
+        except (OSError, ValueError):
+            pass
+
+    def _drain_ffmpeg_stderr(self, proc: subprocess.Popen[str]) -> None:
+        stream = proc.stderr
+        if stream is None:
+            return
+        try:
+            for line in stream:
+                text = line.rstrip("\r\n")
+                if text:
+                    log_event("ffmpeg", text)
+        except (OSError, ValueError):
+            pass
+
+    def _stop_io_threads(self, timeout: float = 2.0) -> None:
+        with self._process_lock:
+            proc = self._process
+        if proc is not None:
+            for stream in (proc.stdout, proc.stderr):
+                if stream is not None:
+                    with suppress(Exception):
+                        stream.close()
+
+        threads = (self._progress_thread, self._stderr_thread)
+        for thread in threads:
+            if thread is not None and thread.is_alive():
+                thread.join(timeout=timeout)
+        self._progress_thread = None
+        self._stderr_thread = None
 
 
 def run_forever(
@@ -2607,12 +2772,26 @@ def run_forever(
 
 
 def _start_streaming_instance(
-    resolution: Optional[str] = None, full_diagnostics: bool = False
+    resolution: Optional[str] = None,
+    full_diagnostics: bool = False,
+    *,
+    demo_video_path: Optional[str] = None,
+    input_args: Optional[list[str]] = None,
+    send_quality: Optional[str] = None,
 ) -> int:
     startup_logger = _StartupLogger(_resolve_startup_log_path())
 
     try:
         with startup_logger as logger:
+            if demo_video_path is not None:
+                resolved_demo = resolve_demo_video_path(explicit=demo_video_path)
+                if not demo_video_exists(resolved_demo):
+                    message = demo_video_missing_message(resolved_demo)
+                    logger.log(message)
+                    print(f"[primary] {message}", file=sys.stderr)
+                    log_event("primary", message)
+                    return 3
+
             logger.log("A verificar sentinelas pendentes antes do arranque.")
             try:
                 _clear_stale_stop_request()
@@ -2646,6 +2825,22 @@ def _start_streaming_instance(
             try:
                 logger.log("A carregar configuração de streaming.")
                 config = load_config(resolution=resolution)
+                if demo_video_path is not None:
+                    config = apply_demo_video_source(config, demo_video_path)
+                    logger.log(
+                        "Modo demonstração ativo; entrada temporária MP4 (sem alterar .env)."
+                    )
+                elif input_args is not None:
+                    config = replace(config, input_args=list(input_args))
+                if send_quality is not None:
+                    quality_key = normalize_send_quality(send_quality)
+                    config = apply_send_quality(config, quality_key)
+                    profile = get_send_quality_profile(quality_key)
+                    logger.log(
+                        "Qualidade de envio manual "
+                        f"{profile.label} ({profile.short_resolution}); "
+                        "sessão UI sem alterar .env."
+                    )
                 logger.log(
                     f"Configuração carregada; resolução reportada: {config.resolution}."
                 )
@@ -2663,7 +2858,9 @@ def _start_streaming_instance(
                     raise
 
             if not config.yt_url:
-                message = "Credenciais YT_URL/YT_KEY ausentes; streaming worker finalizado."
+                message = (
+                    "Credenciais YT_URL/YT_KEY ausentes; streaming worker finalizado."
+                )
                 logger.log(message)
                 print(f"[primary] {message}", file=sys.stderr)
                 log_event("primary", message)
@@ -2690,12 +2887,21 @@ def _start_streaming_instance(
 
 
 def start_streaming_instance(
-    resolution: Optional[str] = None, full_diagnostics: bool = False
+    resolution: Optional[str] = None,
+    full_diagnostics: bool = False,
+    *,
+    demo_video_path: Optional[str] = None,
+    input_args: Optional[list[str]] = None,
+    send_quality: Optional[str] = None,
 ) -> int:
     """Public wrapper used by alternate launchers (e.g., Windows service)."""
 
     return _start_streaming_instance(
-        resolution=resolution, full_diagnostics=full_diagnostics
+        resolution=resolution,
+        full_diagnostics=full_diagnostics,
+        demo_video_path=demo_video_path,
+        input_args=input_args,
+        send_quality=send_quality,
     )
 
 
@@ -2770,6 +2976,26 @@ def stop_active_worker(timeout: Optional[float] = 10.0) -> None:
         log_event("primary", f"Erro ao parar worker ativo: {exc}")
 
 
+def get_active_worker_snapshot() -> Optional[Dict[str, Any]]:
+    """Return a thread-safe status snapshot of the in-process worker, if any."""
+
+    worker = _ACTIVE_WORKER
+    if worker is None:
+        return None
+    try:
+        return worker.status_snapshot()
+    except Exception as exc:  # noqa: BLE001
+        log_event("primary", f"Falha ao obter snapshot do worker: {exc}")
+        return None
+
+
+def collect_diagnostics_text(resolution: Optional[str] = None) -> str:
+    """Build the full diagnostics report for UI or tooling."""
+
+    config = load_config(resolution=resolution)
+    return _collect_full_diagnostics(config)
+
+
 def main() -> None:
     raw_args = sys.argv[1:]
     normalized_pairs: list[tuple[str, str]] = []
@@ -2786,10 +3012,13 @@ def main() -> None:
     command = "--start"
     extra_pairs = normalized_pairs
 
-    if normalized_pairs and normalized_pairs[0][0] in {"--start", "--stop"}:
+    if normalized_pairs and normalized_pairs[0][0] in {"--start", "--stop", "--ui"}:
         command = normalized_pairs[0][0]
         extra_pairs = normalized_pairs[1:]
-    elif normalized_pairs and normalized_pairs[0][0] not in {"--showonscreen", "--fulldiags"}:
+    elif normalized_pairs and normalized_pairs[0][0] not in {
+        "--showonscreen",
+        "--fulldiags",
+    }:
         message = f"Flag desconhecida: {normalized_pairs[0][1]}"
         print(f"[primary] {message}", file=sys.stderr)
         log_event("primary", message)
@@ -2842,6 +3071,12 @@ def main() -> None:
 
         resolution_arg = normalized_resolution
 
+    if command == "--ui":
+        _ensure_signal_handlers()
+        from ui_app import run_ui_app
+
+        sys.exit(run_ui_app(resolution=resolution_arg))
+
     global _SHOW_ON_SCREEN, _FULL_DIAGNOSTICS_REQUESTED
     _SHOW_ON_SCREEN = show_on_screen
     _FULL_DIAGNOSTICS_REQUESTED = full_diagnostics
@@ -2868,63 +3103,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-_STARTUP_LOG_ENV = "BWB_SERVICE_STARTUP_LOG"
-_DEFAULT_STARTUP_LOG_RELATIVE = Path(r"C:\bwb\apps\youtube\logs") / "stream2yt-service-startup.log"
-
-
-def _resolve_startup_log_path() -> Path:
-    override = os.environ.get(_STARTUP_LOG_ENV, "").strip()
-    if override:
-        expanded = os.path.expandvars(override)
-        candidate = Path(expanded).expanduser()
-        if not candidate.is_absolute():
-            candidate = (_script_base_dir() / candidate).resolve()
-        return candidate
-    return _DEFAULT_STARTUP_LOG_RELATIVE
-
-
-class _StartupLogger:
-    """Helper that captures startup diagnostics and cleans up on success."""
-
-    def __init__(self, path: Path) -> None:
-        self._path = path
-        self._handle: Optional[TextIO] = None
-        self._remove_on_exit = False
-
-    def __enter__(self) -> "_StartupLogger":
-        try:
-            self._path.parent.mkdir(parents=True, exist_ok=True)
-            self._handle = self._path.open("w", encoding="utf-8")
-            self.log(
-                "Log de arranque inicializado; a recolher diagnóstico do stream2yt-service."
-            )
-        except OSError:
-            self._handle = None
-        return self
-
-    def __exit__(self, exc_type, exc, tb) -> None:  # noqa: D401 - context manager contract
-        handle = self._handle
-        if handle is not None:
-            handle.close()
-            self._handle = None
-        if self._remove_on_exit:
-            with suppress(OSError):
-                self._path.unlink()
-
-    def log(self, message: str) -> None:
-        handle = self._handle
-        if handle is None:
-            return
-        timestamp = (
-            datetime.datetime.now(datetime.timezone.utc)
-            .replace(microsecond=0)
-            .isoformat()
-        )
-        try:
-            handle.write(f"[{timestamp}] {message}\n")
-            handle.flush()
-        except OSError:
-            pass
-
-    def mark_success(self) -> None:
-        self._remove_on_exit = True

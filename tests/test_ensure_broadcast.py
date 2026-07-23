@@ -5,8 +5,6 @@ import sys
 import types
 from pathlib import Path
 
-import pytest
-
 
 def _ensure_module(name: str, *, package: bool) -> types.ModuleType:
     module = types.ModuleType(name)
