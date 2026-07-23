@@ -70,7 +70,9 @@ def test_build_demo_input_args_loop_realtime():
 def test_missing_demo_file_message_and_exists(tmp_path):
     missing = tmp_path / "absent.mp4"
     assert demo_video_exists(str(missing)) is False
-    assert str(missing) in demo_video_missing_message(str(missing))
+    assert demo_video_missing_message(str(missing)) == (
+        "O vídeo de demonstração selecionado não foi encontrado."
+    )
 
 
 def test_apply_demo_does_not_mutate_original_config(tmp_path):
