@@ -21,6 +21,7 @@ from send_quality import DEFAULT_SEND_QUALITY  # noqa: E402
 from stream_audio import (  # noqa: E402
     AUDIO_MODE_SILENT,
     AUDIO_MODE_SOURCE,
+    AudioProbeResult,
     NO_AUDIO_AVAILABLE_MESSAGE,
     apply_audio_mode_to_config,
     build_audio_map_args,
@@ -275,7 +276,7 @@ def test_silent_mode_ignores_original_mp4_audio():
 def test_source_audio_uses_original_track(monkeypatch):
     monkeypatch.setattr(
         "stream_audio.probe_input_has_audio",
-        lambda *a, **k: True,
+        lambda *a, **k: AudioProbeResult(ok=True, has_audio=True),
     )
     updated = apply_audio_mode_to_config(_base_config(), AUDIO_MODE_SOURCE)
     assert updated.output_args[:4] == ["-map", "0:v:0", "-map", "0:a:0"]
@@ -287,7 +288,9 @@ def test_source_audio_uses_original_track(monkeypatch):
 def test_source_audio_without_track_raises(monkeypatch):
     monkeypatch.setattr(
         "stream_audio.probe_input_has_audio",
-        lambda *a, **k: False,
+        lambda *a, **k: AudioProbeResult(
+            ok=True, has_audio=False, error_kind="no_audio"
+        ),
     )
     with pytest.raises(ValueError, match=NO_AUDIO_AVAILABLE_MESSAGE):
         apply_audio_mode_to_config(_base_config(), AUDIO_MODE_SOURCE)
@@ -341,7 +344,10 @@ def test_demo_silent_orders_mp4_then_anullsrc():
 
 
 def test_camera_source_audio_has_no_anullsrc(monkeypatch):
-    monkeypatch.setattr("stream_audio.probe_input_has_audio", lambda *a, **k: True)
+    monkeypatch.setattr(
+        "stream_audio.probe_input_has_audio",
+        lambda *a, **k: AudioProbeResult(ok=True, has_audio=True),
+    )
     source_args = ["-rtsp_transport", "tcp", "-i", "rtsp://cam/stream"]
     config = apply_audio_mode_to_config(
         _base_config(input_args=list(source_args)), AUDIO_MODE_SOURCE
@@ -373,14 +379,12 @@ def test_probe_helper_parses_ffprobe_json():
         stdout = '{"streams":[{"codec_type":"audio"}]}'
         stderr = ""
 
-    assert (
-        probe_input_has_audio(
-            "ffprobe",
-            ["-i", "file.mp4"],
-            run=lambda *a, **k: _Result(),
-        )
-        is True
+    result = probe_input_has_audio(
+        "ffprobe",
+        ["-i", "file.mp4"],
+        run=lambda *a, **k: _Result(),
     )
+    assert result.ok and result.has_audio
 
 
 def test_ui_settings_never_write_env(monkeypatch, tmp_path):

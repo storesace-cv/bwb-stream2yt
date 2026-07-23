@@ -27,6 +27,7 @@ KEY_SCHEDULE_LIMITED = "schedule_limited"
 KEY_DAY_START = "day_start_hour"
 KEY_DAY_END = "day_end_hour"
 KEY_TZ_OFFSET = "tz_offset_hours"
+KEY_CAMERA_FAILOVER = "camera_failover_to_demo"
 
 
 class SettingsStore(Protocol):
@@ -63,6 +64,7 @@ class UiSettings:
     day_start_hour: int = 0
     day_end_hour: int = 24
     tz_offset_hours: int = 0
+    camera_failover_to_demo: bool = False
 
     @property
     def demo_enabled(self) -> bool:
@@ -84,6 +86,7 @@ def default_ui_settings() -> UiSettings:
         day_start_hour=0,
         day_end_hour=24,
         tz_offset_hours=0,
+        camera_failover_to_demo=False,
     )
 
 
@@ -131,6 +134,8 @@ def validate_ui_settings(settings: UiSettings) -> UiSettings:
     if tz < -12 or tz > 14:
         tz = 0
 
+    failover = bool(settings.camera_failover_to_demo) and source == VIDEO_SOURCE_CAMERA
+
     return UiSettings(
         video_source=source,
         demo_video_path=demo_path,
@@ -140,6 +145,7 @@ def validate_ui_settings(settings: UiSettings) -> UiSettings:
         day_start_hour=start,
         day_end_hour=end,
         tz_offset_hours=tz,
+        camera_failover_to_demo=failover,
     )
 
 
@@ -175,6 +181,10 @@ def load_ui_settings(store: SettingsStore) -> UiSettings:
             store.value(KEY_TZ_OFFSET, defaults.tz_offset_hours),
             defaults.tz_offset_hours,
         ),
+        camera_failover_to_demo=_as_bool(
+            store.value(KEY_CAMERA_FAILOVER, defaults.camera_failover_to_demo),
+            defaults.camera_failover_to_demo,
+        ),
     )
     return validate_ui_settings(loaded)
 
@@ -189,6 +199,7 @@ def save_ui_settings(store: SettingsStore, settings: UiSettings) -> UiSettings:
     store.setValue(KEY_DAY_START, validated.day_start_hour)
     store.setValue(KEY_DAY_END, validated.day_end_hour)
     store.setValue(KEY_TZ_OFFSET, validated.tz_offset_hours)
+    store.setValue(KEY_CAMERA_FAILOVER, validated.camera_failover_to_demo)
     store.sync()
     return validated
 

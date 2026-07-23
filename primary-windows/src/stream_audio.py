@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from typing import Any, Callable, List, Optional, Sequence
 
 from process_launch import hidden_process_kwargs
@@ -14,8 +15,26 @@ AUDIO_MODE_SOURCE = "source"
 DEFAULT_AUDIO_MODE = AUDIO_MODE_SILENT
 
 NO_AUDIO_AVAILABLE_MESSAGE = "A fonte selecionada não tem áudio disponível."
+AUDIO_PROBE_FAILED_MESSAGE = "Não foi possível analisar o áudio da fonte."
 
 _ANULLSRC = "anullsrc=channel_layout=stereo:sample_rate=44100"
+_FFMPEG_ONLY_FLAGS = {"-stream_loop", "-re"}
+_LAVFI_MARKERS = ("lavfi", "anullsrc")
+_RTSP_CREDENTIAL_RE = re.compile(r"(?i)(\w+://)([^:/\s@]+):([^@\s]+)@")
+
+
+def _sanitize_detail(value: str) -> str:
+    """Mascara credenciais que o ffprobe possa repetir no stderr."""
+
+    return _RTSP_CREDENTIAL_RE.sub(r"\1\2:***@", value)
+
+
+@dataclass(frozen=True)
+class AudioProbeResult:
+    ok: bool
+    has_audio: bool
+    error_kind: Optional[str] = None
+    sanitized_detail: Optional[str] = None
 
 
 def normalize_audio_mode(value: Optional[str]) -> str:
@@ -92,21 +111,74 @@ def build_audio_aware_output_args(
     return maps + ensure_aac_audio_output_args(cleaned)
 
 
+def build_ffprobe_input_args(input_args: Sequence[str]) -> List[str]:
+    """Argumentos aceites pelo ffprobe (sem flags exclusivas do FFmpeg)."""
+
+    cleaned: List[str] = []
+    skip_next = False
+    for index, raw in enumerate(input_args):
+        if skip_next:
+            skip_next = False
+            continue
+        token = str(raw)
+        lower = token.lower()
+        if token in _FFMPEG_ONLY_FLAGS:
+            if token == "-stream_loop" and index + 1 < len(input_args):
+                skip_next = True
+            continue
+        if token == "-f" and index + 1 < len(input_args):
+            nxt = str(input_args[index + 1]).lower()
+            if any(marker in nxt for marker in _LAVFI_MARKERS) or nxt == "lavfi":
+                skip_next = True
+                continue
+        if any(marker in lower for marker in _LAVFI_MARKERS):
+            if cleaned and cleaned[-1] == "-i":
+                cleaned.pop()
+            continue
+        cleaned.append(token)
+
+    # Garantir que existe -i <fonte> e descartar entradas lavfi residuais após -i.
+    result: List[str] = []
+    i = 0
+    while i < len(cleaned):
+        token = cleaned[i]
+        if token == "-i" and i + 1 < len(cleaned):
+            target = cleaned[i + 1]
+            if any(marker in target.lower() for marker in _LAVFI_MARKERS):
+                i += 2
+                continue
+            result.extend(["-i", target])
+            i += 2
+            continue
+        result.append(token)
+        i += 1
+    return result
+
+
 def probe_input_has_audio(
     ffprobe: str,
     input_args: Sequence[str],
     *,
     timeout: float = 10.0,
     run: Callable[..., Any] = subprocess.run,
-) -> bool:
-    """Devolve True se ffprobe reportar pelo menos uma faixa de áudio."""
+) -> AudioProbeResult:
+    """Analisa a fonte com ffprobe e distingue ausência de áudio de erros."""
 
     probe = (ffprobe or "").strip() or "ffprobe"
+    probe_args = build_ffprobe_input_args(input_args)
+    if not probe_args or "-i" not in probe_args:
+        return AudioProbeResult(
+            ok=False,
+            has_audio=False,
+            error_kind="bad_args",
+            sanitized_detail="argumentos de entrada inválidos para ffprobe",
+        )
+
     cmd = [
         probe,
         "-v",
         "error",
-        *list(input_args),
+        *probe_args,
         "-select_streams",
         "a",
         "-show_entries",
@@ -124,46 +196,87 @@ def probe_input_has_audio(
             **hidden_process_kwargs(),
         )
     except FileNotFoundError:
-        return False
-    except Exception:  # noqa: BLE001
-        return False
+        return AudioProbeResult(
+            ok=False,
+            has_audio=False,
+            error_kind="ffprobe_missing",
+            sanitized_detail="ffprobe não encontrado",
+        )
+    except subprocess.TimeoutExpired:
+        return AudioProbeResult(
+            ok=False,
+            has_audio=False,
+            error_kind="timeout",
+            sanitized_detail=f"ffprobe excedeu {timeout:.1f}s",
+        )
+    except Exception as exc:  # noqa: BLE001
+        return AudioProbeResult(
+            ok=False,
+            has_audio=False,
+            error_kind="unknown",
+            sanitized_detail=exc.__class__.__name__,
+        )
 
-    if int(getattr(completed, "returncode", 1) or 0) != 0:
-        return False
+    code = int(getattr(completed, "returncode", 1) or 0)
+    stderr = (getattr(completed, "stderr", None) or "").strip()
+    if code != 0:
+        detail = _sanitize_detail(stderr[:160] if stderr else f"exit {code}")
+        lowered = detail.lower()
+        kind = (
+            "connect_failed"
+            if any(
+                token in lowered
+                for token in ("connection", "timed out", "401", "403", "404")
+            )
+            else "bad_args"
+        )
+        return AudioProbeResult(
+            ok=False,
+            has_audio=False,
+            error_kind=kind,
+            sanitized_detail=detail,
+        )
+
     try:
         payload = json.loads(getattr(completed, "stdout", None) or "{}")
     except json.JSONDecodeError:
-        return False
+        return AudioProbeResult(
+            ok=False,
+            has_audio=False,
+            error_kind="unknown",
+            sanitized_detail="json inválido do ffprobe",
+        )
+
     streams = payload.get("streams")
     if not isinstance(streams, list):
-        return False
+        return AudioProbeResult(ok=True, has_audio=False, error_kind="no_audio")
+
     for stream in streams:
         if isinstance(stream, dict) and stream.get("codec_type") == "audio":
-            return True
-    return False
+            return AudioProbeResult(ok=True, has_audio=True, error_kind=None)
+    return AudioProbeResult(ok=True, has_audio=False, error_kind="no_audio")
 
 
 def apply_audio_mode_to_config(config: Any, mode: Optional[str]) -> Any:
-    """Aplica modo de áudio a StreamingConfig (output/maps), sem alterar a fonte.
-
-    ``config.input_args`` continua a representar apenas a câmara ou o MP4.
-    O ``anullsrc`` é acrescentado só em ``build_effective_ffmpeg_input_args``.
-
-    Em modo fonte, exige faixa de áudio na entrada; caso contrário levanta
-    ``ValueError`` com mensagem orientada ao utilizador.
-    """
+    """Aplica modo de áudio a StreamingConfig (output/maps), sem alterar a fonte."""
 
     normalized = normalize_audio_mode(mode)
     if normalized == AUDIO_MODE_SOURCE:
-        has_audio = probe_input_has_audio(
+        result = probe_input_has_audio(
             getattr(getattr(config, "camera_probe", None), "ffprobe", "") or "",
             list(config.input_args),
-            timeout=float(
-                getattr(getattr(config, "camera_probe", None), "timeout", 7.0) or 7.0
+            timeout=min(
+                3.0,
+                float(
+                    getattr(getattr(config, "camera_probe", None), "timeout", 7.0)
+                    or 7.0
+                ),
             ),
         )
-        if not has_audio:
+        if result.ok and not result.has_audio:
             raise ValueError(NO_AUDIO_AVAILABLE_MESSAGE)
+        if not result.ok:
+            raise ValueError(AUDIO_PROBE_FAILED_MESSAGE)
         output_args = build_audio_aware_output_args(config.output_args, silent=False)
         return replace(
             config,

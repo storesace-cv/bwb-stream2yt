@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any, Dict, Iterable, Optional
+from typing import Any, Callable, Dict, Iterable, Optional
 
 LOGGER = logging.getLogger("bwb_status_monitor")
 
@@ -42,6 +42,7 @@ FALLBACK_RESTART_CMD: tuple[str, ...] = (
 DEFAULT_MODE_FILE = Path("/run/youtube-fallback/mode")
 
 PRIMARY_HEALTHY_RTMPS_STATE = "A enviar"
+CLOUD_TRANSITION_GRACE_SECONDS = 35.0
 
 
 def utc_now() -> dt.datetime:
@@ -635,6 +636,7 @@ class StatusMonitor:
         settings: MonitorSettings,
         service_manager: ServiceManager,
         refresher: Optional[YouTubeRefresher] = None,
+        monotonic: Callable[[], float] = time.monotonic,
     ) -> None:
         self._settings = settings
         self._service_manager = service_manager
@@ -649,6 +651,9 @@ class StatusMonitor:
         self._last_camera_status: Optional[Dict[str, Any]] = None
         self._mode_file = settings.mode_file
         self._stop_event = threading.Event()
+        self._monotonic = monotonic
+        self._transition_first_seen_by_id: Dict[str, float] = {}
+        self._transition_grace_started_at: Optional[float] = None
         self._camera_ping_host = settings.camera_ping_host
         self._camera_ping_interval = max(1, int(settings.camera_ping_interval))
         self._camera_ping_count = max(1, int(settings.camera_ping_count))
@@ -698,12 +703,19 @@ class StatusMonitor:
             self._primary_stream_reason = health_reason
 
         if healthy:
+            self._clear_transition_grace()
             _, camera_snapshot = self._extract_camera_status(entry.payload)
             with self._lock:
                 self._last_camera_status = camera_snapshot
             self._force_stop_fallback(
                 "Envio principal saudável (RTMPS a enviar); "
                 "a garantir paragem de youtube-fallback.service."
+            )
+            return
+
+        if self._transition_grace_active(entry.payload):
+            self._force_stop_fallback(
+                "Transição de failover em curso; a aguardar emissor Windows."
             )
             return
 
@@ -823,12 +835,55 @@ class StatusMonitor:
             fallback_reason = self._fallback_reason
 
         if elapsed >= self._settings.missed_threshold:
+            # Heartbeat antigo: sem grace e pode ativar fallback.
+            self._clear_transition_grace()
             if fallback_reason == "no_camera_signal":
                 return
             if not fallback_active or fallback_reason != "no_heartbeats":
                 self._activate_missing_heartbeats(int(elapsed))
         else:
             LOGGER.debug("Heartbeat recente ha %.1fs; fallback desnecessario", elapsed)
+
+    def _clear_transition_grace(self) -> None:
+        with self._lock:
+            self._transition_first_seen_by_id.clear()
+            self._transition_grace_started_at = None
+
+    def _transition_grace_active(self, payload: Dict[str, Any]) -> bool:
+        """Indica se um heartbeat não saudável ainda está em transição.
+
+        Datas enviadas pelo Windows são apenas telemetria: o limite é sempre
+        contado pelo relógio monotónico deste droplet, a partir da primeira
+        transição observada na janela atual.
+        """
+
+        status = payload.get("status")
+        if not isinstance(status, dict):
+            self._clear_transition_grace()
+            return False
+        if status.get("stop_requested") is True:
+            self._clear_transition_grace()
+            return False
+        if status.get("failover_transition_active") is not True:
+            self._clear_transition_grace()
+            return False
+
+        transition_id = status.get("failover_transition_id")
+        if not isinstance(transition_id, str) or not transition_id:
+            self._clear_transition_grace()
+            return False
+
+        now = self._monotonic()
+        with self._lock:
+            if self._transition_grace_started_at is None:
+                self._transition_grace_started_at = now
+            self._transition_first_seen_by_id.setdefault(transition_id, now)
+            started_at = self._transition_grace_started_at
+            active = now - started_at <= CLOUD_TRANSITION_GRACE_SECONDS
+
+        if not active:
+            self._clear_transition_grace()
+        return active
 
     def _write_mode_file(self, mode: str) -> None:
         path = self._mode_file

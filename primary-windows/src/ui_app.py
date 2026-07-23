@@ -9,11 +9,16 @@ import queue
 import sys
 import threading
 import time
-import urllib.error
-import urllib.request
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
+from connectivity import (
+    INTERNET_CHECK_TIMEOUT_SECONDS,
+    INTERNET_CHECK_URL,
+    INTERNET_OFFLINE_LABEL,
+    INTERNET_ONLINE_LABEL,
+    check_internet_connectivity as probe_internet_connectivity,
+)
 from preview_rtsp import (
     STATUS_CONNECTING,
     STATUS_NO_IMAGE,
@@ -41,6 +46,7 @@ from ui_settings import (
 from stream_audio import (
     AUDIO_MODE_SILENT,
     AUDIO_MODE_SOURCE,
+    AUDIO_PROBE_FAILED_MESSAGE,
     NO_AUDIO_AVAILABLE_MESSAGE,
     audio_mode_label,
 )
@@ -58,17 +64,16 @@ INSTANCE_ACTIVE_HINT = (
 )
 
 INTERNET_CHECKING = "A verificar"
-INTERNET_ONLINE = "Ligada"
-INTERNET_OFFLINE = "Sem ligação"
+INTERNET_ONLINE = INTERNET_ONLINE_LABEL
+INTERNET_OFFLINE = INTERNET_OFFLINE_LABEL
 INTERNET_OFFLINE_MESSAGE = (
     "Sem ligação à Internet. Não é possível enviar a transmissão para o YouTube."
 )
-INTERNET_CHECK_URL = "https://www.youtube.com/generate_204"
-INTERNET_CHECK_TIMEOUT_SECONDS = 3.0
 INTERNET_CHECK_INTERVAL_SECONDS = 15.0
 APP_ICON_FILENAME = "stream2yt-ui.ico"
 
 SETTINGS_BLOCKED_MESSAGE = "Pare a transmissão antes de alterar as definições."
+CAMERA_FAILOVER_CHECKBOX_LABEL = "Usar vídeo de demonstração se a câmara falhar"
 
 
 def resolve_app_icon_path() -> Optional[Path]:
@@ -106,25 +111,7 @@ def check_internet_connectivity(
 ) -> str:
     """Verifica conectividade HTTP mínima. Devolve Ligada ou Sem ligação."""
 
-    try:
-        request = urllib.request.Request(
-            url,
-            method="GET",
-            headers={"User-Agent": "BWBPrimary-UI/1.0"},
-        )
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            status_code = getattr(response, "status", None)
-            if status_code is None:
-                status_code = response.getcode()
-            if status_code is not None and int(status_code) >= 500:
-                return INTERNET_OFFLINE
-            return INTERNET_ONLINE
-    except urllib.error.HTTPError as exc:
-        if exc.code < 500:
-            return INTERNET_ONLINE
-        return INTERNET_OFFLINE
-    except (urllib.error.URLError, TimeoutError, OSError):
-        return INTERNET_OFFLINE
+    return probe_internet_connectivity(timeout=timeout, url=url).ui_label()
 
 
 def derive_camera_status(
@@ -300,6 +287,14 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
             source_layout.addWidget(self._radio_camera)
             source_layout.addWidget(self._radio_demo)
 
+            self._failover_checkbox = QCheckBox(CAMERA_FAILOVER_CHECKBOX_LABEL)
+            self._failover_checkbox.setChecked(bool(settings.camera_failover_to_demo))
+            self._failover_checkbox.setToolTip(
+                "Se a câmara falhar durante a transmissão, muda temporariamente "
+                "para o vídeo de demonstração e regressa quando a câmara recuperar."
+            )
+            source_layout.addWidget(self._failover_checkbox)
+
             path_row = QHBoxLayout()
             self._demo_path_label = QLabel(self._demo_path)
             self._demo_path_label.setWordWrap(True)
@@ -312,6 +307,7 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
             layout.addWidget(source_group)
 
             self._radio_demo.toggled.connect(self._update_browse_enabled)
+            self._radio_camera.toggled.connect(self._update_failover_enabled)
 
             quality_group = QGroupBox("Qualidade")
             quality_layout = QVBoxLayout(quality_group)
@@ -391,12 +387,14 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
             layout.addWidget(self._button_box)
 
             self._update_browse_enabled()
+            self._update_failover_enabled()
             self._update_schedule_enabled()
 
             if streaming_active:
                 editable_widgets = [
                     self._radio_camera,
                     self._radio_demo,
+                    self._failover_checkbox,
                     self._browse_button,
                     self._radio_audio_silent,
                     self._radio_audio_source,
@@ -413,7 +411,17 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
         def _update_browse_enabled(self) -> None:
             if self._streaming_active:
                 return
-            self._browse_button.setEnabled(self._radio_demo.isChecked())
+            # Path do MP4 serve tanto para demo principal como para contingência.
+            self._browse_button.setEnabled(True)
+            self._update_failover_enabled()
+
+        def _update_failover_enabled(self) -> None:
+            if self._streaming_active:
+                return
+            camera_selected = self._radio_camera.isChecked()
+            self._failover_checkbox.setEnabled(camera_selected)
+            if not camera_selected:
+                self._failover_checkbox.setChecked(False)
 
         def _update_schedule_enabled(self) -> None:
             if self._streaming_active:
@@ -459,6 +467,10 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
                 day_start_hour=self._start_spin.value(),
                 day_end_hour=self._end_spin.value(),
                 tz_offset_hours=self._tz_spin.value(),
+                camera_failover_to_demo=(
+                    self._failover_checkbox.isChecked()
+                    and self._radio_camera.isChecked()
+                ),
             )
             self._result = validate_ui_settings(draft)
             self.accept()
@@ -485,6 +497,7 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
             self._preview_switch_lock = threading.RLock()
             self._latest_preview_jpeg: Optional[bytes] = None
             self._preview_frame_dirty = False
+            self._preview_effective_source: Optional[str] = None
             self._settings_store = create_qsettings_store()
             self._settings: UiSettings = load_ui_settings(self._settings_store)
 
@@ -618,7 +631,13 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
             self._refresh_button_states()
 
         def _refresh_settings_labels(self) -> None:
-            self._source_value.setText(format_source_status(self._settings))
+            base = format_source_status(self._settings)
+            if (
+                self._settings.camera_failover_to_demo
+                and not self._settings.demo_enabled
+            ):
+                base = f"{base} (failover para demo se a câmara falhar)"
+            self._source_value.setText(base)
             self._quality_value.setText(
                 format_quality_status(
                     get_send_quality_profile(self._settings.send_quality)
@@ -693,7 +712,12 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
                     resolution=self._resolution,
                     require_input_source=not self._settings.demo_enabled,
                 )
-                if self._settings.demo_enabled:
+                use_demo = self._settings.demo_enabled
+                if self._preview_effective_source == "contingency_demo":
+                    use_demo = True
+                elif self._preview_effective_source == "camera":
+                    use_demo = False
+                if use_demo:
                     path = self._settings.demo_video_path
                     if not demo_video_exists(path):
                         self._post("preview_status", demo_video_missing_message(path))
@@ -830,6 +854,31 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
             self._youtube_value.setText(YOUTUBE_CONFIRMED_STATUS)
             self._internet_value.setText(self._internet_status)
 
+            if snapshot and snapshot.get("failover_enabled"):
+                effective = str(snapshot.get("effective_source") or "camera")
+                message = snapshot.get("failover_ui_message")
+                if message:
+                    self._source_value.setText(f"Fonte efetiva: {message}")
+                else:
+                    label = {
+                        "camera": "Câmara",
+                        "contingency_demo": "Vídeo de contingência — câmara indisponível",
+                        "demo": "Vídeo de demonstração",
+                    }.get(effective, effective)
+                    self._source_value.setText(f"Fonte efetiva: {label}")
+                if effective != self._preview_effective_source and not self._closing:
+                    self._preview_effective_source = effective
+                    threading.Thread(
+                        target=self._restart_preview_source,
+                        name="UiPreviewFailover",
+                        daemon=True,
+                    ).start()
+            elif not (snapshot and snapshot.get("thread_running")):
+                if self._preview_effective_source not in (None, "settings"):
+                    self._preview_effective_source = (
+                        "demo" if self._settings.demo_enabled else "camera"
+                    )
+
             progress = (snapshot or {}).get("ffmpeg_progress") or {}
             self._fps_value.setText(format_metric(progress.get("fps")))
             bitrate = progress.get("bitrate") or progress.get("bitrate_kbps")
@@ -874,6 +923,15 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
             settings = self._settings
             demo_path = settings.demo_video_path if settings.demo_enabled else None
             start_hour, end_hour, tz_offset = settings.effective_day_window()
+            failover = (
+                bool(settings.camera_failover_to_demo) and not settings.demo_enabled
+            )
+            if failover and not demo_video_exists(settings.demo_video_path):
+                self._post(
+                    "message",
+                    demo_video_missing_message(settings.demo_video_path),
+                )
+                return
             try:
                 code = start_streaming_instance(
                     resolution=self._resolution,
@@ -883,6 +941,10 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
                     day_start_hour=start_hour,
                     day_end_hour=end_hour,
                     tz_offset_hours=tz_offset,
+                    camera_failover_to_demo=failover,
+                    contingency_demo_path=(
+                        settings.demo_video_path if failover else None
+                    ),
                 )
             except Exception as exc:  # noqa: BLE001
                 self._post("message", f"Falha ao iniciar: {exc}")
@@ -897,14 +959,17 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
             elif code == 3:
                 self._post(
                     "message",
-                    demo_video_missing_message(demo_path),
+                    demo_video_missing_message(demo_path or settings.demo_video_path),
                 )
             elif code == 4:
                 self._post("message", NO_AUDIO_AVAILABLE_MESSAGE)
+            elif code == 5:
+                self._post("message", AUDIO_PROBE_FAILED_MESSAGE)
             elif code != 0:
                 self._post("message", f"Arranque terminou com código {code}.")
             else:
                 self._post("message", "Transmissão terminada.")
+                self._preview_effective_source = None
 
         def _on_stop(self) -> None:
             if self._busy:
@@ -981,6 +1046,15 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
                     day_end_hour=end_hour,
                     tz_offset_hours=tz_offset,
                     apply_audio=True,
+                    camera_failover_to_demo=(
+                        settings.camera_failover_to_demo and not settings.demo_enabled
+                    ),
+                    contingency_demo_path=(
+                        settings.demo_video_path
+                        if settings.camera_failover_to_demo
+                        and not settings.demo_enabled
+                        else None
+                    ),
                 )
             except Exception as exc:  # noqa: BLE001
                 audio_note = f"Aviso de áudio: {exc}"
