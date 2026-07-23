@@ -24,6 +24,7 @@ from stream_audio import (  # noqa: E402
     NO_AUDIO_AVAILABLE_MESSAGE,
     apply_audio_mode_to_config,
     build_audio_map_args,
+    build_effective_ffmpeg_input_args,
     build_silent_audio_input_args,
     ensure_aac_audio_output_args,
     normalize_audio_mode,
@@ -249,8 +250,9 @@ def test_silent_audio_generates_anullsrc_and_maps():
     assert "anullsrc=" in silent_in[3]
     assert build_audio_map_args(silent=True) == ["-map", "0:v:0", "-map", "1:a:0"]
     updated = apply_audio_mode_to_config(_base_config(), AUDIO_MODE_SILENT)
-    joined = " ".join(updated.input_args)
-    assert "anullsrc=" in joined
+    assert "anullsrc=" not in " ".join(updated.input_args)
+    effective = build_effective_ffmpeg_input_args(updated)
+    assert "anullsrc=" in " ".join(effective)
     assert updated.output_args[:4] == ["-map", "0:v:0", "-map", "1:a:0"]
     assert "-filter:a" not in updated.output_args
     assert ensure_aac_audio_output_args([])[1::2] == ["aac", "128k", "44100", "2"]
@@ -262,8 +264,12 @@ def test_silent_mode_ignores_original_mp4_audio():
         demo_mode=True,
     )
     updated = apply_audio_mode_to_config(config, AUDIO_MODE_SILENT)
+    assert updated.input_args == config.input_args
     assert updated.output_args[2:4] == ["-map", "1:a:0"]
     assert "0:a:0" not in updated.output_args
+    effective = build_effective_ffmpeg_input_args(updated)
+    assert effective[:5] == config.input_args
+    assert effective[-4:-1] == ["-f", "lavfi", "-i"]
 
 
 def test_source_audio_uses_original_track(monkeypatch):
@@ -274,6 +280,7 @@ def test_source_audio_uses_original_track(monkeypatch):
     updated = apply_audio_mode_to_config(_base_config(), AUDIO_MODE_SOURCE)
     assert updated.output_args[:4] == ["-map", "0:v:0", "-map", "0:a:0"]
     assert "anullsrc=" not in " ".join(updated.input_args)
+    assert "anullsrc=" not in " ".join(build_effective_ffmpeg_input_args(updated))
     assert updated.audio_detected is True
 
 
@@ -289,7 +296,75 @@ def test_source_audio_without_track_raises(monkeypatch):
 def test_camera_video_only_works_with_silent():
     updated = apply_audio_mode_to_config(_base_config(), "sem")
     assert normalize_audio_mode("sem") == AUDIO_MODE_SILENT
-    assert "anullsrc=" in " ".join(updated.input_args)
+    assert "anullsrc=" not in " ".join(updated.input_args)
+    assert "anullsrc=" in " ".join(build_effective_ffmpeg_input_args(updated))
+
+
+def test_camera_silent_keeps_monitor_on_rtsp_only():
+    source_args = [
+        "-rtsp_transport",
+        "tcp",
+        "-i",
+        "rtsp://user:segredo@10.1.2.3/stream",
+    ]
+    config = apply_audio_mode_to_config(
+        _base_config(input_args=list(source_args)), AUDIO_MODE_SILENT
+    )
+    assert config.input_args == source_args
+    assert "anullsrc=" not in " ".join(config.input_args)
+    monitor = module.CameraSignalMonitor(
+        "ffprobe",
+        config.input_args,
+        5.0,
+        2.0,
+        False,
+        log_fn=lambda *_a, **_k: None,
+    )
+    assert monitor._input_args == source_args
+    effective = build_effective_ffmpeg_input_args(config)
+    assert effective[:4] == source_args
+    assert effective[4:6] == ["-f", "lavfi"]
+    assert "anullsrc=" in effective[7]
+    assert config.output_args[:4] == ["-map", "0:v:0", "-map", "1:a:0"]
+
+
+def test_demo_silent_orders_mp4_then_anullsrc():
+    demo_args = ["-stream_loop", "-1", "-re", "-i", r"C:\demo\video.mp4"]
+    config = apply_audio_mode_to_config(
+        _base_config(input_args=list(demo_args), demo_mode=True),
+        AUDIO_MODE_SILENT,
+    )
+    effective = build_effective_ffmpeg_input_args(config)
+    assert effective[4] == r"C:\demo\video.mp4"
+    assert effective[5:8] == ["-f", "lavfi", "-i"]
+    assert config.output_args[:4] == ["-map", "0:v:0", "-map", "1:a:0"]
+
+
+def test_camera_source_audio_has_no_anullsrc(monkeypatch):
+    monkeypatch.setattr("stream_audio.probe_input_has_audio", lambda *a, **k: True)
+    source_args = ["-rtsp_transport", "tcp", "-i", "rtsp://cam/stream"]
+    config = apply_audio_mode_to_config(
+        _base_config(input_args=list(source_args)), AUDIO_MODE_SOURCE
+    )
+    assert config.input_args == source_args
+    assert build_effective_ffmpeg_input_args(config) == source_args
+    assert config.output_args[:4] == ["-map", "0:v:0", "-map", "0:a:0"]
+
+
+def test_diagnostics_effective_cmd_hides_rtsp_password():
+    source_args = [
+        "-rtsp_transport",
+        "tcp",
+        "-i",
+        "rtsp://user:segredo-secreto@10.1.2.3/stream",
+    ]
+    config = apply_audio_mode_to_config(
+        _base_config(input_args=list(source_args)), AUDIO_MODE_SILENT
+    )
+    report = module._collect_full_diagnostics(config)
+    assert "segredo-secreto" not in report
+    assert "anullsrc=" in report
+    assert "rtsp://user:***@" in report or "***" in report
 
 
 def test_probe_helper_parses_ffprobe_json():
