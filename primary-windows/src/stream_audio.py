@@ -144,7 +144,10 @@ def probe_input_has_audio(
 
 
 def apply_audio_mode_to_config(config: Any, mode: Optional[str]) -> Any:
-    """Aplica modo de áudio a StreamingConfig (input/output/maps).
+    """Aplica modo de áudio a StreamingConfig (output/maps), sem alterar a fonte.
+
+    ``config.input_args`` continua a representar apenas a câmara ou o MP4.
+    O ``anullsrc`` é acrescentado só em ``build_effective_ffmpeg_input_args``.
 
     Em modo fonte, exige faixa de áudio na entrada; caso contrário levanta
     ``ValueError`` com mensagem orientada ao utilizador.
@@ -169,12 +172,22 @@ def apply_audio_mode_to_config(config: Any, mode: Optional[str]) -> Any:
             audio_detected=True,
         )
 
-    input_args = list(config.input_args) + build_silent_audio_input_args()
     output_args = build_audio_aware_output_args(config.output_args, silent=True)
     return replace(
         config,
-        input_args=input_args,
         output_args=output_args,
         audio_mode=normalized,
         audio_detected=False,
     )
+
+
+def build_effective_ffmpeg_input_args(config: Any) -> List[str]:
+    """Entradas efetivas do FFmpeg principal (fonte + anullsrc se silent)."""
+
+    args = list(getattr(config, "input_args", []) or [])
+    mode = getattr(config, "audio_mode", None)
+    if mode is None:
+        return args
+    if normalize_audio_mode(mode) == AUDIO_MODE_SILENT:
+        return args + build_silent_audio_input_args()
+    return args

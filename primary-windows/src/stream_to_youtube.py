@@ -47,6 +47,7 @@ from stream_audio import (
     NO_AUDIO_AVAILABLE_MESSAGE,
     apply_audio_mode_to_config,
     audio_mode_label,
+    build_effective_ffmpeg_input_args,
     normalize_audio_mode,
 )
 
@@ -813,6 +814,9 @@ def _collect_full_diagnostics(config: "StreamingConfig") -> str:
     timestamp_text = generated_at.isoformat().replace("+00:00", "Z")
 
     sanitized_input = [_mask_sensitive_arg(arg) for arg in config.input_args]
+    sanitized_effective = [
+        _mask_sensitive_arg(arg) for arg in build_effective_ffmpeg_input_args(config)
+    ]
     sanitized_output = [_mask_sensitive_arg(arg) for arg in config.output_args]
 
     camera_snapshot: Dict[str, Any] = {}
@@ -947,11 +951,17 @@ def _collect_full_diagnostics(config: "StreamingConfig") -> str:
         f"- Intervalo do autotune (s): {config.autotune_interval:.1f}",
         f"- Margem de segurança do autotune: {config.autotune_safety_margin:.2f}",
         f"- URL do YouTube presente: {'sim' if bool(config.yt_url) else 'não'}",
-        "- Argumentos de entrada (ffmpeg):",
+        "- Argumentos de entrada da fonte (ffmpeg/ffprobe):",
     ]
 
     if sanitized_input:
         lines.extend(f"  - {item}" for item in sanitized_input)
+    else:
+        lines.append("  - (nenhum argumento configurado)")
+
+    lines.append("- Argumentos de entrada efetivos do FFmpeg principal:")
+    if sanitized_effective:
+        lines.extend(f"  - {item}" for item in sanitized_effective)
     else:
         lines.append("  - (nenhum argumento configurado)")
 
@@ -960,6 +970,30 @@ def _collect_full_diagnostics(config: "StreamingConfig") -> str:
         lines.extend(f"  - {item}" for item in sanitized_output)
     else:
         lines.append("  - (nenhum argumento configurado)")
+
+    if config.yt_url:
+        sanitized_cmd = " ".join(
+            [
+                str(config.ffmpeg),
+                "-hide_banner",
+                "-loglevel",
+                "warning",
+                "-nostats",
+                "-progress",
+                "pipe:1",
+                *sanitized_effective,
+                *sanitized_output,
+                "-f",
+                "flv",
+                _mask_sensitive_arg(config.yt_url),
+            ]
+        )
+        lines.extend(
+            [
+                "- Comando FFmpeg principal (sanitizado):",
+                f"  {sanitized_cmd}",
+            ]
+        )
 
     lines.extend(
         [
@@ -2429,6 +2463,7 @@ class StreamingWorker:
         return snapshot
 
     def _run_loop(self) -> None:
+        effective_inputs = build_effective_ffmpeg_input_args(self._config)
         print(
             "===== START {} =====".format(
                 datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -2443,7 +2478,7 @@ class StreamingWorker:
             "-nostats",
             "-progress",
             "pipe:1",
-            *self._config.input_args,
+            *effective_inputs,
             *self._config.output_args,
             "-f",
             "flv",
@@ -2469,6 +2504,7 @@ class StreamingWorker:
                     continue
 
                 output_args = self._prepare_output_args()
+                effective_inputs = build_effective_ffmpeg_input_args(self._config)
                 cmd = [
                     self._config.ffmpeg,
                     "-hide_banner",
@@ -2477,7 +2513,7 @@ class StreamingWorker:
                     "-nostats",
                     "-progress",
                     "pipe:1",
-                    *self._config.input_args,
+                    *effective_inputs,
                     *output_args,
                     "-f",
                     "flv",
@@ -2492,7 +2528,7 @@ class StreamingWorker:
                     "-nostats",
                     "-progress",
                     "pipe:1",
-                    *self._config.input_args,
+                    *effective_inputs,
                     *output_args,
                     "-f",
                     "flv",
