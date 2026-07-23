@@ -65,16 +65,16 @@ ENV_TEMPLATE_CONTENT = """# Configurações para stream_to_youtube.py
 #YT_URL=rtmps://a.rtmps.youtube.com/live2/SEU_CODIGO_DO_YOUTUBE
 
 # Parâmetros de entrada para o ffmpeg. Ajuste o endereço RTSP conforme necessário.
-#YT_INPUT_ARGS=-rtsp_transport tcp -rtsp_flags prefer_tcp -fflags nobuffer -flags low_delay -use_wallclock_as_timestamps 1 -i rtsp://USUARIO:SenhaFort3@10.0.254.50:554/Streaming/Channels/101
+#YT_INPUT_ARGS=-rtsp_transport tcp -rtsp_flags prefer_tcp -fflags nobuffer -flags low_delay -use_wallclock_as_timestamps 1 -i rtsp://UTILIZADOR_RTSP:PALAVRA_PASSE@192.0.2.10:554/Streaming/Channels/101
 
 # Também é possível deixar `YT_INPUT_ARGS` vazio e informar as variáveis abaixo para montar
 # automaticamente a URL RTSP. Todas são opcionais e só são utilizadas quando `YT_INPUT_ARGS`
 # permanecer em branco.
-#RTSP_HOST=10.0.254.50
+#RTSP_HOST=192.0.2.10
 #RTSP_PORT=554
 #RTSP_PATH=Streaming/Channels/101
-#RTSP_USERNAME=USUARIO
-#RTSP_PASSWORD=SenhaFort3
+#RTSP_USERNAME=UTILIZADOR_RTSP
+#RTSP_PASSWORD=PALAVRA_PASSE
 
 # Parâmetros de saída para o ffmpeg. Utilize para alterar codec, bitrate ou filtros.
 #YT_OUTPUT_ARGS=-vf scale=1920:1080:flags=bicubic:in_range=pc:out_range=tv,format=yuv420p -r 30 -c:v libx264 -preset veryfast -profile:v high -level 4.2 -b:v 4500k -pix_fmt yuv420p -g 60 -c:a aac -b:a 128k -ar 44100 -f flv
@@ -1322,9 +1322,12 @@ _DEFAULT_INPUT_ARGS = [
     "low_delay",
     "-use_wallclock_as_timestamps",
     "1",
-    "-i",
-    "rtsp://BEACHCAM:QueriasEntrar123@10.0.254.50:554/Streaming/Channels/101",
 ]
+
+_MISSING_INPUT_SOURCE_ERROR = (
+    "Configuração de entrada ausente: defina YT_INPUT_ARGS ou "
+    "RTSP_HOST e RTSP_PATH (e RTSP_USERNAME/RTSP_PASSWORD se necessário)."
+)
 
 
 def _default_input_args() -> list[str]:
@@ -1661,7 +1664,11 @@ def _resolve_heartbeat_config(base_dir: Path) -> HeartbeatConfig:
     )
 
 
-def load_config(resolution: Optional[str] = None) -> StreamingConfig:
+def load_config(
+    resolution: Optional[str] = None,
+    *,
+    require_input_source: bool = True,
+) -> StreamingConfig:
     _ensure_env_file()
     _load_env_files()
 
@@ -1672,7 +1679,9 @@ def load_config(resolution: Optional[str] = None) -> StreamingConfig:
         default_input_args = _default_input_args()
         rtsp_url = _build_rtsp_url_from_env()
         if rtsp_url:
-            input_args = default_input_args[:-1] + [rtsp_url]
+            input_args = default_input_args + ["-i", rtsp_url]
+        elif require_input_source:
+            raise ValueError(_MISSING_INPUT_SOURCE_ERROR)
         else:
             input_args = default_input_args
     output_args = _split_args(
@@ -2824,7 +2833,10 @@ def _start_streaming_instance(
 
             try:
                 logger.log("A carregar configuração de streaming.")
-                config = load_config(resolution=resolution)
+                config = load_config(
+                    resolution=resolution,
+                    require_input_source=demo_video_path is None and input_args is None,
+                )
                 if demo_video_path is not None:
                     config = apply_demo_video_source(config, demo_video_path)
                     logger.log(
