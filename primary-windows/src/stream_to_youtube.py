@@ -58,12 +58,15 @@ from source_failover import (
     SourceFailoverController,
 )
 from stream_audio import (
-    AUDIO_PROBE_FAILED_MESSAGE,
-    NO_AUDIO_AVAILABLE_MESSAGE,
+    AUDIO_FALLBACK_EVENT_MESSAGE,
+    AUDIO_MODE_SILENT,
+    AUDIO_MODE_SOURCE,
+    AUDIO_PROBE_MAX_TIMEOUT_S,
     apply_audio_mode_to_config,
     audio_mode_label,
     build_effective_ffmpeg_input_args,
     normalize_audio_mode,
+    resolve_audio_for_source,
 )
 
 
@@ -1648,6 +1651,8 @@ class StreamingConfig:
     demo_mode: bool = False
     audio_mode: Optional[str] = None
     audio_detected: Optional[bool] = None
+    requested_audio_mode: Optional[str] = None
+    audio_probe_error_kind: Optional[str] = None
     camera_failover_to_demo: bool = False
     contingency_demo_path: Optional[str] = None
 
@@ -1742,9 +1747,23 @@ def prepare_ui_session_config(
             tz_offset_hours=tz_offset_hours,
         )
     if apply_audio and audio_mode is not None:
-        config = apply_audio_mode_to_config(config, audio_mode)
+        if bool(camera_failover_to_demo) and demo_video_path is None:
+            # Failover: guardar o pedido; resolver áudio só na fonte efetiva.
+            config = replace(
+                config,
+                requested_audio_mode=normalize_audio_mode(audio_mode),
+                audio_mode=None,
+                audio_detected=None,
+                audio_probe_error_kind=None,
+            )
+        else:
+            config = apply_audio_mode_to_config(config, audio_mode)
     elif audio_mode is not None:
-        config = replace(config, audio_mode=normalize_audio_mode(audio_mode))
+        config = replace(
+            config,
+            audio_mode=normalize_audio_mode(audio_mode),
+            requested_audio_mode=normalize_audio_mode(audio_mode),
+        )
     if camera_failover_to_demo is not None or contingency_demo_path is not None:
         config = replace(
             config,
@@ -2421,8 +2440,23 @@ class StreamingWorker:
         self._failover_last_launch_attempt: float = 0.0
 
         failover_enabled = bool(failover_enabled) and not config.demo_mode
+        requested_audio = normalize_audio_mode(
+            config.requested_audio_mode or config.audio_mode or AUDIO_MODE_SILENT
+        )
+        self._requested_audio_mode = requested_audio
+        self._last_audio_resolution = None
+        self._audio_fallback_logged = False
+
         if failover_enabled:
             base_camera_config = camera_config if camera_config is not None else config
+            # Templates por fonte sem áudio resolvido (probe só no arranque da fonte).
+            base_camera_config = replace(
+                base_camera_config,
+                requested_audio_mode=requested_audio,
+                audio_mode=None,
+                audio_detected=None,
+                audio_probe_error_kind=None,
+            )
             demo_path = resolve_demo_video_path(
                 explicit=contingency_demo_path
                 or base_camera_config.contingency_demo_path
@@ -2430,19 +2464,21 @@ class StreamingWorker:
             demo_config = contingency_demo_config
             if demo_config is None:
                 demo_config = apply_demo_video_source(base_camera_config, demo_path)
-                if base_camera_config.audio_mode is not None:
-                    try:
-                        demo_config = apply_audio_mode_to_config(
-                            demo_config, base_camera_config.audio_mode
-                        )
-                    except ValueError:
-                        # Contingência não deve falhar por ausência de áudio na fonte demo;
-                        # mantém o modo silencioso já aplicado por apply_demo_video_source.
-                        pass
+            demo_config = replace(
+                demo_config,
+                requested_audio_mode=requested_audio,
+                audio_mode=None,
+                audio_detected=None,
+                audio_probe_error_kind=None,
+            )
             self._camera_config = base_camera_config
             self._contingency_demo_config = demo_config
             self._failover_demo_path = demo_path
             config = base_camera_config
+        else:
+            self._camera_config = None
+            self._contingency_demo_config = None
+            self._failover_demo_path = None
 
         self._config = config
         self._thread: Optional[threading.Thread] = None
@@ -2485,6 +2521,17 @@ class StreamingWorker:
                 demo_exists=lambda: demo_video_exists(demo_path),
             )
             self._failover_controller.start_camera_session()
+        else:
+            self._failover_controller = None
+            # Sessão sem failover: resolver áudio da fonte já selecionada.
+            if config.audio_mode is None and (
+                config.requested_audio_mode is not None or requested_audio
+            ):
+                self._config = self._resolve_active_audio(config).config
+                self._base_output_args = list(self._config.output_args)
+                self._base_preset = _extract_arg_value(
+                    self._base_output_args, "-preset"
+                )
 
     def start(self) -> None:
         if self.is_running:
@@ -2588,7 +2635,66 @@ class StreamingWorker:
         else:
             snapshot["failover_enabled"] = False
 
+        audio_source = (
+            "contingency_demo"
+            if self._config.demo_mode
+            else (
+                "camera"
+                if not snapshot.get("effective_source")
+                else snapshot.get("effective_source")
+            )
+        )
+        if self._failover_controller is not None:
+            audio_source = snapshot.get("effective_source") or "camera"
+        resolution = self._last_audio_resolution
+        snapshot.update(
+            {
+                "requested_audio_mode": self._requested_audio_mode,
+                "effective_audio_mode": (
+                    resolution.effective_audio_mode
+                    if resolution is not None
+                    else self._config.audio_mode
+                ),
+                "audio_detected": (
+                    resolution.audio_detected
+                    if resolution is not None
+                    else self._config.audio_detected
+                ),
+                "audio_probe_error_kind": (
+                    resolution.audio_probe_error_kind
+                    if resolution is not None
+                    else self._config.audio_probe_error_kind
+                ),
+                "audio_source": audio_source,
+            }
+        )
+
         return snapshot
+
+    def _resolve_active_audio(
+        self,
+        config: StreamingConfig,
+        *,
+        deadline_mono: Optional[float] = None,
+    ):
+        remaining: Optional[float] = None
+        if deadline_mono is not None:
+            remaining = max(0.0, float(deadline_mono) - time.monotonic())
+        resolution = resolve_audio_for_source(
+            config,
+            self._requested_audio_mode,
+            timeout=AUDIO_PROBE_MAX_TIMEOUT_S,
+            deadline_remaining=remaining,
+        )
+        self._last_audio_resolution = resolution
+        if (
+            resolution.used_silent_fallback
+            and self._requested_audio_mode == AUDIO_MODE_SOURCE
+            and not self._audio_fallback_logged
+        ):
+            self._audio_fallback_logged = True
+            log_event("primary", AUDIO_FALLBACK_EVENT_MESSAGE)
+        return resolution
 
     def _run_loop(self) -> None:
         if self._failover_controller is not None:
@@ -3003,7 +3109,10 @@ class StreamingWorker:
                     )
                     self._apply_failover_action(follow_up, _depth + 1)
                 return
-            self._switch_active_config(target_config)
+            self._switch_active_config(
+                target_config,
+                deadline_mono=self._failover_controller.transition.deadline,
+            )
             launched = self._launch_ffmpeg()
             if launched and self._await_rtmps_sending(FIRST_PROGRESS_WAIT_S):
                 log_event("primary", "Vídeo de contingência a enviar com sucesso.")
@@ -3022,7 +3131,10 @@ class StreamingWorker:
             camera_config = self._camera_config
             if camera_config is None:
                 return
-            self._switch_active_config(camera_config)
+            self._switch_active_config(
+                camera_config,
+                deadline_mono=self._failover_controller.transition.deadline,
+            )
             launched = self._launch_ffmpeg()
             if launched and self._await_rtmps_sending(FIRST_PROGRESS_WAIT_S):
                 log_event("primary", "Câmara restabelecida e a enviar com sucesso.")
@@ -3050,7 +3162,10 @@ class StreamingWorker:
             self._terminate_process(timeout=FFMPEG_STOP_TIMEOUT_S)
             target_config = self._contingency_demo_config
             if target_config is not None:
-                self._switch_active_config(target_config)
+                self._switch_active_config(
+                    target_config,
+                    deadline_mono=self._failover_controller.transition.deadline,
+                )
                 self._launch_ffmpeg()
             return
 
@@ -3058,7 +3173,10 @@ class StreamingWorker:
             self._terminate_process(timeout=FFMPEG_STOP_TIMEOUT_S)
             camera_config = self._camera_config
             if camera_config is not None:
-                self._switch_active_config(camera_config)
+                self._switch_active_config(
+                    camera_config,
+                    deadline_mono=self._failover_controller.transition.deadline,
+                )
                 self._launch_ffmpeg()
             return
 
@@ -3068,13 +3186,22 @@ class StreamingWorker:
             self._terminate_process(timeout=FFMPEG_STOP_TIMEOUT_S)
             return
 
-    def _switch_active_config(self, new_config: StreamingConfig) -> None:
-        self._config = new_config
-        self._base_output_args = list(new_config.output_args)
+    def _switch_active_config(
+        self,
+        new_config: StreamingConfig,
+        *,
+        deadline_mono: Optional[float] = None,
+    ) -> None:
+        prepared = self._resolve_active_audio(
+            new_config, deadline_mono=deadline_mono
+        ).config
+        self._config = prepared
+        self._base_output_args = list(prepared.output_args)
         self._base_preset = _extract_arg_value(self._base_output_args, "-preset")
         self._last_autotune_bitrate = None
         self._last_autotune_preset = None
         self._autotune_failed_once = False
+        self._audio_fallback_logged = False
 
     def _ensure_process_for_config(
         self,
@@ -3090,7 +3217,7 @@ class StreamingWorker:
         if now - self._failover_last_launch_attempt < min_relaunch_gap:
             return
         self._failover_last_launch_attempt = now
-        if self._config is not config:
+        if self._config is not config or self._config.audio_mode is None:
             self._switch_active_config(config)
         self._launch_ffmpeg()
 
@@ -3472,19 +3599,31 @@ def _start_streaming_instance(
                         f"UTC{config.tz_offset_hours:+d}); sem alterar .env."
                     )
                 if audio_mode is not None:
-                    try:
-                        config = apply_audio_mode_to_config(config, audio_mode)
-                    except ValueError as exc:
-                        message = str(exc) or NO_AUDIO_AVAILABLE_MESSAGE
-                        logger.log(message)
-                        print(f"[primary] {message}", file=sys.stderr)
-                        log_event("primary", message)
-                        if message == AUDIO_PROBE_FAILED_MESSAGE:
-                            return 5
-                        return 4
-                    logger.log(
-                        f"Modo de áudio da sessão: {audio_mode_label(config.audio_mode)}."
-                    )
+                    requested = normalize_audio_mode(audio_mode)
+                    if camera_failover_to_demo and demo_video_path is None:
+                        # Fonte efetiva ainda não conhecida: não sondar a câmara.
+                        config = replace(
+                            config,
+                            requested_audio_mode=requested,
+                            audio_mode=None,
+                            audio_detected=None,
+                            audio_probe_error_kind=None,
+                        )
+                        logger.log(
+                            "Modo de áudio pedido: "
+                            f"{audio_mode_label(requested)} "
+                            "(resolução adiada até à fonte efetiva)."
+                        )
+                    else:
+                        resolution = resolve_audio_for_source(config, requested)
+                        config = resolution.config
+                        logger.log(
+                            "Modo de áudio da sessão: "
+                            f"{audio_mode_label(resolution.requested_audio_mode)} "
+                            f"(efetivo: {audio_mode_label(resolution.effective_audio_mode)})."
+                        )
+                        if resolution.used_silent_fallback:
+                            logger.log(AUDIO_FALLBACK_EVENT_MESSAGE)
                 logger.log(
                     f"Configuração carregada; resolução reportada: {config.resolution}."
                 )

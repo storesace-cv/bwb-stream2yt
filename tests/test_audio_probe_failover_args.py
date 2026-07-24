@@ -15,10 +15,10 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from stream_audio import (  # noqa: E402
+    AUDIO_MODE_SILENT,
     AUDIO_MODE_SOURCE,
-    AUDIO_PROBE_FAILED_MESSAGE,
-    NO_AUDIO_AVAILABLE_MESSAGE,
     apply_audio_mode_to_config,
+    build_effective_ffmpeg_input_args,
     build_ffprobe_input_args,
     probe_input_has_audio,
 )
@@ -29,6 +29,10 @@ class _Config:
     input_args: list[str]
     output_args: list[str]
     camera_probe: object
+    audio_mode: object = None
+    audio_detected: object = None
+    requested_audio_mode: object = None
+    audio_probe_error_kind: object = None
 
 
 def test_ffprobe_args_remove_ffmpeg_flags_and_lavfi() -> None:
@@ -51,7 +55,7 @@ def test_probe_detects_aac_audio() -> None:
     assert result.ok and result.has_audio and result.error_kind is None
 
 
-def test_probe_no_audio_and_apply_raises(monkeypatch) -> None:
+def test_probe_no_audio_falls_back_silent(monkeypatch) -> None:
     result = probe_input_has_audio(
         "ffprobe",
         ["-i", "demo.mp4"],
@@ -64,8 +68,9 @@ def test_probe_no_audio_and_apply_raises(monkeypatch) -> None:
         ["-i", "demo.mp4"], [], SimpleNamespace(ffprobe="ffprobe", timeout=2.0)
     )
     monkeypatch.setattr("stream_audio.probe_input_has_audio", lambda *_a, **_kw: result)
-    with pytest.raises(ValueError, match=NO_AUDIO_AVAILABLE_MESSAGE):
-        apply_audio_mode_to_config(config, AUDIO_MODE_SOURCE)
+    updated = apply_audio_mode_to_config(config, AUDIO_MODE_SOURCE)
+    assert updated.audio_mode == AUDIO_MODE_SILENT
+    assert "anullsrc=" in " ".join(build_effective_ffmpeg_input_args(updated))
 
 
 @pytest.mark.parametrize(
@@ -79,15 +84,16 @@ def test_probe_no_audio_and_apply_raises(monkeypatch) -> None:
         ),
     ],
 )
-def test_probe_failure_is_not_no_audio(monkeypatch, run) -> None:
+def test_probe_failure_falls_back_silent(monkeypatch, run) -> None:
     result = probe_input_has_audio("ffprobe", ["-i", "rtsp://cam/stream"], run=run)
     assert not result.ok and result.error_kind != "no_audio"
     config = _Config(
         ["-i", "rtsp://cam/stream"], [], SimpleNamespace(ffprobe="ffprobe", timeout=2.0)
     )
     monkeypatch.setattr("stream_audio.probe_input_has_audio", lambda *_a, **_kw: result)
-    with pytest.raises(ValueError, match=AUDIO_PROBE_FAILED_MESSAGE):
-        apply_audio_mode_to_config(config, AUDIO_MODE_SOURCE)
+    updated = apply_audio_mode_to_config(config, AUDIO_MODE_SOURCE)
+    assert updated.audio_mode == AUDIO_MODE_SILENT
+    assert "anullsrc=" in " ".join(build_effective_ffmpeg_input_args(updated))
 
 
 def test_probe_error_masks_rtsp_password() -> None:

@@ -9,8 +9,6 @@ import types
 from dataclasses import replace
 from pathlib import Path
 
-import pytest
-
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "primary-windows" / "src"
 if str(SRC) not in sys.path:
@@ -22,7 +20,6 @@ from stream_audio import (  # noqa: E402
     AUDIO_MODE_SILENT,
     AUDIO_MODE_SOURCE,
     AudioProbeResult,
-    NO_AUDIO_AVAILABLE_MESSAGE,
     apply_audio_mode_to_config,
     build_audio_map_args,
     build_effective_ffmpeg_input_args,
@@ -285,15 +282,17 @@ def test_source_audio_uses_original_track(monkeypatch):
     assert updated.audio_detected is True
 
 
-def test_source_audio_without_track_raises(monkeypatch):
+def test_source_audio_without_track_falls_back_silent(monkeypatch):
     monkeypatch.setattr(
         "stream_audio.probe_input_has_audio",
         lambda *a, **k: AudioProbeResult(
             ok=True, has_audio=False, error_kind="no_audio"
         ),
     )
-    with pytest.raises(ValueError, match=NO_AUDIO_AVAILABLE_MESSAGE):
-        apply_audio_mode_to_config(_base_config(), AUDIO_MODE_SOURCE)
+    updated = apply_audio_mode_to_config(_base_config(), AUDIO_MODE_SOURCE)
+    assert updated.audio_mode == AUDIO_MODE_SILENT
+    assert updated.audio_detected is False
+    assert "anullsrc=" in " ".join(build_effective_ffmpeg_input_args(updated))
 
 
 def test_camera_video_only_works_with_silent():

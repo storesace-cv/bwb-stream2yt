@@ -46,8 +46,6 @@ from ui_settings import (
 from stream_audio import (
     AUDIO_MODE_SILENT,
     AUDIO_MODE_SOURCE,
-    AUDIO_PROBE_FAILED_MESSAGE,
-    NO_AUDIO_AVAILABLE_MESSAGE,
     audio_mode_label,
 )
 from send_quality import (
@@ -961,10 +959,6 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
                     "message",
                     demo_video_missing_message(demo_path or settings.demo_video_path),
                 )
-            elif code == 4:
-                self._post("message", NO_AUDIO_AVAILABLE_MESSAGE)
-            elif code == 5:
-                self._post("message", AUDIO_PROBE_FAILED_MESSAGE)
             elif code != 0:
                 self._post("message", f"Arranque terminou com código {code}.")
             else:
