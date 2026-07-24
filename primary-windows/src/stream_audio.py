@@ -257,41 +257,133 @@ def probe_input_has_audio(
     return AudioProbeResult(ok=True, has_audio=False, error_kind="no_audio")
 
 
-def apply_audio_mode_to_config(config: Any, mode: Optional[str]) -> Any:
-    """Aplica modo de áudio a StreamingConfig (output/maps), sem alterar a fonte."""
+AUDIO_PROBE_MAX_TIMEOUT_S = 3.0
+AUDIO_FALLBACK_EVENT_MESSAGE = "Áudio não disponível; transmissão mantida sem som."
 
-    normalized = normalize_audio_mode(mode)
-    if normalized == AUDIO_MODE_SOURCE:
-        result = probe_input_has_audio(
-            getattr(getattr(config, "camera_probe", None), "ffprobe", "") or "",
-            list(config.input_args),
-            timeout=min(
-                3.0,
-                float(
-                    getattr(getattr(config, "camera_probe", None), "timeout", 7.0)
-                    or 7.0
-                ),
-            ),
-        )
-        if result.ok and not result.has_audio:
-            raise ValueError(NO_AUDIO_AVAILABLE_MESSAGE)
-        if not result.ok:
-            raise ValueError(AUDIO_PROBE_FAILED_MESSAGE)
-        output_args = build_audio_aware_output_args(config.output_args, silent=False)
-        return replace(
+
+@dataclass(frozen=True)
+class AudioResolution:
+    """Resultado da resolução de áudio por fonte (nunca bloqueia o vídeo)."""
+
+    config: Any
+    requested_audio_mode: str
+    effective_audio_mode: str
+    audio_detected: bool
+    probe: AudioProbeResult
+    used_silent_fallback: bool = False
+
+    @property
+    def audio_probe_error_kind(self) -> Optional[str]:
+        return self.probe.error_kind
+
+
+def _probe_timeout_for_config(
+    config: Any, *, deadline_remaining: Optional[float] = None
+) -> float:
+    configured = float(
+        getattr(getattr(config, "camera_probe", None), "timeout", 7.0) or 7.0
+    )
+    timeout = min(AUDIO_PROBE_MAX_TIMEOUT_S, configured)
+    if deadline_remaining is not None:
+        timeout = min(timeout, max(0.0, float(deadline_remaining)))
+    return timeout
+
+
+def resolve_audio_for_source(
+    config: Any,
+    requested_mode: Optional[str],
+    *,
+    timeout: Optional[float] = None,
+    deadline_remaining: Optional[float] = None,
+    run: Callable[..., Any] = subprocess.run,
+) -> AudioResolution:
+    """Resolve áudio efetivo para uma fonte prestes a iniciar.
+
+    - silent → anullsrc (sem probe)
+    - source + áudio confirmado → faixa original
+    - source + sem áudio / erro / timeout / prazo esgotado → silencioso
+    Nunca bloqueia o arranque do vídeo.
+    """
+
+    requested = normalize_audio_mode(requested_mode)
+
+    def _as_silent(probe: AudioProbeResult, *, used_fallback: bool) -> AudioResolution:
+        output_args = build_audio_aware_output_args(config.output_args, silent=True)
+        updated = replace(
             config,
             output_args=output_args,
-            audio_mode=normalized,
-            audio_detected=True,
+            audio_mode=AUDIO_MODE_SILENT,
+            audio_detected=False,
+            requested_audio_mode=requested,
+            audio_probe_error_kind=probe.error_kind,
+        )
+        return AudioResolution(
+            config=updated,
+            requested_audio_mode=requested,
+            effective_audio_mode=AUDIO_MODE_SILENT,
+            audio_detected=False,
+            probe=probe,
+            used_silent_fallback=used_fallback,
         )
 
-    output_args = build_audio_aware_output_args(config.output_args, silent=True)
-    return replace(
-        config,
-        output_args=output_args,
-        audio_mode=normalized,
-        audio_detected=False,
+    if requested == AUDIO_MODE_SILENT:
+        return _as_silent(
+            AudioProbeResult(ok=True, has_audio=False, error_kind=None),
+            used_fallback=False,
+        )
+
+    effective_timeout = AUDIO_PROBE_MAX_TIMEOUT_S if timeout is None else float(timeout)
+    effective_timeout = min(
+        effective_timeout,
+        _probe_timeout_for_config(config, deadline_remaining=deadline_remaining),
     )
+    if effective_timeout <= 0:
+        return _as_silent(
+            AudioProbeResult(
+                ok=False,
+                has_audio=False,
+                error_kind="timeout",
+                sanitized_detail="prazo de troca esgotado para probe de áudio",
+            ),
+            used_fallback=True,
+        )
+
+    probe = probe_input_has_audio(
+        getattr(getattr(config, "camera_probe", None), "ffprobe", "") or "",
+        list(config.input_args),
+        timeout=effective_timeout,
+        run=run,
+    )
+    if probe.ok and probe.has_audio:
+        output_args = build_audio_aware_output_args(config.output_args, silent=False)
+        updated = replace(
+            config,
+            output_args=output_args,
+            audio_mode=AUDIO_MODE_SOURCE,
+            audio_detected=True,
+            requested_audio_mode=requested,
+            audio_probe_error_kind=None,
+        )
+        return AudioResolution(
+            config=updated,
+            requested_audio_mode=requested,
+            effective_audio_mode=AUDIO_MODE_SOURCE,
+            audio_detected=True,
+            probe=probe,
+            used_silent_fallback=False,
+        )
+
+    return _as_silent(probe, used_fallback=True)
+
+
+def apply_audio_mode_to_config(config: Any, mode: Optional[str]) -> Any:
+    """Aplica modo de áudio a StreamingConfig (output/maps), sem alterar a fonte.
+
+    Com áudio: usa a faixa original quando disponível; caso contrário silencioso.
+    Nunca levanta ValueError por falha/ausência de áudio.
+    """
+
+    return resolve_audio_for_source(config, mode).config
 
 
 def build_effective_ffmpeg_input_args(config: Any) -> List[str]:
