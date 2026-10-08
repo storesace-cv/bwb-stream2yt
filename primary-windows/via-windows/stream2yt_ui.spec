@@ -43,6 +43,12 @@ hiddenimports = [
     "process_launch",
     "stream_to_youtube",
     "autotune",
+    "effective_config",
+    "engine_compat",
+    "stream_engine",
+    "yt_destination",
+    "windows_acl",
+    "gst_rtmps_helper",
 ]
 
 analysis = Analysis(

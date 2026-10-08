@@ -1,9 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller build configuration for the Windows service wrapper.
-
-This mirrors the CLI invocation:
-pyinstaller --onefile --noconsole primary-windows/src/windows_service.py
-"""
+"""PyInstaller onefile for gst_rtmps_helper (sem gi; usa gst-launch do runtime)."""
 
 import inspect
 from pathlib import Path
@@ -18,35 +14,20 @@ else:
         BASE_DIR = Path(inspect.getfile(current_frame)).resolve().parent
     finally:
         del current_frame
+
 SRC_DIR = (BASE_DIR / ".." / "src").resolve()
-SCRIPT = SRC_DIR / "windows_service.py"
+SCRIPT = SRC_DIR / "gst_rtmps_helper.py"
 
 analysis = Analysis(
     [str(SCRIPT)],
     pathex=[str(SRC_DIR)],
     binaries=[],
     datas=[],
-    hiddenimports=[
-        "stream_to_youtube",
-        "effective_config",
-        "engine_compat",
-        "stream_engine",
-        "yt_destination",
-        "windows_acl",
-        "gst_rtmps_helper",
-        "send_quality",
-        "source_failover",
-        "stream_audio",
-        "demo_video",
-        "connectivity",
-        "observability",
-        "process_launch",
-        "autotune",
-    ],
+    hiddenimports=[],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=["gi", "PySide6"],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
@@ -60,14 +41,14 @@ exe = EXE(
     analysis.zipfiles,
     analysis.datas,
     [],
-    name="stream2yt-service",
+    name="gst_rtmps_helper",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=False,
+    console=True,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,

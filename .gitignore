@@ -41,6 +41,11 @@ primary-windows/via-windows/*
 !primary-windows/via-windows/stream2yt_ui.spec
 !primary-windows/via-windows/build.bat
 !primary-windows/via-windows/prepare-env.bat
+!primary-windows/via-windows/stream2yt.iss
+!primary-windows/via-windows/gst_rtmps_helper.spec
+!primary-windows/via-windows/installer/
+!primary-windows/via-windows/installer/**
+primary-windows/via-windows/installer/__pycache__/
 
 # Secrets
 *.env

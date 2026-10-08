@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "app_version": "2026.10.08.1",
+  "notes": "Downloads apenas em instalação/reparação; HTTPS; versões e SHA256 fixados de fornecedores oficiais. Verificado em 2026-10-08.",
+  "components": {
+    "ffmpeg": {
+      "increment": "A",
+      "description": "FFmpeg e FFprobe win64 GPL estático (BtbN FFmpeg-Builds, tag autobuild fixada)",
+      "vendor": "https://github.com/BtbN/FFmpeg-Builds",
+      "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-07-31-14-10/ffmpeg-n7.1.5-12-g1fdbca85aa-win64-gpl-7.1.zip",
+      "sha256": "c067a1ca58f4fc4449f4bab0890fbcd65cbb3e5f46e066cf9c768e06c0c1d4d9",
+      "sha256_source": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-07-31-14-10/checksums.sha256",
+      "version": "n7.1.5-12-g1fdbca85aa",
+      "arch": "win64",
+      "extract_to": "bin/ffmpeg",
+      "zip_inner_prefix": "ffmpeg-n7.1.5-12-g1fdbca85aa-win64-gpl-7.1",
+      "required_files": [
+        "bin/ffmpeg.exe",
+        "bin/ffprobe.exe"
+      ],
+      "offline_cache_name": "ffmpeg-n7.1.5-12-g1fdbca85aa-win64-gpl-7.1.zip"
+    },
+    "gstreamer_runtime": {
+      "increment": "B",
+      "description": "Runtime oficial GStreamer MSVC x86_64 1.24.13 (pacote MSI oficial com parâmetros msiexec)",
+      "vendor": "https://gstreamer.freedesktop.org/",
+      "url": "https://gstreamer.freedesktop.org/data/pkg/windows/1.24.13/msvc/gstreamer-1.0-msvc-x86_64-1.24.13.msi",
+      "sha256": "66915d82adda34189703c36a5d2ef145d2e3afb7afc12c66fcf2ea506e2466d2",
+      "sha256_source": "https://gstreamer.freedesktop.org/data/pkg/windows/1.24.13/msvc/gstreamer-1.0-msvc-x86_64-1.24.13.msi.sha256sum",
+      "version": "1.24.13",
+      "arch": "x86_64",
+      "package_kind": "official_msi",
+      "install_args_official": [
+        "/i",
+        "{package}",
+        "/qn",
+        "/norestart",
+        "ADDLOCAL=ALL",
+        "INSTALLDIR={gst_root}"
+      ],
+      "admin_extract_args": [
+        "/a",
+        "{package}",
+        "/qn",
+        "TARGETDIR={gst_root}"
+      ],
+      "notes": "Bindings Python (PyGObject/gi) NÃO vêm no runtime. O auxiliar gst_rtmps_helper.exe usa gst-inspect-1.0/gst-launch-1.0 do runtime empacotado.",
+      "extract_to": "bin/gstreamer",
+      "offline_cache_name": "gstreamer-1.0-msvc-x86_64-1.24.13.msi",
+      "required_tools": [
+        "bin/gst-launch-1.0.exe",
+        "bin/gst-inspect-1.0.exe"
+      ],
+      "required_checks": [
+        "gst_inspect_elements",
+        "gst_helper_prove",
+        "gst_tls_plugin"
+      ]
+    },
+    "gst_helper": {
+      "increment": "B",
+      "description": "Auxiliar empacotado (PyInstaller) — sem pip/Python no cliente; chama gst-launch do runtime",
+      "bundled_with_app": true,
+      "no_client_python": true,
+      "artifact": "bin/gst_rtmps_helper.exe"
+    }
+  },
+  "paths": {
+    "install_root": "C:\\bwb\\apps\\youtube",
+    "bin_dir": "C:\\bwb\\apps\\youtube\\bin",
+    "data_dir": "C:\\bwb\\apps\\youtube\\data",
+    "cache_dir": "C:\\bwb\\apps\\youtube\\installer-cache"
+  }
+}

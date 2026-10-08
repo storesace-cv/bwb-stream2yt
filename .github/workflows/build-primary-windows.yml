@@ -14,6 +14,7 @@ on:
       - "tests/test_ui_status.py"
       - "tests/test_preview_rtsp.py"
       - "tests/test_demo_video.py"
+      - "tests/test_client_no_droplet.py"
   pull_request:
     paths:
       - "primary-windows/**"
@@ -23,6 +24,7 @@ on:
       - "tests/test_ui_status.py"
       - "tests/test_preview_rtsp.py"
       - "tests/test_demo_video.py"
+      - "tests/test_client_no_droplet.py"
   workflow_dispatch:
 
 permissions:
@@ -44,6 +46,10 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Block release build if manifest has placeholders
+        run: |
+          python primary-windows/via-windows/installer/validate_manifest.py --manifest primary-windows/via-windows/installer/deps_manifest.json
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip wheel
@@ -51,9 +57,22 @@ jobs:
           python -m pip install -r primary-windows/via-windows/requirements.txt
           python -m pip install pywin32==306
 
-      - name: Run tests
+      - name: Run directed tests
         run: |
-          python -m pytest tests/test_observability.py tests/test_stream_to_youtube.py tests/test_ui_status.py tests/test_preview_rtsp.py tests/test_demo_video.py -q
+          python -m pytest tests/test_observability.py tests/test_stream_to_youtube.py tests/test_ui_status.py tests/test_preview_rtsp.py tests/test_demo_video.py tests/test_client_no_droplet.py tests/test_send_quality.py -q
+
+      - name: Download and stage FFmpeg + GStreamer (verified SHA256)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $manifest = "primary-windows/via-windows/installer/deps_manifest.json"
+          $cache = "staging/installer-cache"
+          $bin = "staging/bin"
+          New-Item -ItemType Directory -Force -Path $cache, $bin | Out-Null
+          & "primary-windows/via-windows/installer/install_deps.ps1" `
+            -ManifestPath $manifest `
+            -CacheDir (Resolve-Path $cache) `
+            -BinDir (Resolve-Path $bin)
 
       - name: Build headless executable
         run: |
@@ -66,6 +85,50 @@ jobs:
       - name: Build Windows service executable
         run: |
           python -m PyInstaller --clean primary-windows/via-windows/stream2yt_service.spec
+
+      - name: Build GStreamer helper executable
+        run: |
+          python -m PyInstaller --clean primary-windows/via-windows/gst_rtmps_helper.spec
+
+      - name: Prove GStreamer helper against staged runtime
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (-not (Test-Path "dist\gst_rtmps_helper.exe")) {
+            throw "gst_rtmps_helper.exe em falta"
+          }
+          Copy-Item "dist\gst_rtmps_helper.exe" -Destination "staging\bin\gst_rtmps_helper.exe" -Force
+          $env:BWB_GST_ROOT = (Resolve-Path "staging\bin\gstreamer").Path
+          $env:PATH = (Join-Path $env:BWB_GST_ROOT "bin") + ";" + $env:PATH
+          $json = & "dist\gst_rtmps_helper.exe" --prove
+          Write-Host $json
+          $obj = $json | ConvertFrom-Json
+          if (-not $obj.ok) {
+            throw "Prova GStreamer falhou: $($obj.error)"
+          }
+          & "primary-windows/via-windows/installer/verify_runtime.ps1" `
+            -BinDir (Resolve-Path "staging\bin") `
+            -DataDir (New-Item -ItemType Directory -Force -Path "staging\data").FullName `
+            -RequireGStreamer `
+            -HelperPath (Resolve-Path "staging\bin\gst_rtmps_helper.exe").Path
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y
+          if (-not (Test-Path "C:\Program Files (x86)\Inno Setup 6\ISCC.exe")) {
+            throw "ISCC.exe não encontrado após instalação do Inno Setup"
+          }
+
+      - name: Compile Inno Setup installer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "primary-windows\via-windows\stream2yt.iss"
+          $setup = Get-ChildItem "release\stream2yt-setup-*.exe" | Select-Object -First 1
+          if (-not $setup) { throw "Setup Inno não gerado em release\" }
+          Write-Host "Setup: $($setup.FullName)"
 
       - name: Package release ZIPs and checksums
         shell: pwsh
@@ -82,54 +145,62 @@ jobs:
           if (-not (Test-Path "dist\stream2yt-service.exe")) {
             throw "Service EXE missing: dist\stream2yt-service.exe"
           }
+          if (-not (Test-Path "dist\gst_rtmps_helper.exe")) {
+            throw "GStreamer helper missing: dist\gst_rtmps_helper.exe"
+          }
 
-          # UI: zip the full onedir folder so extraction yields stream2yt-ui\stream2yt-ui.exe + DLLs
           Compress-Archive -Path "dist\stream2yt-ui" -DestinationPath "release\stream2yt-ui-windows-x64.zip" -Force
 
-          # Headless: single EXE inside a named folder for a clear extract layout
           $headlessDir = "release\_pkg\stream-to-youtube-windows-x64"
           New-Item -ItemType Directory -Force -Path $headlessDir | Out-Null
           Copy-Item "dist\stream_to_youtube.exe" -Destination $headlessDir
           Compress-Archive -Path $headlessDir -DestinationPath "release\stream-to-youtube-windows-x64.zip" -Force
 
-          # Service
           $serviceDir = "release\_pkg\stream2yt-service-windows-x64"
           New-Item -ItemType Directory -Force -Path $serviceDir | Out-Null
           Copy-Item "dist\stream2yt-service.exe" -Destination $serviceDir
           Compress-Archive -Path $serviceDir -DestinationPath "release\stream2yt-service-windows-x64.zip" -Force
 
+          $helperDir = "release\_pkg\gst-rtmps-helper-windows-x64"
+          New-Item -ItemType Directory -Force -Path $helperDir | Out-Null
+          Copy-Item "dist\gst_rtmps_helper.exe" -Destination $helperDir
+          Compress-Archive -Path $helperDir -DestinationPath "release\gst-rtmps-helper-windows-x64.zip" -Force
+
           Remove-Item -Recurse -Force "release\_pkg"
 
           $sums = @()
-          Get-ChildItem "release\*.zip" | Sort-Object Name | ForEach-Object {
+          Get-ChildItem "release\*" -Include *.zip,*.exe | Sort-Object Name | ForEach-Object {
             $hash = (Get-FileHash -Algorithm SHA256 -Path $_.FullName).Hash.ToLower()
             $sums += "$hash  $($_.Name)"
           }
           $sums -join "`n" | Set-Content -Path "release\SHA256SUMS.txt" -Encoding ascii
           Get-Content "release\SHA256SUMS.txt"
 
+          # Gate final: manifesto no artefacto sem placeholders
+          python primary-windows/via-windows/installer/validate_manifest.py
+
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
         with:
           name: stream2yt-windows-x64
           path: |
+            release/stream2yt-setup-*.exe
             release/stream2yt-ui-windows-x64.zip
             release/stream-to-youtube-windows-x64.zip
             release/stream2yt-service-windows-x64.zip
+            release/gst-rtmps-helper-windows-x64.zip
             release/SHA256SUMS.txt
           retention-days: 30
           if-no-files-found: error
 
-      - name: Create GitHub Release
+      - name: Create GitHub Release (DRAFT — instalação limpa não validada no runner)
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: pwsh
         run: |
-          gh release create "${{ github.ref_name }}" `
-            "release/stream2yt-ui-windows-x64.zip" `
-            "release/stream-to-youtube-windows-x64.zip" `
-            "release/stream2yt-service-windows-x64.zip" `
-            "release/SHA256SUMS.txt" `
+          $files = @(Get-ChildItem "release\stream2yt-setup-*.exe", "release\*.zip", "release\SHA256SUMS.txt" | ForEach-Object { $_.FullName })
+          gh release create "${{ github.ref_name }}" @files `
             --title "${{ github.ref_name }}" `
-            --generate-notes
+            --notes "DRAFT: artefactos Windows (setup Inno + ZIPs + SHA256SUMS).`n`nInstalação limpa e provas operacionais (câmara/destino) **não** validadas automaticamente neste runner.`nNão usar em produção até promoção após prova em Windows limpo.`n`nSem DigitalOcean / heartbeat desactivado." `
+            --draft

@@ -42,6 +42,7 @@ from demo_video import (
     resolve_demo_video_path,
 )
 from send_quality import (
+    SEND_QUALITY_SOURCE,
     apply_profile_to_output_args,
     get_send_quality_profile,
     normalize_send_quality,
@@ -70,7 +71,8 @@ from stream_audio import (
 )
 
 
-DEFAULT_STATUS_ENDPOINT = "http://104.248.134.44:8080/status"
+# Heartbeat droplet desactivado nesta linha de cliente (sem DigitalOcean).
+DEFAULT_STATUS_ENDPOINT = ""
 APP_VERSION = "2024.09"
 HEARTBEAT_USER_AGENT = f"BWBPrimary/{APP_VERSION}"
 HEARTBEAT_DEFAULT_LOG_RELATIVE = "logs/heartbeat-status.jsonl"
@@ -127,14 +129,8 @@ ENV_TEMPLATE_CONTENT = """# Configurações para stream_to_youtube.py
 #BWB_CAMERA_SIGNAL_REQUIRED=1
 
 # Configurações do heartbeat/status para comunicar com a droplet secundária.
-#BWB_STATUS_ENABLED=1
-#BWB_STATUS_ENDPOINT=http://104.248.134.44:8080/status
-#BWB_STATUS_INTERVAL=20
-#BWB_STATUS_TIMEOUT=5
-#BWB_STATUS_MACHINE_ID=BEACHCAM-PRIMARY
-#BWB_STATUS_TOKEN=
-#BWB_STATUS_LOG_FILE=logs/heartbeat-status.jsonl
-#BWB_STATUS_LOG_RETENTION_SECONDS=3600
+# Heartbeat DigitalOcean removido nesta linha de cliente.
+# Variáveis BWB_STATUS_* são ignoradas e não reactivam comunicação remota.
 
 # Janela diária de transmissão.
 # Hora inicial, inclusive.
@@ -1367,15 +1363,23 @@ def _load_env_files():
 
 
 def _resolve_yt_url() -> Optional[str]:
-    url = os.environ.get("YT_URL", "").strip()
-    if url:
-        return url
+    """Destino efectivo partilhado; YT_URL legado tem precedência sobre YT_KEY.
 
-    key = os.environ.get("YT_KEY", "").strip()
-    if key:
-        return f"rtmps://a.rtmps.youtube.com/live2/{key}"
+    Config guardada inválida → ValueError (sem cair em legado).
+    Ausência de destino → None.
+    """
 
-    return None
+    from yt_destination import DestinationError, resolve_destination
+
+    try:
+        destination = resolve_destination(allow_legacy_fallback=True)
+    except DestinationError as exc:
+        message = str(exc)
+        lowered = message.lower()
+        if "não configurado" in lowered or "não configurada" in lowered:
+            return None
+        raise ValueError(message) from exc
+    return destination.full_url
 
 
 # === CONFIG (edit if needed) ===
@@ -1655,6 +1659,10 @@ class StreamingConfig:
     audio_probe_error_kind: Optional[str] = None
     camera_failover_to_demo: bool = False
     contingency_demo_path: Optional[str] = None
+    engine: Optional[str] = None
+    engine_mode: Optional[str] = None
+    engine_selection_reason: Optional[str] = None
+    send_quality: Optional[str] = None
 
 
 def apply_schedule_override(
@@ -1697,7 +1705,10 @@ def apply_send_quality(
 ) -> StreamingConfig:
     """Aplica perfil manual de qualidade (sessão UI; não altera .env)."""
 
-    profile = get_send_quality_profile(quality_key)
+    key = normalize_send_quality(quality_key)
+    profile = get_send_quality_profile(key)
+    if key == SEND_QUALITY_SOURCE:
+        return replace(config, resolution="source", send_quality=SEND_QUALITY_SOURCE)
     output_args = apply_profile_to_output_args(config.output_args, profile)
     bitrate_max = profile.maxrate_kbps
     bitrate_min = min(config.bitrate_min_kbps, profile.bitrate_kbps)
@@ -1709,6 +1720,7 @@ def apply_send_quality(
         resolution=profile.short_resolution,
         bitrate_min_kbps=bitrate_min,
         bitrate_max_kbps=bitrate_max,
+        send_quality=key,
     )
 
 
@@ -1782,52 +1794,21 @@ def prepare_ui_session_config(
 
 
 def _resolve_heartbeat_config(base_dir: Path) -> HeartbeatConfig:
-    enabled_flag = _env_flag("BWB_STATUS_ENABLED", True)
-    endpoint_raw = os.environ.get("BWB_STATUS_ENDPOINT")
-    endpoint = (endpoint_raw or DEFAULT_STATUS_ENDPOINT).strip()
+    """Heartbeat para droplet: sempre desligado (ignora BWB_STATUS_*)."""
 
-    if not endpoint:
-        enabled_flag = False
-        endpoint_value: Optional[str] = None
-    else:
-        endpoint_value = endpoint
-
-    interval = _env_float("BWB_STATUS_INTERVAL", 20.0)
-    if interval < 5.0:
-        interval = 5.0
-
-    timeout = _env_float("BWB_STATUS_TIMEOUT", 5.0)
-    if timeout <= 0:
-        timeout = 5.0
-    if timeout >= interval:
-        timeout = max(1.0, interval / 2)
-
-    retention = _env_int("BWB_STATUS_LOG_RETENTION_SECONDS", 3600)
-    if retention <= 0:
-        retention = 3600
-    retention = max(retention, int(interval * 4))
-
-    machine_id_raw = os.environ.get("BWB_STATUS_MACHINE_ID", "").strip()
-    if machine_id_raw:
-        machine_id = machine_id_raw
-    else:
-        node = platform.node().strip()
-        machine_id = node or "primary-sender"
-
-    token_raw = os.environ.get("BWB_STATUS_TOKEN", "").strip()
-    log_path = _resolve_custom_path(
-        "BWB_STATUS_LOG_FILE", HEARTBEAT_DEFAULT_LOG_RELATIVE
-    )
-
+    _ = base_dir  # API estável; paths de log legado não são usados.
+    node = platform.node().strip() or "primary-sender"
     return HeartbeatConfig(
-        enabled=enabled_flag and endpoint_value is not None,
-        endpoint=endpoint_value if enabled_flag else None,
-        interval=interval,
-        timeout=timeout,
-        machine_id=machine_id,
-        token=token_raw or None,
-        log_path=log_path,
-        log_retention_seconds=retention,
+        enabled=False,
+        endpoint=None,
+        interval=20.0,
+        timeout=5.0,
+        machine_id=node,
+        token=None,
+        log_path=_resolve_custom_path(
+            "BWB_STATUS_LOG_FILE", HEARTBEAT_DEFAULT_LOG_RELATIVE
+        ),
+        log_retention_seconds=3600,
     )
 
 
@@ -1938,7 +1919,19 @@ def load_config(
     elif safety_margin > 1.0:
         safety_margin = 1.0
 
-    ffmpeg_path = os.environ.get("FFMPEG", r"C:\bwb\ffmpeg\bin\ffmpeg.exe")
+    try:
+        from effective_config import shared_bin_dir
+
+        packaged_ffmpeg = shared_bin_dir() / "ffmpeg" / "bin" / "ffmpeg.exe"
+        default_ffmpeg = (
+            str(packaged_ffmpeg)
+            if packaged_ffmpeg.is_file()
+            else r"C:\bwb\ffmpeg\bin\ffmpeg.exe"
+        )
+    except Exception:
+        default_ffmpeg = r"C:\bwb\ffmpeg\bin\ffmpeg.exe"
+    ffmpeg_path = os.environ.get("FFMPEG", default_ffmpeg)
+    # Não aceitar caminhos arbitrários de plugins/executáveis vindos só da config partilhada.
     camera_interval = _env_float("BWB_CAMERA_PROBE_INTERVAL", 30.0)
     if camera_interval < 5.0:
         camera_interval = 5.0
@@ -3408,6 +3401,7 @@ def run_forever(
     startup_grace_period: float = _STARTUP_SUCCESS_GRACE_PERIOD,
 ) -> None:
     global _ACTIVE_WORKER
+    selection_reason = ""
     if existing_worker is not None:
         worker = existing_worker
         active_config = (
@@ -3416,44 +3410,47 @@ def run_forever(
     else:
         if config is None:
             config = load_config()
-        worker = StreamingWorker(
-            config,
-            failover_enabled=config.camera_failover_to_demo,
-            contingency_demo_path=config.contingency_demo_path,
-        )
-        active_config = config
+        from stream_engine import resolve_and_build_emitter
+
+        def _factory(cfg: StreamingConfig) -> StreamingWorker:
+            return StreamingWorker(
+                cfg,
+                failover_enabled=cfg.camera_failover_to_demo,
+                contingency_demo_path=cfg.contingency_demo_path,
+            )
+
+        try:
+            worker, selection, active_config = resolve_and_build_emitter(
+                config,
+                worker_factory=_factory,
+                send_quality=getattr(config, "send_quality", None),
+            )
+            selection_reason = selection.reason
+            active_config = replace(
+                active_config,
+                engine=selection.engine,
+                engine_mode=selection.mode,
+                engine_selection_reason=selection.reason,
+            )
+            log_event(
+                "primary",
+                f"Motor efectivo: {selection.engine}/{selection.mode} — {selection.reason}",
+            )
+        except ValueError as exc:
+            log_event("primary", f"Seleção de motor falhou: {exc}")
+            raise
     _ACTIVE_WORKER = worker
     if not worker.is_running and not _stop_request_active():
         worker.start()
     stop_logged = False
+    # Heartbeat sempre desactivado (mesmo com BWB_STATUS_* legado).
     reporter: Optional[HeartbeatReporter] = None
     startup_notified = False
     if startup_confirmed_callback is not None:
         deadline = time.monotonic() + max(0.0, startup_grace_period)
     else:
         deadline = None
-    if active_config.heartbeat.enabled and active_config.heartbeat.endpoint:
-
-        def _heartbeat_status() -> Dict[str, Any]:
-            snapshot = worker.status_snapshot()
-            snapshot.update(
-                {
-                    "stop_request_active": _stop_request_active(),
-                    "bitrate_min_kbps": active_config.bitrate_min_kbps,
-                    "bitrate_max_kbps": active_config.bitrate_max_kbps,
-                    "autotune_interval": active_config.autotune_interval,
-                    "autotune_safety_margin": active_config.autotune_safety_margin,
-                    "day_window": {
-                        "start_hour": active_config.day_start_hour,
-                        "end_hour": active_config.day_end_hour,
-                        "tz_offset_hours": active_config.tz_offset_hours,
-                    },
-                }
-            )
-            return snapshot
-
-        reporter = HeartbeatReporter(active_config.heartbeat, _heartbeat_status)
-        reporter.start()
+    _ = selection_reason
     try:
         while True:
             if (
@@ -3642,7 +3639,7 @@ def _start_streaming_instance(
 
             if not config.yt_url:
                 message = (
-                    "Credenciais YT_URL/YT_KEY ausentes; streaming worker finalizado."
+                    "Destino YouTube ausente; configure a URL/chave nas definições."
                 )
                 logger.log(message)
                 print(f"[primary] {message}", file=sys.stderr)
@@ -3657,11 +3654,18 @@ def _start_streaming_instance(
             log_event("primary", f"Resolução selecionada: {config.resolution}")
             print(f"[primary] Resolução selecionada: {config.resolution}")
             log_event("primary", f"Iniciando worker (PID {os.getpid()})")
-            run_forever(
-                config=config,
-                startup_confirmed_callback=logger.mark_success,
-                startup_grace_period=_STARTUP_SUCCESS_GRACE_PERIOD,
-            )
+            try:
+                run_forever(
+                    config=config,
+                    startup_confirmed_callback=logger.mark_success,
+                    startup_grace_period=_STARTUP_SUCCESS_GRACE_PERIOD,
+                )
+            except ValueError as exc:
+                message = str(exc)
+                logger.log(message)
+                print(f"[primary] {message}", file=sys.stderr)
+                log_event("primary", message)
+                return 4
             log_event("primary", "Worker finalizado")
             return 0
     finally:

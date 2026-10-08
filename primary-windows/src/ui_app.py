@@ -49,10 +49,20 @@ from stream_audio import (
     audio_mode_label,
 )
 from send_quality import (
+    SEND_QUALITY_SOURCE,
+    SOURCE_QUALITY_LABEL,
     format_quality_status,
     get_send_quality_profile,
     iter_send_quality_profiles,
     normalize_send_quality,
+)
+from effective_config import (
+    ENGINE_AUTOMATIC,
+    ENGINE_FFMPEG,
+    ENGINE_GSTREAMER,
+    load_effective_config,
+    normalize_engine_preference,
+    save_effective_config,
 )
 
 YOUTUBE_CONFIRMED_STATUS = "Não verificado"
@@ -307,10 +317,54 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
             self._radio_demo.toggled.connect(self._update_browse_enabled)
             self._radio_camera.toggled.connect(self._update_failover_enabled)
 
+            engine_group = QGroupBox("Motor de envio")
+            engine_layout = QVBoxLayout(engine_group)
+            self._engine_group = QButtonGroup(self)
+            self._radio_engine_auto = QRadioButton("Automático")
+            self._radio_engine_ffmpeg = QRadioButton("FFmpeg")
+            self._radio_engine_gst = QRadioButton("GStreamer (cópia)")
+            self._engine_group.addButton(self._radio_engine_auto)
+            self._engine_group.addButton(self._radio_engine_ffmpeg)
+            self._engine_group.addButton(self._radio_engine_gst)
+            try:
+                eff = load_effective_config()
+                pref = normalize_engine_preference(eff.engine_preference)
+            except Exception:
+                pref = ENGINE_FFMPEG
+            if pref == ENGINE_AUTOMATIC:
+                self._radio_engine_auto.setChecked(True)
+            elif pref == ENGINE_GSTREAMER:
+                self._radio_engine_gst.setChecked(True)
+            else:
+                self._radio_engine_ffmpeg.setChecked(True)
+            engine_hint = QLabel(
+                "A escolha aplica-se no próximo início. "
+                "Não há troca automática durante a transmissão nem promessa de melhor desempenho."
+            )
+            engine_hint.setWordWrap(True)
+            engine_hint.setStyleSheet("color: #666;")
+            engine_layout.addWidget(self._radio_engine_auto)
+            engine_layout.addWidget(self._radio_engine_ffmpeg)
+            engine_layout.addWidget(self._radio_engine_gst)
+            engine_layout.addWidget(engine_hint)
+            layout.addWidget(engine_group)
+
             quality_group = QGroupBox("Qualidade")
             quality_layout = QVBoxLayout(quality_group)
             self._quality_group = QButtonGroup(self)
             self._quality_buttons: Dict[str, QRadioButton] = {}
+            self._radio_quality_source = QRadioButton(SOURCE_QUALITY_LABEL)
+            self._radio_quality_source.setProperty("quality_key", SEND_QUALITY_SOURCE)
+            self._quality_group.addButton(self._radio_quality_source)
+            self._quality_buttons[SEND_QUALITY_SOURCE] = self._radio_quality_source
+            quality_layout.addWidget(self._radio_quality_source)
+            self._gst_quality_hint = QLabel(
+                "Com GStreamer só se aplica a qualidade da fonte (presets de "
+                "resolução/bitrate não são usados)."
+            )
+            self._gst_quality_hint.setWordWrap(True)
+            self._gst_quality_hint.setStyleSheet("color: #666;")
+            quality_layout.addWidget(self._gst_quality_hint)
             for profile in iter_send_quality_profiles():
                 label_text = (
                     f"{profile.label} — {profile.short_resolution}, "
@@ -323,7 +377,13 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
                 self._quality_group.addButton(button)
                 self._quality_buttons[profile.key] = button
                 quality_layout.addWidget(button)
+            if settings.send_quality == SEND_QUALITY_SOURCE or pref == ENGINE_GSTREAMER:
+                self._radio_quality_source.setChecked(True)
             layout.addWidget(quality_group)
+            self._radio_engine_gst.toggled.connect(self._update_quality_for_engine)
+            self._radio_engine_ffmpeg.toggled.connect(self._update_quality_for_engine)
+            self._radio_engine_auto.toggled.connect(self._update_quality_for_engine)
+            self._update_quality_for_engine()
 
             audio_group = QGroupBox("Áudio")
             audio_layout = QVBoxLayout(audio_group)
@@ -400,11 +460,36 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
                     self._start_spin,
                     self._end_spin,
                     self._tz_spin,
+                    self._radio_engine_auto,
+                    self._radio_engine_ffmpeg,
+                    self._radio_engine_gst,
                 ]
                 editable_widgets.extend(self._quality_buttons.values())
                 for widget in editable_widgets:
                     widget.setEnabled(False)
                 self._save_button.setEnabled(False)
+
+        def _update_quality_for_engine(self) -> None:
+            if self._streaming_active:
+                return
+            gst = self._radio_engine_gst.isChecked()
+            self._gst_quality_hint.setVisible(gst)
+            for key, button in self._quality_buttons.items():
+                if key == SEND_QUALITY_SOURCE:
+                    button.setEnabled(True)
+                    if gst:
+                        button.setChecked(True)
+                else:
+                    button.setEnabled(not gst)
+                    if gst:
+                        button.setChecked(False)
+
+        def _selected_engine_preference(self) -> str:
+            if self._radio_engine_auto.isChecked():
+                return ENGINE_AUTOMATIC
+            if self._radio_engine_gst.isChecked():
+                return ENGINE_GSTREAMER
+            return ENGINE_FFMPEG
 
         def _update_browse_enabled(self) -> None:
             if self._streaming_active:
@@ -448,6 +533,10 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
                 if button.isChecked():
                     selected_quality = key
                     break
+            engine_pref = self._selected_engine_preference()
+            quality = normalize_send_quality(selected_quality)
+            if engine_pref == ENGINE_GSTREAMER:
+                quality = SEND_QUALITY_SOURCE
             draft = UiSettings(
                 video_source=(
                     VIDEO_SOURCE_DEMO
@@ -455,7 +544,7 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
                     else VIDEO_SOURCE_CAMERA
                 ),
                 demo_video_path=self._demo_path,
-                send_quality=normalize_send_quality(selected_quality),
+                send_quality=quality,
                 audio_mode=(
                     AUDIO_MODE_SOURCE
                     if self._radio_audio_source.isChecked()
@@ -471,6 +560,22 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
                 ),
             )
             self._result = validate_ui_settings(draft)
+            try:
+                eff = load_effective_config()
+                eff.engine_preference = engine_pref
+                eff.send_quality = self._result.send_quality
+                eff.audio_mode = self._result.audio_mode
+                eff.camera_failover_to_demo = self._result.camera_failover_to_demo
+                eff.demo_video_path = self._result.demo_video_path
+                save_effective_config(eff)
+            except Exception as exc:  # noqa: BLE001
+                from PySide6.QtWidgets import QMessageBox
+
+                QMessageBox.warning(
+                    self,
+                    "Configuração partilhada",
+                    f"Definições da UI guardadas, mas falhou a config partilhada: {exc}",
+                )
             self.accept()
 
         def result_settings(self) -> Optional[UiSettings]:
@@ -527,8 +632,27 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
             )
             self._audio_value = QLabel(format_audio_status(self._settings))
             self._schedule_value = QLabel(format_schedule_status(self._settings))
+            try:
+                eff = load_effective_config()
+                eng = normalize_engine_preference(eff.engine_preference)
+                eng_label = {
+                    ENGINE_AUTOMATIC: "Automático",
+                    ENGINE_FFMPEG: "FFmpeg",
+                    ENGINE_GSTREAMER: "GStreamer",
+                }.get(eng, eng)
+                if eff.effective_engine:
+                    eng_text = (
+                        f"Motor: {eng_label} "
+                        f"(efectivo: {eff.effective_engine}/{eff.effective_mode or '—'})"
+                    )
+                else:
+                    eng_text = f"Motor: {eng_label}"
+            except Exception:
+                eng_text = "Motor: FFmpeg"
+            self._engine_value = QLabel(eng_text)
             for value_label in (
                 self._source_value,
+                self._engine_value,
                 self._quality_value,
                 self._audio_value,
                 self._schedule_value,
@@ -636,6 +760,23 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
             ):
                 base = f"{base} (failover para demo se a câmara falhar)"
             self._source_value.setText(base)
+            try:
+                eff = load_effective_config()
+                eng = normalize_engine_preference(eff.engine_preference)
+                eng_label = {
+                    ENGINE_AUTOMATIC: "Automático",
+                    ENGINE_FFMPEG: "FFmpeg",
+                    ENGINE_GSTREAMER: "GStreamer",
+                }.get(eng, eng)
+                if eff.effective_engine:
+                    self._engine_value.setText(
+                        f"Motor: {eng_label} "
+                        f"(efectivo: {eff.effective_engine}/{eff.effective_mode or '—'})"
+                    )
+                else:
+                    self._engine_value.setText(f"Motor: {eng_label}")
+            except Exception:
+                self._engine_value.setText("Motor: FFmpeg")
             self._quality_value.setText(
                 format_quality_status(
                     get_send_quality_profile(self._settings.send_quality)
@@ -952,7 +1093,7 @@ def run_ui_app(*, resolution: Optional[str] = None) -> int:
             elif code == 2:
                 self._post(
                     "message",
-                    "Credenciais YT_URL/YT_KEY ausentes; configure o .env antes de iniciar.",
+                    "Destino YouTube ausente; configure a URL/chave nas definições.",
                 )
             elif code == 3:
                 self._post(
