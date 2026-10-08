@@ -5,10 +5,11 @@
 #define MyAppName "stream2yt"
 #define MyAppVersion "2026.10.08.1"
 #define MyAppPublisher "BWB"
+; Caminhos absolutos (sem defines aninhados — ISPP não reexpansão em DestDir).
 #define InstallRoot "C:\bwb\apps\youtube"
-#define BinDir "{#InstallRoot}\bin"
-#define DataDir "{#InstallRoot}\data"
-#define CacheDir "{#InstallRoot}\installer-cache"
+#define BinDir "C:\bwb\apps\youtube\bin"
+#define DataDir "C:\bwb\apps\youtube\data"
+#define CacheDir "C:\bwb\apps\youtube\installer-cache"
 
 [Setup]
 AppId={{A7C2E8F1-4B5D-4E9A-9C31-8F0D2B6E1A90}

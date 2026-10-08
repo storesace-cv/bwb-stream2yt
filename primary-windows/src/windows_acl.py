@@ -9,7 +9,11 @@ from typing import Optional
 
 
 def _posix_restrict(path: Path, *, writable_group: bool = False) -> None:
-    mode = 0o770 if (path.is_dir() and writable_group) else (0o750 if path.is_dir() else 0o640)
+    mode = (
+        0o770
+        if (path.is_dir() and writable_group)
+        else (0o750 if path.is_dir() else 0o640)
+    )
     try:
         path.chmod(mode)
     except OSError:

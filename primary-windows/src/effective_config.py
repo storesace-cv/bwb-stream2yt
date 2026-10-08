@@ -102,9 +102,7 @@ def load_effective_config(data_dir: Optional[Path] = None) -> EffectiveConfig:
     if not isinstance(payload, dict):
         raise ValueError("Configuração efectiva inválida ou corrompida.")
     return EffectiveConfig(
-        engine_preference=normalize_engine_preference(
-            payload.get("engine_preference")
-        ),
+        engine_preference=normalize_engine_preference(payload.get("engine_preference")),
         yt_ingest_base=str(payload.get("yt_ingest_base") or DEFAULT_YT_BASE).strip(),
         stream_key_ref=str(payload.get("stream_key_ref") or "default").strip()
         or "default",
@@ -128,7 +126,9 @@ def load_effective_config(data_dir: Optional[Path] = None) -> EffectiveConfig:
             else None
         ),
         selection_reason=(
-            str(payload["selection_reason"]) if payload.get("selection_reason") else None
+            str(payload["selection_reason"])
+            if payload.get("selection_reason")
+            else None
         ),
     )
 

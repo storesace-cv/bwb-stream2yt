@@ -257,9 +257,13 @@ def resolve_and_build_emitter(
     selection = resolve_engine_for_session(
         effective=cfg,
         send_quality=quality if quality != "source" else SEND_QUALITY_SOURCE,
-        audio_mode=str(getattr(config, "audio_mode", None) or cfg.audio_mode or "silent"),
+        audio_mode=str(
+            getattr(config, "audio_mode", None) or cfg.audio_mode or "silent"
+        ),
         contingency_on=bool(getattr(config, "camera_failover_to_demo", False)),
-        mp4_path=str(getattr(config, "contingency_demo_path", None) or cfg.demo_video_path or ""),
+        mp4_path=str(
+            getattr(config, "contingency_demo_path", None) or cfg.demo_video_path or ""
+        ),
         input_args=list(getattr(config, "input_args", []) or []),
         ffmpeg_path=str(getattr(config, "ffmpeg", "") or ""),
         ffprobe_path=str(

@@ -19,7 +19,11 @@ from effective_config import (
     shared_bin_dir,
     shared_data_dir,
 )
-from send_quality import SEND_QUALITY_SOURCE, normalize_send_quality, quality_requires_transcode
+from send_quality import (
+    SEND_QUALITY_SOURCE,
+    normalize_send_quality,
+    quality_requires_transcode,
+)
 
 ANALYSIS_COMPATIBLE = "compatible"
 ANALYSIS_INCOMPATIBLE = "incompatible"
@@ -335,15 +339,19 @@ def probe_source_from_ffprobe(
         height=int(video["height"]) if video.get("height") else None,
         fps=fps,
         audio_codec=(str(audio.get("codec_name")).lower() if audio else None),
-        audio_channels=(int(audio["channels"]) if audio and audio.get("channels") else None),
+        audio_channels=(
+            int(audio["channels"]) if audio and audio.get("channels") else None
+        ),
         audio_rate=(
             int(audio["sample_rate"]) if audio and audio.get("sample_rate") else None
         ),
         is_h264=is_h264,
         gop_known=False,
         bitrate_known=False,
-        analysis=ANALYSIS_COMPATIBLE if is_h264 else (
-            ANALYSIS_INCOMPATIBLE if is_h264 is False else ANALYSIS_INDETERMINATE
+        analysis=(
+            ANALYSIS_COMPATIBLE
+            if is_h264
+            else (ANALYSIS_INCOMPATIBLE if is_h264 is False else ANALYSIS_INDETERMINATE)
         ),
         reason=(
             "Fonte H.264 detetada."
@@ -499,11 +507,7 @@ def select_engine(
     if pref in {ENGINE_FFMPEG, ENGINE_GSTREAMER}:
         item = by_engine.get(pref)
         if item is None or not item.eligible:
-            reason = (
-                item.reason
-                if item is not None
-                else f"Motor {pref} indisponível."
-            )
+            reason = item.reason if item is not None else f"Motor {pref} indisponível."
             raise ValueError(
                 f"Motor '{pref}' não pode iniciar: {reason} "
                 "Altere o motor ou as definições e reinicie."
@@ -553,9 +557,7 @@ def select_engine(
                 eligibilities=tuple(eligibilities),
             )
         details = "; ".join(f"{e.engine}: {e.reason}" for e in eligibilities)
-        raise ValueError(
-            "Nenhum motor elegível para a configuração pedida. " + details
-        )
+        raise ValueError("Nenhum motor elegível para a configuração pedida. " + details)
 
     last = normalize_engine_preference(last_successful) if last_successful else None
     if last and last != ENGINE_AUTOMATIC:
@@ -638,24 +640,26 @@ def resolve_engine_for_session(
     else:
         cached = load_compat_cache(data_dir)
         if cached and cached.is_fresh(fingerprint):
-            probe = SourceProbeSummary(**{
+            probe = SourceProbeSummary(
                 **{
-                    "video_codec": None,
-                    "width": None,
-                    "height": None,
-                    "fps": None,
-                    "audio_codec": None,
-                    "audio_channels": None,
-                    "audio_rate": None,
-                    "is_h264": None,
-                    "gop_known": False,
-                    "bitrate_known": False,
-                    "analysis": ANALYSIS_INDETERMINATE,
-                    "reason": "",
-                    "config_fingerprint": fingerprint,
-                },
-                **cached.probe,
-            })
+                    **{
+                        "video_codec": None,
+                        "width": None,
+                        "height": None,
+                        "fps": None,
+                        "audio_codec": None,
+                        "audio_channels": None,
+                        "audio_rate": None,
+                        "is_h264": None,
+                        "gop_known": False,
+                        "bitrate_known": False,
+                        "analysis": ANALYSIS_INDETERMINATE,
+                        "reason": "",
+                        "config_fingerprint": fingerprint,
+                    },
+                    **cached.probe,
+                }
+            )
         else:
             probe = probe_source_from_ffprobe(
                 ffprobe=ffprobe_path or "ffprobe",

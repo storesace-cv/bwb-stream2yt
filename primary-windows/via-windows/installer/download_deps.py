@@ -102,7 +102,9 @@ def ensure_component(
             raise DownloadError(
                 f"Cache inválida para {name} (hash). Apague ou use --force."
             )
-        raise DownloadError(f"Cache presente mas SHA256 do manifesto inválido ({name}).")
+        raise DownloadError(
+            f"Cache presente mas SHA256 do manifesto inválido ({name})."
+        )
     return download_https(
         str(comp["url"]), dest, expected_sha256=str(comp.get("sha256") or "")
     )

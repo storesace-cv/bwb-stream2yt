@@ -32,7 +32,9 @@ def _walk(obj: Any, path: str = "") -> list[str]:
             errors.append(f"{path}: URL deve ser HTTPS")
         if "latest" in obj.lower() and path.endswith("url"):
             # Permitir apenas se o path do URL não usar o tag flutuante /latest/
-            if "/download/latest/" in obj.lower() or obj.rstrip("/").endswith("/latest"):
+            if "/download/latest/" in obj.lower() or obj.rstrip("/").endswith(
+                "/latest"
+            ):
                 errors.append(f"{path}: URL usa tag/canal 'latest' flutuante")
     return errors
 

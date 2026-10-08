@@ -81,9 +81,7 @@ def test_heartbeat_hard_off_ignores_legacy_env(monkeypatch, tmp_path):
 
 def test_yt_url_precedes_yt_key_not_xor(monkeypatch, tmp_path):
     monkeypatch.setenv("BWB_SHARED_DATA_DIR", str(tmp_path))
-    monkeypatch.setenv(
-        "YT_URL", "rtmps://a.rtmps.youtube.com/live2/FROM_URL_KEY_123"
-    )
+    monkeypatch.setenv("YT_URL", "rtmps://a.rtmps.youtube.com/live2/FROM_URL_KEY_123")
     monkeypatch.setenv("YT_KEY", "FROM_KEY_ONLY_999")
     dest = resolve_destination(data_dir=tmp_path, allow_legacy_fallback=True)
     assert dest.stream_key == "FROM_URL_KEY_123"
@@ -130,9 +128,7 @@ def test_default_engine_preference_ffmpeg(tmp_path, monkeypatch):
 
 def test_manual_gstreamer_requires_eligibility():
     elig = [
-        EngineEligibility(
-            ENGINE_FFMPEG, MODE_TRANSCODE, True, "compatible", "ok"
-        ),
+        EngineEligibility(ENGINE_FFMPEG, MODE_TRANSCODE, True, "compatible", "ok"),
         EngineEligibility(
             ENGINE_GSTREAMER,
             MODE_COPY,
@@ -151,12 +147,8 @@ def test_manual_gstreamer_requires_eligibility():
 
 def test_automatic_prefers_last_successful():
     elig = [
-        EngineEligibility(
-            ENGINE_FFMPEG, MODE_TRANSCODE, True, "compatible", "ff"
-        ),
-        EngineEligibility(
-            ENGINE_GSTREAMER, MODE_COPY, True, "compatible", "gst"
-        ),
+        EngineEligibility(ENGINE_FFMPEG, MODE_TRANSCODE, True, "compatible", "ff"),
+        EngineEligibility(ENGINE_GSTREAMER, MODE_COPY, True, "compatible", "gst"),
     ]
     sel = select_engine(
         preference=ENGINE_AUTOMATIC,
@@ -169,12 +161,8 @@ def test_automatic_prefers_last_successful():
 
 def test_automatic_without_history_ffmpeg_first():
     elig = [
-        EngineEligibility(
-            ENGINE_FFMPEG, MODE_TRANSCODE, True, "compatible", "ff"
-        ),
-        EngineEligibility(
-            ENGINE_GSTREAMER, MODE_COPY, True, "compatible", "gst"
-        ),
+        EngineEligibility(ENGINE_FFMPEG, MODE_TRANSCODE, True, "compatible", "ff"),
+        EngineEligibility(ENGINE_GSTREAMER, MODE_COPY, True, "compatible", "gst"),
     ]
     sel = select_engine(
         preference=ENGINE_AUTOMATIC,
@@ -285,7 +273,9 @@ def test_download_requires_pinned_sha(tmp_path):
             }
         }
     }
-    with pytest.raises(download_deps.DownloadError, match="SHA256|placeholder|placeholders"):
+    with pytest.raises(
+        download_deps.DownloadError, match="SHA256|placeholder|placeholders"
+    ):
         download_deps.ensure_component(manifest, "ffmpeg", cache_dir=tmp_path)
 
 

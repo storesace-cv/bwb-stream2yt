@@ -113,7 +113,9 @@ def prove_runtime() -> dict[str, Any]:
     result["inspect_tool"] = bool(inspect_tool)
     result["launch_tool"] = bool(launch_tool)
     if not inspect_tool or not launch_tool:
-        result["error"] = "gst-inspect-1.0/gst-launch-1.0 ausentes no runtime empacotado."
+        result["error"] = (
+            "gst-inspect-1.0/gst-launch-1.0 ausentes no runtime empacotado."
+        )
         return result
 
     env = _gst_env()
@@ -194,7 +196,17 @@ def _build_launch_args(
                 "mux.",
             ]
         else:
-            audio = ["d.audio_0", "!", "queue", "!", "aacparse", "!", "queue", "!", "mux."]
+            audio = [
+                "d.audio_0",
+                "!",
+                "queue",
+                "!",
+                "aacparse",
+                "!",
+                "queue",
+                "!",
+                "mux.",
+            ]
         rest = [
             "flvmux",
             "name=mux",
@@ -297,7 +309,9 @@ def run_pipeline(
 
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="BWB GStreamer RTMPS helper")
-    parser.add_argument("--prove", action="store_true", help="Prova runtime (sem YouTube)")
+    parser.add_argument(
+        "--prove", action="store_true", help="Prova runtime (sem YouTube)"
+    )
     parser.add_argument("--source", default="", help="URI RTSP ou caminho MP4")
     parser.add_argument("--rtmps", default="", help="URL RTMPS (não registada em logs)")
     parser.add_argument("--file", action="store_true", help="Fonte é ficheiro MP4")
@@ -314,7 +328,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         print("Indique --source e --rtmps (ou --prove).", file=sys.stderr)
         return 2
 
-    silent = not args.with_source-audio
+    silent = not args.with_source - audio
     return run_pipeline(
         args.source,
         args.rtmps,

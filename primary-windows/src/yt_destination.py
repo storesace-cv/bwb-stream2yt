@@ -81,9 +81,7 @@ def save_stream_key(
         raise DestinationError("Chave de transmissão inválida ou vazia.")
     root = ensure_data_dir(data_dir)
     path = key_blob_path(root, ref)
-    fd, tmp_name = tempfile.mkstemp(
-        prefix=".stream_key.", suffix=".tmp", dir=str(root)
-    )
+    fd, tmp_name = tempfile.mkstemp(prefix=".stream_key.", suffix=".tmp", dir=str(root))
     tmp_path = Path(tmp_name)
     try:
         with os.fdopen(fd, "wb") as handle:
