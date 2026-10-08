@@ -328,7 +328,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         print("Indique --source e --rtmps (ou --prove).", file=sys.stderr)
         return 2
 
-    silent = not args.with_source - audio
+    silent = not args.with_source_audio
     return run_pipeline(
         args.source,
         args.rtmps,
