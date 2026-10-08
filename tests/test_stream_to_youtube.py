@@ -353,7 +353,7 @@ def test_startup_log_preserved_when_credentials_missing(tmp_path, monkeypatch):
     assert exit_code == 2
     assert startup_log.exists()
     contents = startup_log.read_text(encoding="utf-8")
-    assert "Credenciais YT_URL/YT_KEY ausentes" in contents
+    assert "Destino YouTube ausente" in contents
 
 
 def test_startup_log_preserved_when_worker_quits_early(tmp_path, monkeypatch):
